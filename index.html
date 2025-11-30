@@ -20,7 +20,7 @@
             // !!! BITTE DIESE LOGIK DURCH EINE SUPABASE AUTHENTIFIZIERUNG ERSETZEN!  !!!
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             var USER_ACCESS_CODE = "1234"; // 4-stellig
-            var ADMIN_ACCESS_CODE = "4321"; // NEU: 4-stellig, um automatischen Login zu ermöglichen
+            var ADMIN_ACCESS_CODE = "4321"; // 4-stellig
             // ---------------------------------------------------------
 
             // Initialisierung
@@ -203,7 +203,7 @@
                 gap: 15px;
                 margin-bottom: 30px;
                 height: 12px;
-                /* NEU: Beschränkt auf 4 Ziffern */
+                /* Beschränkt auf 4 Ziffern */
                 width: 130px; 
                 justify-content: center;
             }
@@ -628,10 +628,19 @@
                 opacity: 0.7;
             }
             
+            /* NEU: Bestand-Anzeige */
             .item-count {
                 font-size: 1.5rem;
                 font-weight: 700;
                 color: var(--color-accent-green);
+                text-align: right;
+            }
+            .item-count small {
+                display: block;
+                font-size: 0.5em;
+                font-weight: 400;
+                color: rgba(255, 255, 255, 0.5);
+                margin-top: -5px;
             }
 
         </style>
@@ -870,7 +879,7 @@
                 });
             }
 
-            // NEU: Logik für automatischen 4-stelligen Login
+            // Automatischer 4-stelliger Login
             function handlePinInput(key) {
                 document.getElementById("authError").innerText = ""; 
                 const MAX_PIN_LENGTH = 4; // Max 4 Ziffern
@@ -1031,8 +1040,8 @@
                     const content = `
                         <p><strong>Stellplatz:</strong> ${data.stellplatz}</p>
                         <p><strong>Typ:</strong> ${data.blocklager ? 'Blocklager' : 'Regal'}</p>
+                        <p><strong>Bestand:</strong> ${data.bestand || 'N/A'}</p>
                         <p><strong>Erster Scan:</strong> ${new Date(data.created_at).toLocaleDateString()}</p>
-                        <p><strong>Scans (DB):</strong> ${data.scans}</p>
                         <p><strong>Barcode:</strong> ${data.barcode}</p>
                     `;
                     showResultCard(data.name, content, '✅');
@@ -1041,7 +1050,8 @@
                     // Scans inkrementieren (ohne auf das Resultat zu warten)
                     const { error: updateError } = await window.appSupabaseClient
                         .from("artikel")
-                        .update({ scans: data.scans + 1 })
+                        // Scans bleiben für historische Zwecke erhalten, werden aber in der UI nicht mehr gezeigt
+                        .update({ scans: (data.scans || 0) + 1 }) 
                         .eq("barcode", code);
                         
                     if(updateError) console.error("Update Fehler:", updateError);
@@ -1085,6 +1095,8 @@
                     return;
                 }
 
+                const INITIAL_BESTAND = 100; // Simulierter Anfangsbestand
+
                 const { data, error } = await window.appSupabaseClient
                     .from("artikel")
                     .insert([{ 
@@ -1092,7 +1104,8 @@
                         name: name,
                         stellplatz: platz, 
                         blocklager: block, 
-                        scans: 1 
+                        scans: 1,
+                        bestand: INITIAL_BESTAND // NEU: Bestandswert speichern
                     }]);
 
                 if (error) {
@@ -1103,7 +1116,7 @@
                     showToast(`Artikel "${name}" erfolgreich gespeichert.`, "success");
                     showResultCard(
                         name, 
-                        `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${block ? 'Blocklager' : 'Regal'}</p> <p><strong>Scans:</strong> 1</p>`,
+                        `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${block ? 'Blocklager' : 'Regal'}</p> <p><strong>Bestand:</strong> ${INITIAL_BESTAND}</p>`,
                         '✅'
                     );
                     
@@ -1223,13 +1236,18 @@
                         listItem.style.cursor = 'pointer'; 
                         listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
                     }
+                    
+                    // NEU: Anzeige des Bestands (oder N/A, falls die Spalte fehlt)
+                    const bestandAnzeige = item.bestand !== undefined ? item.bestand : 'N/A';
+                    const bestandLabel = item.bestand !== undefined ? '<small>Bestand</small>' : '<small>Fehlt</small>';
+
 
                     const details = `
                         <div class="item-details">
                             <strong>${item.name}</strong>
                             <span>Stellplatz: ${item.stellplatz} | Barcode: ${item.barcode}</span>
                         </div>
-                        <div class="item-count">${item.scans}</div>
+                        <div class="item-count">${bestandAnzeige}${bestandLabel}</div>
                     `;
                     listItem.innerHTML = details;
                     articleListContainer.appendChild(listItem);
