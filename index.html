@@ -350,21 +350,19 @@ button.secondary {
             return;
         }
 
-        // DB Abfrage
+        // DB Abfrage: user_id Filter entfernt, um gemeinsamen Bestand zu ermöglichen
         const { data, error } = await window.appSupabaseClient
             .from("artikel")
             .select("*")
             .eq("barcode", code)
-            .eq("user_id", currentUserId)
             .single();
 
         if (data) {
-            // Update
+            // Update: user_id Filter entfernt
             await window.appSupabaseClient
                 .from("artikel")
                 .update({ scans: data.scans + 1 })
-                .eq("barcode", code)
-                .eq("user_id", currentUserId);
+                .eq("barcode", code);
 
             showResult(
                 `<strong>${data.name}</strong><br>
@@ -402,17 +400,18 @@ button.secondary {
         const block = document.getElementById("block").checked;
 
         if(!name || !platz) {
-            alert("Bitte Name und Platz ausfüllen");
+            // HINWEIS: alert() sollte vermieden werden. Hier sollte eine Modal-Fehlermeldung erscheinen.
+            console.error("Bitte Name und Platz ausfüllen");
             return;
         }
 
+        // Speichern: user_id wurde entfernt, da alle Benutzer denselben Lagerbestand teilen
         await window.appSupabaseClient.from("artikel").insert([{
             barcode: lastCode,
             name: name,
             stellplatz: platz,
             blocklager: block,
-            scans: 1,
-            user_id: currentUserId
+            scans: 1
         }]);
 
         hidePopup();
@@ -427,13 +426,23 @@ button.secondary {
         const enteredCode = document.getElementById("codeInput").value.trim();
         showAuthError(""); // Fehler zurücksetzen
 
+        // Überprüfung des API-Keys
+        if (APP_SUPABASE_KEY.includes("IHR_ANON_PUBLIC_KEY_HIER_EINFUEGEN")) {
+            showAuthError("⚠️ FEHLER: Bitte ersetzen Sie den Platzhalter 'IHR_ANON_PUBLIC_KEY_HIER_EINFUEGEN' im Code durch Ihren Supabase Anon Key!");
+            return;
+        }
+
         if (enteredCode === MASTER_ACCESS_CODE) {
+            
+            // NEU: Alte Sitzung abmelden, um eine saubere Neuanmeldung zu garantieren (Fix für Re-Login-Problem)
+            await window.appSupabaseClient.auth.signOut();
+            
             // Code ist korrekt, melde anonym bei Supabase an.
-            // Dies gibt uns einen gültigen, aber anonymen User ID.
             const { error } = await window.appSupabaseClient.auth.signInAnonymously();
             
             if (error) {
-                showAuthError("Fehler bei der Anmeldung: " + error.message);
+                // Detailliertere Fehlermeldung bei Supabase-Fehler
+                showAuthError("Fehler bei der Anmeldung: " + error.message + " (Prüfen Sie, ob 'Anonymous Sign In' in Supabase aktiviert ist.)");
             }
             // Bei Erfolg übernimmt checkLogin() den Wechsel zur App-Ansicht
         } else {
