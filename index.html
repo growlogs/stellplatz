@@ -112,23 +112,24 @@
                 overflow: hidden; /* Wichtig, um die Tabs im Container zu halten */
             }
             
-            /* KORREKTUR: Vereinfachung der Sichtbarkeitsregeln */
+            /* KORREKTUR: Vereinfachung der Sichtbarkeitsregeln - Wichtig für Log Überlappung */
             .tab-content {
                 position: absolute;
                 top: 0;
                 left: 0;
                 width: 100%;
                 height: 100%;
-                display: none; /* <-- Stellt sicher, dass inaktive Tabs NICHT sichtbar sind */
+                /* WICHTIG: display: none mit !important, um Überlappung zu verhindern */
+                display: none !important; 
                 flex-direction: column;
                 overflow-y: auto; /* List- und Log-Tabs brauchen Scrolling */
                 
-                /* WICHTIG: Expliziter Hintergrund, damit der aktive Tab den Hintergrund des Body überdeckt */
+                /* Expliziter Hintergrund, falls doch etwas durchscheint */
                 background: var(--color-bg-dark); 
             }
             
             .tab-content.active {
-                display: flex; /* <-- Macht den aktiven Tab sichtbar */
+                display: flex !important; /* Macht den aktiven Tab sichtbar */
             }
 
 
@@ -603,7 +604,7 @@
             
             /* --- ARTIKEL LIST VIEW STYLES --- */
             #listTab {
-                /* KORREKTUR: Erhöhung des Padding-Bottom auf 80px (60px Nav Bar + 20px Puffer) */
+                /* Padding muss hier gesetzt werden, da es der Scroll-Container ist */
                 padding: 15px 15px 80px 15px;
             }
             
@@ -643,7 +644,7 @@
                 opacity: 0.7;
             }
             
-            /* NEU: Icon-Anzeige für Lagertyp */
+            /* Icon-Anzeige für Lagertyp */
             .item-count {
                 text-align: center; 
                 width: 40px; 
@@ -670,7 +671,7 @@
             
             /* Admin Log Liste Styles */
             #logTab {
-                padding: 15px 15px 80px 15px; /* Korrigiertes Padding */
+                padding: 15px 15px 80px 15px; 
                 display: flex; 
                 flex-direction: column;
             }
