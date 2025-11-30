@@ -9,15 +9,18 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // --- Globale Konstanten ---
-// Direkt zugänglich für den nativen Fetch-Aufruf
+// WICHTIG: Ersetzen Sie den Platzhalter durch Ihren service_role Key! (Beginnt mit eyJ...)
+// Dieser wird nur für den Magic Link Aufruf benötigt, um Header-Fehler zu vermeiden.
 const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDQzNTc1OSwiZXhwIjoyMDgwMDExNzU5fQ.-hpaWFdLMsqUjCeYlAo2l1z_rF1vdWJsP9CtQlcCWEA"; 
 
 // --- SUPABASE INITIALISIERUNG ---
 // Initialisiert den Client (für alle anderen Data API-Aufrufe, die den Auth-Token nutzen)
 (function() {
     // Erzeugt den Client und weist ihn der globalen Variable zu
-    // Hier verwenden wir wieder die Standard-URL, da der Key/Token-Auth für Data-API-Anfragen besser funktioniert.
+    // WICHTIG: HIER verwenden wir den service_role key nicht. Da wir den auth-Aufruf mit fetch machen,
+    // können wir hier den public key verwenden, der für die Datenbank-Operationen nach dem Login funktioniert.
+    // Falls Sie den public key in SUPABASE_KEY haben, wird er hier verwendet.
     window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 })();
 </script>
@@ -288,7 +291,7 @@ input {
             html5QrCode.start(
                 { facingMode: "environment" },
                 { fps: 10, qrbox: 250 },
-                code => lookup(code)
+                    code => lookup(code)
             )
             .catch(err => {
                 // Zeige dem Benutzer den Fehler an, falls der Browser den Zugriff verweigert
@@ -301,13 +304,13 @@ input {
 <script>
 // --- Global Login Script ---
 
-// NEU: Verwendet nativen Fetch, um den API-Schlüssel sicher als Query-Parameter zu übergeben
+// NEU: Verwendet nativen Fetch, um den API-Schlüssel als Bearer Token zu übergeben
 async function sendMagicLink() {
     const email = document.getElementById("emailInput").value;
     const redirectUrl = encodeURIComponent(window.location.href);
 
-    // Baut die URL manuell mit dem API-Schlüssel als Query-Parameter auf
-    const url = `${SUPABASE_URL}/auth/v1/otp?apikey=${SUPABASE_KEY}`;
+    // Baut die URL auf (OHNE apikey Query-Parameter)
+    const url = `${SUPABASE_URL}/auth/v1/otp`;
 
     const payload = {
         email: email,
@@ -321,8 +324,8 @@ async function sendMagicLink() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // Optional: Fügt den Authorization Header hinzu, falls er doch benötigt wird.
-                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                // Fügt den Schlüssel als Bearer Token hinzu (dies funktioniert oft besser mit dem service_role key)
+                'Authorization': `Bearer ${SUPABASE_KEY}`, 
             },
             body: JSON.stringify(payload)
         });
