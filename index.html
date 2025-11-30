@@ -13,7 +13,7 @@
             // KONFIGURATION: Supabase und Zugangs-Codes
             // ---------------------------------------------------------
             var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-            var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
+            var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8ZxqnL2BUjf1QJOrXGYlPotaS4";
             
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             // !!! KRITISCHE SICHERHEITSWARNUNG: DIESER CODE IST UNSICHER             !!!
@@ -628,16 +628,20 @@
                 opacity: 0.7;
             }
             
-            /* NEU: Icon-Anzeige für Lagertyp */
+            /* NEU: Icon-Anzeige für Lagertyp - Angepasst für SVG */
             .item-count {
-                font-size: 2.5rem; /* Größer für das Icon */
-                font-weight: 700;
-                color: white; /* Icon ist weiß/emoji farbig */
+                font-size: 0; /* Verhindert die Anzeige von Emoji-Fallback */
                 text-align: right;
-                width: 50px; /* Feste Breite für Layout */
+                width: 30px; /* Feste Breite für Layout */
+                height: 30px;
+                flex-shrink: 0;
+                margin-left: 10px;
             }
-            .item-count small {
-                display: none; /* Nicht mehr nötig */
+            
+            .item-count svg {
+                width: 30px;
+                height: 30px;
+                /* Farbe wird inline im JS gesetzt, um Konsistenz zu gewährleisten */
             }
 
         </style>
@@ -818,6 +822,10 @@
             let currentUserRole = null; 
             let isAuthReady = false;
             let articleToEdit = null; 
+            
+            // NEU: SVG-Strings für die Lagertypen
+            const SHELF_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v16m14-16v16M5 8h14M5 12h14M5 16h14"/></svg>';
+            const WAREHOUSE_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9M7 15v6h10v-6M7 18h10"/></svg>';
 
 
             /* --- HILFSFUNKTIONEN --- */
@@ -1234,15 +1242,16 @@
                         listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
                     }
                     
-                    // Korrigierte Logik: Zeigt nur das Lagertyp-Icon
-                    const lagertypIcon = item.blocklager ? '🏢' : '📦';
+                    // NEU: Lagertyp-Icon als SVG einfügen
+                    const lagertypIconSvg = item.blocklager ? WAREHOUSE_ICON_SVG : SHELF_ICON_SVG;
 
                     const details = `
                         <div class="item-details">
                             <strong>${item.name}</strong>
                             <span>Stellplatz: ${item.stellplatz} | Barcode: ${item.barcode}</span>
                         </div>
-                        <div class="item-count">${lagertypIcon}</div> `;
+                        <div class="item-count">${lagertypIconSvg}</div>
+                    `;
                     listItem.innerHTML = details;
                     articleListContainer.appendChild(listItem);
                 });
