@@ -10,14 +10,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
-<script>
-    // 👇 HIER später deinen NEUEN anon key einsetzen
-const SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
-
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-</script>
 
 <style>
 body {
@@ -87,6 +79,15 @@ input {
 </head>
 
 <body>
+
+    <div id="loginView" style="display:none;">
+    <h1>🔐 Stellplatz App</h1>
+    <input id="emailInput" type="email" placeholder="E-Mail eingeben" />
+    <button onclick="sendMagicLink()">Login-Link senden</button>
+</div>
+
+<div id="appView" style="display:none;">
+
 
 <div id="reader"></div>
 
@@ -182,6 +183,43 @@ new Html5Qrcode("reader").start(
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/static/sw.js");
 }
+</script>
+</div>
+<script>
+const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function sendMagicLink() {
+    const email = document.getElementById("emailInput").value;
+
+    const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+            emailRedirectTo: window.location.href
+        }
+    });
+
+    if (error) {
+        alert("❌ Fehler: " + error.message);
+    } else {
+        alert("✅ Login-Link wurde per Mail gesendet.");
+    }
+}
+
+async function checkLogin() {
+    const { data } = await supabase.auth.getSession();
+
+    if (data.session) {
+        document.getElementById("loginView").style.display = "none";
+        document.getElementById("appView").style.display = "block";
+    } else {
+        document.getElementById("loginView").style.display = "block";
+        document.getElementById("appView").style.display = "none";
+    }
+}
+
+checkLogin();
 </script>
 
 </body>
