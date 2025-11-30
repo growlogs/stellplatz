@@ -12,8 +12,7 @@
         getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut 
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { 
-        getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, 
-        collection, query, where, getDocs, runTransaction 
+        getFirestore, doc, addDoc, collection, query, where, getDocs, runTransaction 
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -21,45 +20,93 @@
     setLogLevel('Debug');
     
     // --- CANVAS GLOBALE VARIABLEN ---
-    // Diese Variablen werden vom Canvas-System zur Verfügung gestellt und sind sicher.
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
+    // Globale Firebase-Instanzen
+    window.db = null;
+    window.auth = null;
+
     // --- FIREBASE INITIALISIERUNG ---
-    window.app = initializeApp(firebaseConfig);
-    window.db = getFirestore(window.app);
-    window.auth = getAuth(window.app);
-    
-    // Globaler Verweis für Master Code (Bleibt im Klartext, da es nur ein lokaler Vergleich ist)
+    const hasValidConfig = firebaseConfig && firebaseConfig.apiKey && firebaseConfig.projectId;
+    if (hasValidConfig) {
+        window.app = initializeApp(firebaseConfig);
+        window.db = getFirestore(window.app);
+        window.auth = getAuth(window.app);
+    } else {
+        console.warn("Firestore Konfiguration fehlt oder ist ungültig. DB-Operationen sind deaktiviert.");
+        // Zeige einen Fehler in der Login-Ansicht an, falls die Konfiguration fehlt
+        document.addEventListener('DOMContentLoaded', () => {
+             showAuthError("❌ DB-Konfiguration fehlt. Nur Test-Login möglich.", false);
+        });
+    }
+
+    // Globaler Verweis für Master Code
     window.MASTER_ACCESS_CODE = "123456"; 
     window.currentPin = ""; // Speichert den aktuell eingegebenen PIN-Code
-
+    window.lastCode = "";
+    
     /**
      * Berechnet den Pfad zur Artikelsammlung für den aktuellen Benutzer.
-     * Daten werden als privat im Benutzerbereich gespeichert.
-     * Pfad: /artifacts/{appId}/users/{userId}/artikel
      */
     function getArtikelCollectionRef(userId) {
+        if (!window.db) {
+            console.error("Datenbankverbindung nicht verfügbar.");
+            return null;
+        }
         if (!userId) {
             console.error("Kann Collection nicht abrufen: Benutzer-ID fehlt.");
             return null;
         }
+        // Pfad: /artifacts/{appId}/users/{userId}/artikel
         return collection(window.db, `artifacts/${appId}/users/${userId}/artikel`);
     }
 
+
     /**
-     * Überprüft den Anmeldestatus und aktualisiert die UI.
+     * Führt die Anmeldung mit dem Master Code durch.
+     */
+    async function loginWithCode(enteredCode) {
+        showAuthError("", false); 
+
+        if (enteredCode === window.MASTER_ACCESS_CODE) {
+            // Beim erfolgreichen Code-Check die UI umschalten
+            await checkLogin(); 
+        } else {
+            showAuthError("❌ Falscher Zugangscode.", true);
+            updatePinIndicators(true);
+            
+            setTimeout(() => {
+                window.currentPin = "";
+                updatePinIndicators();
+            }, 500);
+        }
+    }
+
+    /**
+     * Überprüft den Anmeldestatus (Firebase) und aktualisiert die UI.
      */
     async function checkLogin() { 
+        if (!window.auth) {
+            // Wenn Auth nicht initialisiert ist (weil Config fehlte), simulieren wir den Login-Erfolg
+            // Dies ist ein Notfall-Fallback, damit die App überhaupt startet.
+            window.currentUserId = "TEST-USER-ID";
+            document.getElementById("loginView").style.display = "none";
+            document.getElementById("appView").style.display = "flex";
+            document.getElementById("userDisplay").innerText = "TEST-MODE";
+            window.currentPin = ""; 
+            updatePinIndicators();
+            document.getElementById("popup").style.display = "none"; 
+            return;
+        }
+
         // 1. Authentifizierung durchführen oder Zustand prüfen
         if (!window.auth.currentUser) {
             try {
                 if (initialAuthToken) {
-                    // Signiert mit sicherem Custom Token
                     await signInWithCustomToken(window.auth, initialAuthToken);
                 } else {
-                    // Fallback: Anonym anmelden (weniger sicher, aber funktioniert ohne Token)
                     await signInAnonymously(window.auth);
                 }
             } catch (error) {
@@ -77,7 +124,6 @@
             window.currentUserId = user.uid;
             document.getElementById("loginView").style.display = "none";
             document.getElementById("appView").style.display = "flex";
-            // Die gekürzte ID wird nur in der UI angezeigt, die volle ID (user.uid) für DB-Pfad genutzt
             document.getElementById("userDisplay").innerText = user.uid.substring(0, 8) + '...'; 
             window.currentPin = ""; 
             updatePinIndicators();
@@ -89,47 +135,6 @@
             window.currentPin = ""; 
             updatePinIndicators();
             showAuthError("", false); 
-        }
-    }
-
-    /**
-     * Verarbeitet die Eingabe von Ziffern über den Ziffernblock.
-     */
-    window.handlePinInput = async function(value) {
-        showAuthError("", false); 
-
-        if (value === 'backspace') {
-            window.currentPin = window.currentPin.slice(0, -1);
-        } else if (value === 'clear') {
-             window.currentPin = "";
-        } else if (value.match(/[0-9]/) && window.currentPin.length < window.MASTER_ACCESS_CODE.length) {
-            window.currentPin += value;
-        }
-
-        updatePinIndicators();
-
-        if (window.currentPin.length === window.MASTER_ACCESS_CODE.length) {
-            await loginWithCode(window.currentPin);
-        }
-    }
-
-    /**
-     * Führt die Anmeldung mit dem Master Code durch.
-     */
-    async function loginWithCode(enteredCode) {
-        showAuthError("", false); 
-
-        if (enteredCode === window.MASTER_ACCESS_CODE) {
-            // Beim erfolgreichen Code-Check wird die UI umgeschaltet, da die Session bereits steht (siehe onAuthStateChanged)
-            await checkLogin(); 
-        } else {
-            showAuthError("❌ Falscher Zugangscode.", true);
-            updatePinIndicators(true);
-            
-            setTimeout(() => {
-                window.currentPin = "";
-                updatePinIndicators();
-            }, 500);
         }
     }
     
@@ -144,8 +149,8 @@
 
         showResult("Lade Daten...", "loading");
 
-        if(!window.auth.currentUser) {
-            showResult("Fehler: Kein aktiver Benutzer angemeldet.", "error");
+        if(!window.db || !window.currentUserId) {
+            showResult("Fehler: Datenbank nicht verfügbar.", "error");
             setTimeout(() => { window.lastCode = ""; if(window.html5QrCode) window.html5QrCode.resume(); }, 1000); 
             return;
         }
@@ -161,7 +166,6 @@
             const querySnapshot = await getDocs(q);
             
             if (!querySnapshot.empty) {
-                // Ein Artikel gefunden
                 const docSnap = querySnapshot.docs[0];
                 foundData = { id: docSnap.id, ...docSnap.data() };
             }
@@ -204,7 +208,6 @@
 
         } else {
             showResult(`Unbekannter Barcode:<br><em>${code}</em>`, "error");
-            // Zeige das Popup an, wenn der Artikel unbekannt ist.
             document.getElementById("popup").style.display = "flex";
         }
     }
@@ -221,13 +224,19 @@
             showResult(`FEHLER: Bitte Name und Platz ausfüllen.`, "error"); 
             return;
         }
+        
+        if(!window.db || !window.currentUserId) {
+            showResult("FEHLER: Datenbank nicht verfügbar. Speichern nicht möglich.", "error"); 
+            hidePopup();
+            return;
+        }
 
         const artikelRef = getArtikelCollectionRef(window.currentUserId);
         if (!artikelRef) return;
 
         try {
             await addDoc(artikelRef, {
-                barcode: window.lastCode, // lastCode ist der aktuelle, unbekannte Code
+                barcode: window.lastCode, 
                 name: name,
                 stellplatz: platz,
                 blocklager: block,
@@ -250,16 +259,43 @@
         if (window.html5QrCode) {
             window.html5QrCode.stop().catch(err => console.warn("Kamera Stoppen fehlgeschlagen:", err));
         }
-        await signOut(window.auth);
+        if (window.auth) {
+            await signOut(window.auth);
+        }
         window.currentUserId = null;
         await checkLogin();
     }
     
+    // Verarbeitet die Eingabe von Ziffern über den Ziffernblock (Für HTML-onclick)
+    window.handlePinInput = async function(value) {
+        showAuthError("", false); 
+
+        if (value === 'backspace') {
+            window.currentPin = window.currentPin.slice(0, -1);
+        } else if (value === 'clear') {
+             window.currentPin = "";
+        } else if (value.match(/[0-9]/) && window.currentPin.length < window.MASTER_ACCESS_CODE.length) {
+            window.currentPin += value;
+        }
+
+        updatePinIndicators();
+
+        if (window.currentPin.length === window.MASTER_ACCESS_CODE.length) {
+            await loginWithCode(window.currentPin);
+        }
+    }
+
     // Initialer Aufruf
-    // Stellt sicher, dass die Anmeldung überprüft wird, sobald Firebase bereit ist.
-    onAuthStateChanged(window.auth, () => {
-        checkLogin();
-    });
+    if (window.auth) {
+        onAuthStateChanged(window.auth, () => {
+            checkLogin();
+        });
+    } else {
+         // Fallback, wenn Firebase Init fehlgeschlagen ist (um die App nutzbar zu halten)
+         document.addEventListener('DOMContentLoaded', () => {
+            checkLogin();
+        });
+    }
 </script>
 
 
@@ -654,6 +690,7 @@ input:focus {
     <div id="popup">
         <div id="popupBox">
             <h3>Neuer Artikel</h3>
+            <label>Barcode: <span id="popupBarcode" style="font-weight: bold;"></span></label>
             <label>Name:</label>
             <input id="name" placeholder="Produktname">
             <label>Stellplatz:</label>
@@ -668,12 +705,10 @@ input:focus {
 </div>
 
 <script>
-    // --- Variablen außerhalb des Moduls definieren, damit sie global zugänglich sind ---
-    window.lastCode = "";
+    // --- Globale Variablen für UI-Helfer ---
     window.html5QrCode = null;
-    window.currentUserId = null; 
-    
-    // --- PIN-FELD LOGIK (funktioniert jetzt mit den globalen Variablen aus dem Modul) ---
+
+    // --- PIN-FELD UI LOGIK ---
 
     /**
      * Aktualisiert die visuellen PIN-Indikatoren basierend auf der Länge des aktuellen Codes.
@@ -705,7 +740,7 @@ input:focus {
         r.innerHTML = r.innerHTML.replace(' pulsating', ''); 
 
         if(type === "success" || type === "error") {
-             r.innerHTML = `<div class="${badgeClass}">${type === "success" ? "GEFUNDEN" : "FEHLER"}</div><br>${html}`;
+             r.innerHTML = `<div class="${badgeClass}">${type === "success" ? "GEFUNDEN" : (type === "error" ? "FEHLER" : "STATUS")}</div><br>${html}`;
         } else {
              r.innerHTML = html;
         }
@@ -734,6 +769,18 @@ input:focus {
     }
 
     function startScanner() {
+        // Lade die Scanner-Bibliothek dynamisch
+        if (typeof Html5Qrcode === 'undefined') {
+            const script = document.createElement('script');
+            script.src = "https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js";
+            script.onload = () => initScanner();
+            document.head.appendChild(script);
+        } else {
+            initScanner();
+        }
+    }
+    
+    function initScanner() {
         if (window.html5QrCode) {
             window.html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, window.onScanSuccess)
             .catch(err => {
@@ -754,7 +801,7 @@ input:focus {
             window.onScanSuccess
         ).catch(err => {
             console.error(err);
-            showAuthError("Zugriff verweigert oder Fehler: " + err, true);
+            showAuthError("Zugriff verweigert oder Fehler: " + (err.name || err.message || "Unbekannt"), true);
             document.getElementById("preScan").style.display = "flex";
         });
     }
