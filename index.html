@@ -474,7 +474,9 @@ button.secondary {
             
             try {
                 // Alte Sitzung abmelden, um eine saubere Neuanmeldung zu garantieren
-                await window.appSupabaseClient.auth.signOut();
+                // DIESE ZEILE WURDE ENTFERNT, da die logout()-Funktion bereits die Seite neu lädt
+                // und somit ein sauberer, abgemeldeter Zustand erwartet wird.
+                // await window.appSupabaseClient.auth.signOut(); 
                 
                 // Code ist korrekt, melde anonym bei Supabase an.
                 const { data, error } = await window.appSupabaseClient.auth.signInAnonymously();
@@ -490,6 +492,7 @@ button.secondary {
                     // Das Session-Objekt wird direkt übergeben.
                     await checkLogin(null, data.session); 
                 } else {
+                     // Diese Fehlermeldung wird angezeigt, wenn der Supabase-Aufruf weder einen Fehler noch einen Benutzer zurückgibt.
                      showAuthError("Anmeldung fehlgeschlagen. Überprüfen Sie die Konsolen-Logs und Supabase-Einstellungen.");
                 }
             } catch (e) {
