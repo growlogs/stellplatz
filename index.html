@@ -13,7 +13,8 @@
             // KONFIGURATION: Supabase und Zugangs-Codes
             // ---------------------------------------------------------
             var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-            var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8ZxqnL2BUjf1QJOrXGYlPotaS4";
+            // WICHTIG: Der Schlüssel wurde korrigiert, um die Verbindung zur Datenbank wiederherzustellen!
+            var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
             
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             // !!! KRITISCHE SICHERHEITSWARNUNG: DIESER CODE IST UNSICHER             !!!
@@ -824,7 +825,9 @@
             let articleToEdit = null; 
             
             // NEU: SVG-Strings für die Lagertypen
+            // Regal / Fach (Shelf/Rack)
             const SHELF_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v16m14-16v16M5 8h14M5 12h14M5 16h14"/></svg>';
+            // Blocklager (Warehouse/Building)
             const WAREHOUSE_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9M7 15v6h10v-6M7 18h10"/></svg>';
 
 
@@ -1042,7 +1045,7 @@
 
                 if (data) {
                     // ARTIKEL GEFUNDEN
-                    const lagertyp = data.blocklager ? 'Blocklager 🏢' : 'Regal/Fach 📦';
+                    const lagertyp = data.blocklager ? 'Blocklager' : 'Regal/Fach'; // Text für die Karte
                     
                     const content = `
                         <p><strong>Stellplatz:</strong> ${data.stellplatz}</p>
@@ -1094,7 +1097,7 @@
                 const block = document.getElementById('popupBlocklager').value === 'true';
 
                 const name = baseName + (material ? ` (${material})` : '');
-                const lagertyp = block ? 'Blocklager 🏢' : 'Regal/Fach 📦';
+                const lagertyp = block ? 'Blocklager' : 'Regal/Fach'; // Text für die Karte
 
 
                 if (!baseName || !platz) {
@@ -1213,6 +1216,7 @@
                 const articleListContainer = document.getElementById('articleList');
                 articleListContainer.innerHTML = '<li>Lade Artikel...</li>'; // Lade-Status anzeigen
 
+                // DATENBANK-ABFRAGE
                 const { data, error } = await window.appSupabaseClient
                     .from("artikel")
                     .select("*")
@@ -1242,7 +1246,7 @@
                         listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
                     }
                     
-                    // NEU: Lagertyp-Icon als SVG einfügen
+                    // Lagertyp-Icon als SVG einfügen (basierend auf der Korrektur)
                     const lagertypIconSvg = item.blocklager ? WAREHOUSE_ICON_SVG : SHELF_ICON_SVG;
 
                     const details = `
