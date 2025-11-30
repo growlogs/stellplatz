@@ -8,6 +8,11 @@
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#0d0d0d">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+</script>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
@@ -186,9 +191,6 @@ if ("serviceWorker" in navigator) {
 </script>
 </div>
 <script>
-const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
-const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function sendMagicLink() {
     const email = document.getElementById("emailInput").value;
@@ -219,6 +221,7 @@ async function checkLogin() {
     }
 }
 
+supabase.auth.onAuthStateChange(checkLogin);
 checkLogin();
 </script>
 
