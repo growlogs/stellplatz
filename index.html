@@ -5,635 +5,289 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Stellplatz App</title>
 
-<!-- Lade die Supabase Bibliothek -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-// --- Globale Konstanten ---
-// WICHTIG: Ersetzen Sie den Platzhalter durch Ihren ANON PUBLIC KEY! (Beginnt mit eyJ...).
-// Dies ist der sicherste Schlüssel für clientseitige Nutzung.
-const SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
-
-// --- SUPABASE INITIALISIERUNG ---
-// Initialisiert den Client (für alle anderen Data API-Aufrufe)
-(function() {
-    // Erzeugt den Client und weist ihn der globalen Variable zu
-    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-})();
-</script>
-
-<!-- Lade die Scanner Bibliothek -->
 <script src="https://unpkg.com/html5-qrcode"></script>
 
-<style>
-/* --- GLOBALE STYLES & HINTERGRUND --- */
-* {
-    box-sizing: border-box;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
+<script>
+const SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
 
+window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+</script>
+
+<style>
 body {
     margin: 0;
-    padding: 0;
-    /* Tiefdunkler, subtiler Farbverlauf für Premium-Look */
-    background: linear-gradient(145deg, #09090b 0%, #1e1e24 100%);
+    background: linear-gradient(145deg, #09090b, #1e1e24);
     color: white;
-    height: 100dvh; 
-    display: flex;
-    flex-direction: column;
+    height: 100vh;
+    font-family: Arial, sans-serif;
     overflow: hidden;
 }
 
-/* --- ANIMATIONEN --- */
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 0.8; }
-    50% { transform: scale(1.05); opacity: 1; }
-    100% { transform: scale(1); opacity: 0.8; }
-}
-.pulsating {
-    animation: pulse 1.5s infinite ease-in-out;
+#loginView, #appView {
+    height: 100%;
+    display: none;
 }
 
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    20%, 60% { transform: translateX(-5px); }
-    40%, 80% { transform: translateX(5px); }
-}
-
-/* --- HEADER & LAYOUT --- */
-header {
-    height: 60px;
-    background: #1a1a1a;
+#loginView {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
-    border-bottom: 1px solid #333;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-    z-index: 10;
+    padding: 50px 20px;
 }
 
-header h1 {
-    font-size: 1.2rem;
-    margin: 0;
-    color: #f0f0f0;
-}
-
-#appView {
-    flex: 1;
-    display: none; 
-    flex-direction: column;
-    height: 100%;
-    position: relative;
-}
-
-/* --- SCANNER BEREICH --- */
-#reader-container {
-    position: relative;
-    width: 100%;
-    height: 60%; 
-    background: black;
-    overflow: hidden;
-}
-
-#result-container {
-    height: 40%; 
-    background: #18181f; /* Dunkler als der Hintergrund, für Kontrast */
-    border-top-left-radius: 30px; /* Stärkere Rundung */
-    border-top-right-radius: 30px;
-    margin-top: -30px; 
-    z-index: 5;
-    padding: 30px 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    box-shadow: 0 -5px 25px rgba(0,0,0,0.8); /* Starker Schatten */
-    transition: all 0.3s ease;
-}
-
-#result {
-    font-size: 1.1em;
-    text-align: center;
-    line-height: 1.5;
-    width: 100%;
-    padding: 10px;
-}
-
-/* --- LOGIN VIEW --- */
-#loginView {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between; 
-    align-items: center;
-    padding: 40px 20px;
-}
-
-/* Login Text/Status */
-#authError {
-    color: #f55; 
-    margin-top: 15px; 
-    height: 1.2em;
-    font-weight: 500;
-}
-.error-shake {
-    animation: shake 0.5s;
-}
-
-/* --- PIN ANZEIGE (INDIKATOR-PUNKTE) --- */
 #pinIndicators {
     display: flex;
     gap: 15px;
-    margin-bottom: 50px;
-    height: 12px;
 }
+
 .pin-indicator {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    background: transparent;
-    transition: background-color 0.2s, border-color 0.2s;
+    border: 2px solid rgba(255,255,255,0.4);
 }
+
 .pin-indicator.active {
-    background: #4A90E2; /* Hellblau gefüllt */
+    background: #4A90E2;
     border-color: #4A90E2;
 }
+
 .pin-indicator.error {
-    background: #ff4d4d;
-    border-color: #ff4d4d;
-    animation: shake 0.3s;
+    background: red;
+    border-color: red;
 }
 
-
-/* --- KEYPAD STYLES (Glassmorphism + Subtle Gradient) --- */
 #keypad {
     width: 100%;
-    max-width: 380px;
+    max-width: 320px;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 18px;
+    gap: 15px;
 }
 
 .keypad-button {
-    height: 80px;
-    width: 100%;
-    /* Glaseffekt */
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-    
+    height: 70px;
+    border-radius: 50%;
+    font-size: 1.5em;
+    background: rgba(255,255,255,0.08);
     color: white;
-    border-radius: 50px; 
-    font-size: 1.8rem;
-    font-weight: 300;
-    cursor: pointer;
-    transition: all 0.15s ease-out;
+    border: none;
+}
+
+#reader { height: 60%; background: black; }
+
+#result {
+    height: 40%;
     display: flex;
-    flex-direction: column;
-    align-items: center;
     justify-content: center;
-    line-height: 1;
-    position: relative;
-    user-select: none;
-    touch-action: manipulation;
+    align-items: center;
+    font-size: 1.1em;
+    padding: 20px;
 }
 
-.keypad-button small {
-    font-size: 0.6rem;
-    opacity: 0.5;
-    margin-top: 3px;
-    text-transform: uppercase;
-}
+.green { color: #4CAF50; }
+.red { color: red; }
+.yellow { color: gold; }
 
-.keypad-button:active {
-    background: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-    transform: scale(0.95);
-}
-
-.keypad-button.action {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    font-size: 1rem;
-    opacity: 0.6;
-}
-
-.keypad-button.backspace svg {
-    width: 28px;
-    height: 28px;
-    fill: none;
-    stroke: white;
-    stroke-width: 2;
-}
-
-/* --- GENERELLE BUTTONS --- */
-button {
-    width: 100%;
-    padding: 15px;
-    margin-top: 15px;
-    border: none;
-    border-radius: 12px; /* Weichere Kanten */
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    /* Lebhafter Gradient für Hauptaktionen */
-    background: linear-gradient(90deg, #4A90E2 0%, #50C9C3 100%); 
-    color: white;
-    box-shadow: 0 4px 15px rgba(74, 144, 226, 0.4);
-    transition: all 0.2s ease;
-}
-.header-button {
-    width: auto;
-    padding: 8px 15px;
-    font-size: 0.8em;
-    margin-top: 0;
-    background: #333;
-    box-shadow: none;
-}
-
-button:active {
-    transform: scale(0.98);
-    box-shadow: 0 2px 10px rgba(74, 144, 226, 0.5);
-}
-
-button.secondary {
-    background: #333;
-    margin-top: 10px;
-    box-shadow: none;
-}
-
-/* --- STATUS BADGES --- */
-.status-badge {
-    display: inline-block;
-    padding: 8px 18px;
-    border-radius: 50px;
-    margin-bottom: 10px;
-    font-weight: bold;
-    letter-spacing: 0.5px;
-    transition: all 0.3s ease;
-}
-.green { background: rgba(0, 255, 0, 0.1); color: #4CAF50; border: 1px solid #4CAF50; }
-.red { background: rgba(255, 0, 0, 0.1); color: #ff4d4d; border: 1px solid #ff4d4d; }
-.yellow { color: #FFC107; }
-
-/* --- POPUP (MODAL) --- */
 #popup {
-    /* Wichtig: Initial verstecken! */
-    display: none; 
+    display: none;
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 100;
+    inset: 0;
+    background: rgba(0,0,0,.8);
     justify-content: center;
     align-items: center;
 }
 
 #popupBox {
-    background: #1e1e24; 
-    padding: 25px;
-    border-radius: 20px;
+    background: #222;
+    padding: 20px;
+    border-radius: 15px;
     width: 90%;
-    max-width: 380px;
-    box-shadow: 0 15px 40px rgba(0,0,0,0.7);
+    max-width: 350px;
 }
 
-input { 
+input {
     width: 100%;
-    padding: 15px;
-    margin: 10px 0;
-    background: #2a2a30;
-    border: 1px solid #3e3e4a;
-    color: white;
+    padding: 10px;
+    margin-bottom: 10px;
     border-radius: 10px;
-    font-size: 16px;
-    transition: border-color 0.3s;
-}
-input:focus {
-    border-color: #4A90E2;
-    outline: none;
+    border: none;
 }
 </style>
 </head>
 
 <body>
 
-<!-- LOGIN SCREEN - PIN EINGABE ÜBER KEYPAD -->
+<!-- LOGIN -->
 <div id="loginView">
-    <!-- Header (Symbol und Text) -->
-    <div style="text-align: center; margin-top: 50px;">
-        <div style="font-size: 3em; margin-bottom: 10px; color: #4A90E2;">
-            <!-- Modernes Icon mit Licht-Effekt -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock">
-                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-        </div>
-        <h2 style="font-size: 1.5rem; font-weight: 500; margin-bottom: 10px;">Stellplatz Zugang</h2>
-        <div id="authError" style="color: #f55; margin-top: 15px; height: 1.2em;"></div>
-    </div>
-    
-    <!-- PIN Indikatoren -->
+    <h2>🔐 Stellplatz Login</h2>
+
     <div id="pinIndicators">
-        <div class="pin-indicator" data-index="0"></div>
-        <div class="pin-indicator" data-index="1"></div>
-        <div class="pin-indicator" data-index="2"></div>
-        <div class="pin-indicator" data-index="3"></div>
-        <div class="pin-indicator" data-index="4"></div>
-        <div class="pin-indicator" data-index="5"></div>
+        <div class="pin-indicator"></div>
+        <div class="pin-indicator"></div>
+        <div class="pin-indicator"></div>
+        <div class="pin-indicator"></div>
+        <div class="pin-indicator"></div>
+        <div class="pin-indicator"></div>
     </div>
-    
-    <!-- Keypad -->
-    <div id="keypad" oncontextmenu="return false;">
-        <!-- Reihe 1 -->
-        <button class="keypad-button" onclick="handlePinInput('1')">1</button>
-        <button class="keypad-button" onclick="handlePinInput('2')">2<small>ABC</small></button>
-        <button class="keypad-button" onclick="handlePinInput('3')">3<small>DEF</small></button>
-        
-        <!-- Reihe 2 -->
-        <button class="keypad-button" onclick="handlePinInput('4')">4<small>GHI</small></button>
-        <button class="keypad-button" onclick="handlePinInput('5')">5<small>JKL</small></button>
-        <button class="keypad-button" onclick="handlePinInput('6')">6<small>MNO</small></button>
-        
-        <!-- Reihe 3 -->
-        <button class="keypad-button" onclick="handlePinInput('7')">7<small>PQRS</small></button>
-        <button class="keypad-button" onclick="handlePinInput('8')">8<small>TUV</small></button>
-        <button class="keypad-button" onclick="handlePinInput('9')">9<small>WXYZ</small></button>
-        
-        <!-- Reihe 4 (Aktionen) -->
-        <button class="keypad-button action" onclick="handlePinInput('clear')">LÖSCHEN</button>
-        <button class="keypad-button" onclick="handlePinInput('0')">0</button>
-        <button class="keypad-button backspace action" onclick="handlePinInput('backspace')">
-            <!-- Backspace-Icon (modernisiert) -->
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M21 5H9L3 12L9 19H21V5Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 9L15 12L12 15" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-        </button>
+
+    <div id="keypad">
+        <button class="keypad-button" onclick="handlePin('1')">1</button>
+        <button class="keypad-button" onclick="handlePin('2')">2</button>
+        <button class="keypad-button" onclick="handlePin('3')">3</button>
+
+        <button class="keypad-button" onclick="handlePin('4')">4</button>
+        <button class="keypad-button" onclick="handlePin('5')">5</button>
+        <button class="keypad-button" onclick="handlePin('6')">6</button>
+
+        <button class="keypad-button" onclick="handlePin('7')">7</button>
+        <button class="keypad-button" onclick="handlePin('8')">8</button>
+        <button class="keypad-button" onclick="handlePin('9')">9</button>
+
+        <button class="keypad-button" onclick="clearPin()">↺</button>
+        <button class="keypad-button" onclick="handlePin('0')">0</button>
+        <button class="keypad-button" onclick="backspace()">⌫</button>
     </div>
 </div>
 
-<div id="appView" style="display:none;">
+<!-- APP -->
+<div id="appView">
 
-    <!-- Container für den Videostream -->
-    <div id="reader"></div>
+<div id="reader"></div>
+<div id="result">Scanne einen Barcode...</div>
 
-    <!-- START SCAN BUTTON: Zeigt den Button zur manuellen Aktivierung -->
-    <div id="preScan" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; flex: 1;">
-        <h2>Kamera aktivieren</h2>
-        <p>Klicken Sie, um den Barcode-Scanner zu starten.</p>
-        <button onclick="startScannerAndHideButton()" style="max-width: 300px;">SCANNER STARTEN</button>
-    </div>
-
-    <!-- Ergebnis Bereich -->
-    <div id="result-container">
-        <div style="width: 50px; height: 5px; background: #333; border-radius: 2px; margin-bottom: 20px;"></div>
-        <div id="result">
-            Scannen Sie einen Barcode...
-        </div>
-    </div>
-
-    <!-- Popup für neue Artikel -->
-    <div id="popup">
-        <div id="popupBox">
-            <h3>Neuer Artikel</h3>
-            <label>Name:</label>
-            <input id="name" placeholder="Produktname">
-            <label>Stellplatz:</label>
-            <input id="platz" placeholder="z.B. A-01">
-            <label style="display: flex; align-items: center; margin: 15px 0; font-size: 0.9em; opacity: 0.8;">
-                <input type="checkbox" id="block" style="width: auto; margin-right: 10px; accent-color: #4A90E2;"> Blocklager
-            </label>
-            <button onclick="save()">Speichern</button>
-            <button class="secondary" onclick="hidePopup()">Abbrechen</button>
-        </div>
-    </div>
+<div id="popup">
+<div id="popupBox">
+    <h3>Neuer Artikel</h3>
+    <input id="name" placeholder="Name">
+    <input id="platz" placeholder="Stellplatz">
+    <label>
+        <input type="checkbox" id="block"> Blocklager
+    </label>
+    <button onclick="save()">Speichern</button>
+    <button onclick="hidePopup()">Abbrechen</button>
+</div>
 </div>
 
-    <script>
-        // Deklaration mit 'var' um sicherzustellen, dass die Variablen im gesamten Skript zugänglich sind
-        var lastCode = "";
-        var html5QrCode = null;
-        var currentUserId = null; // Globaler Benutzerstatus
-        
-        // --- Core Functions ---
-        
-        function showResult(text, color) {
-            const r = document.getElementById("result");
-            r.className = color;
-            r.innerHTML = text;
-        }
-
-        async function lookup(code) {
-            // Prüfen, ob der Benutzer eingeloggt ist
-            if (!currentUserId) {
-                showResult("⚠️ Nicht eingeloggt. Bitte zuerst anmelden.", "red");
-                return;
-            }
-
-            // Scanner kurz stoppen, um Mehrfachscans zu verhindern
-            if (html5QrCode) {
-                await html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
-            }
-            
-            showResult("⏳ Prüfe Artikel...", "yellow");
-
-            // *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
-            const { data, error } = await window.supabaseClient
-                .from("artikel")
-                .select("*")
-                .eq("barcode", code)
-                .eq("user_id", currentUserId) // WICHTIG: Filtern nach User-ID
-                .single();
-            
-            
-            if (data) {
-
-                await window.supabaseClient // *** VERWENDE GLOBALE INSTANZ ***
-                    .from("artikel")
-                    .update({ scans: data.scans + 1 })
-                    .eq("barcode", code)
-                    .eq("user_id", currentUserId); // Update nur eigene Artikel
-
-                showResult(
-                    `✅ ${data.name}<br>
-                    📍 ${data.stellplatz}<br>
-                    🧱 Blocklager: ${data.blocklager ? "JA" : "NEIN"}<br>
-                    📊 Scans: ${data.scans + 1}`,
-                    "green"
-                );
-                
-                // Scanner nach erfolgreichem Lookup wieder starten
-                if (html5QrCode) {
-                    html5QrCode.start(
-                        { facingMode: "environment" },
-                        { fps: 10, qrbox: 250 },
-                        code => lookup(code)
-                    ).catch(err => console.error("Kamera konnte nicht gestartet werden:", err));
-                }
-
-
-            } else {
-                showResult("❌ Unbekannter Artikel", "red");
-                lastCode = code;
-                
-                // Scanner stoppen, bevor das Popup erscheint, um Hintergrund-Scans zu verhindern
-                if (html5QrCode) {
-                    await html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
-                }
-
-                showPopup();
-            }
-        }
-
-        function showPopup() {
-            document.getElementById("popup").style.display = "flex";
-        }
-
-        function hide() {
-            document.getElementById("popup").style.display = "none";
-            // Scanner nach Schließen des Popups (ohne Speichern) neu starten
-            startScanner();
-        }
-
-        async function save() {
-            // Prüfen, ob der Benutzer eingeloggt ist, bevor gespeichert wird
-            if (!currentUserId) {
-                alert("Fehler: Kann nicht speichern, da kein Benutzer eingeloggt ist.");
-                hide();
-                return;
-            }
-
-            // Speichert den neuen Artikel
-            await window.supabaseClient.from("artikel").insert([{ // *** VERWENDE GLOBALE INSTANZ ***
-                barcode: lastCode,
-                name: document.getElementById("name").value,
-                stellplatz: document.getElementById("platz").value,
-                blocklager: document.getElementById("block").checked,
-                scans: 0,
-                user_id: currentUserId // WICHTIG: User-ID hinzufügen
-            }]);
-
-            hide();
-            // lookup() wird mit dem neuen Eintrag gestartet (dies startet den Scanner im Erfolgsfall neu)
-            lookup(lastCode); 
-        }
-        
-        // WICHTIGE FUNKTION: Wird nur beim Klick auf den Button aufgerufen (löst Browser-Sperre)
-        function startScannerAndHideButton() {
-            document.getElementById("preScan").style.display = "none";
-            document.getElementById("reader").style.display = "block";
-            startScanner();
-        }
-
-        // FUNKTION: Startet den Scanner
-        function startScanner() {
-            if (html5QrCode) {
-                // Wenn er schon initialisiert ist, aber gestoppt war (z.B. nach hide()), einfach starten
-                return html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: 250 },
-                    code => lookup(code)
-                ).catch(err => console.error("Kamera konnte nicht gestartet werden:", err));
-            }
-            
-            // Wenn er noch nicht initialisiert ist, neu erstellen und starten
-            html5QrCode = new Html5Qrcode("reader");
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: 250 },
-                    code => lookup(code)
-            )
-            .catch(err => {
-                // Zeige dem Benutzer den Fehler an, falls der Browser den Zugriff verweigert
-                showResult(`⚠️ Kamerafehler: ${err.name}. Bitte Kameraberechtigungen prüfen.`, "red");
-                console.error("Kamera konnte nicht gestartet werden:", err);
-            });
-        }
-    </script>
 </div>
+
 <script>
-// --- Global Login Script ---
+/* -------- PIN LOGIN -------- */
 
-// NEU: Verwendet nativen Fetch mit Triple-Key-Strategie für maximale Robustheit
-async function sendMagicLink() {
-    const email = document.getElementById("emailInput").value;
-    const redirectUrl = encodeURIComponent(window.location.href);
+let enteredPin = "";
+const CORRECT_PIN = "123456"; // << PIN HIER ÄNDERN
 
-    // 1. FÜGT den apikey Query-Parameter hinzu
-    const url = `${SUPABASE_URL}/auth/v1/otp?apikey=${SUPABASE_KEY}`;
+function handlePin(num) {
+    if (enteredPin.length >= 6) return;
+    enteredPin += num;
+    updateDots();
+    if (enteredPin.length === 6) validate();
+}
 
-    const payload = {
-        email: email,
-        options: {
-            emailRedirectTo: redirectUrl 
-        }
-    };
-    
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                // 2. Fügt den Schlüssel in den speziellen 'apikey' Header ein
-                'apikey': SUPABASE_KEY, 
-                // 3. Fügt den Schlüssel als Bearer Token hinzu
-                'Authorization': `Bearer ${SUPABASE_KEY}`, 
-            },
-            body: JSON.stringify(payload)
-        });
+function updateDots() {
+    const dots = document.querySelectorAll(".pin-indicator");
+    dots.forEach((d,i)=>d.classList.toggle("active", i < enteredPin.length));
+}
 
-        const data = await response.json();
+function clearPin() {
+    enteredPin = "";
+    updateDots();
+}
 
-        if (response.ok) {
-            alert("✅ Login-Link wurde per Mail gesendet.");
-        } else {
-            // Zeigt den Fehler aus der Supabase-Antwort an
-            console.error("Supabase Auth API Error:", data);
-            alert("❌ Fehler beim Senden des Magic-Links: " + (data.error_description || data.msg || "Unbekannter Fehler"));
-        }
-    } catch (e) {
-        console.error("Network Fetch Error:", e);
-        alert("❌ Netzwerkfehler: Konnte Supabase nicht erreichen. Bitte Internetverbindung prüfen.");
+function backspace() {
+    enteredPin = enteredPin.slice(0,-1);
+    updateDots();
+}
+
+function validate() {
+    const dots = document.querySelectorAll(".pin-indicator");
+
+    if (enteredPin === CORRECT_PIN) {
+        document.getElementById("loginView").style.display="none";
+        document.getElementById("appView").style.display="block";
+        startScanner();
+    } else {
+        dots.forEach(d=>d.classList.add("error"));
+        setTimeout(()=> {
+            dots.forEach(d=>d.classList.remove("error"));
+            clearPin();
+        }, 1000);
     }
 }
 
-async function checkLogin() {
-    // *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
-    const { data } = await window.supabaseClient.auth.getSession();
+/* -------- SCANNER -------- */
 
-    if (data.session) {
-        // Setze die globale Benutzer-ID
-        currentUserId = data.session.user.id; 
+let html5QrCode = null;
+let lastCode = "";
 
-        document.getElementById("loginView").style.display = "none";
-        document.getElementById("appView").style.display = "flex"; 
-        
-        // Nach erfolgreichem Login: Zeige den Button zum manuellen Starten des Scanners an
-        document.getElementById("preScan").style.display = "flex"; 
-        document.getElementById("reader").style.display = "none"; 
+function showResult(msg, cls) {
+    const r=document.getElementById("result");
+    r.className=cls;
+    r.innerHTML=msg;
+}
+
+function startScanner() {
+    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start({facingMode:"environment"},{fps:10,qrbox:250},
+        code => lookup(code));
+}
+
+async function lookup(code) {
+
+    await html5QrCode.stop();
+    showResult("⏳ Prüfe...", "yellow");
+
+    const { data } = await supabaseClient
+        .from("artikel")
+        .select("*")
+        .eq("barcode", code)
+        .single();
+
+    if (data) {
+        await supabaseClient
+            .from("artikel")
+            .update({ scans: data.scans + 1 })
+            .eq("barcode", code);
+
+        showResult(`✅ ${data.name}<br>📍 ${data.stellplatz}<br>📊 ${data.scans+1}`, "green");
+        startScanner();
 
     } else {
-        // Setze die globale Benutzer-ID zurück, wenn nicht eingeloggt
-        currentUserId = null; 
-        document.getElementById("loginView").style.display = "block";
-        document.getElementById("appView").style.display = "none";
+        lastCode = code;
+        showResult("❌ Unbekannt", "red");
+        showPopup();
     }
 }
 
-// Überwachung von Login-Status-Änderungen
-// *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
-window.supabaseClient.auth.onAuthStateChange(checkLogin);
-// Initialer Check beim Laden der Seite
-checkLogin();
-</script>
+/* -------- NEUER ARTIKEL -------- */
 
+function showPopup(){
+    document.getElementById("popup").style.display="flex";
+}
+
+function hidePopup(){
+    document.getElementById("popup").style.display="none";
+    startScanner();
+}
+
+async function save() {
+
+    await supabaseClient.from("artikel").insert([{
+        barcode: lastCode,
+        name: name.value,
+        stellplatz: platz.value,
+        blocklager: block.checked,
+        scans: 0
+    }]);
+
+    hidePopup();
+    lookup(lastCode);
+}
+
+document.getElementById("loginView").style.display="flex";
+</script>
 </body>
 </html>
