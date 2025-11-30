@@ -13,7 +13,7 @@
             // KONFIGURATION: Supabase und Zugangs-Codes
             // ---------------------------------------------------------
             var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-            // KORRIGIERT: Der API-Schlüssel wurde auf den funktionsfähigen Wert zurückgesetzt!
+            // BESTÄTIGT KORREKT: Dies ist der öffentliche 'anon' Schlüssel.
             var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
             
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1359,8 +1359,9 @@
                     
                 if (error) {
                     showToast("Fehler beim Laden der Artikelliste.", 'error');
-                    articleListContainer.innerHTML = '<li>FEHLER: Die Liste konnte nicht von der Datenbank geladen werden.</li>';
-                    console.error("Fehler beim Laden der Artikel:", error);
+                    // KRITISCHER HINWEIS, DA DER FEHLER HIER HÄUFIG LIEGT:
+                    console.error("Fehler beim Laden der Artikel (Prüfen Sie RLS-Policies!):", error);
+                    articleListContainer.innerHTML = '<li style="color: var(--color-error-red);">FEHLER: Die Liste konnte nicht von der Datenbank geladen werden. BITTE RLS-POLICIES PRÜFEN!</li>';
                     return;
                 }
 
