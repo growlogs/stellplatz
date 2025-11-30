@@ -13,8 +13,8 @@
             // KONFIGURATION: Supabase und Zugangs-Codes
             // ---------------------------------------------------------
             var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-            // WICHTIG: Der Schlüssel wurde korrigiert, um die Verbindung zur Datenbank wiederherzustellen!
-            var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImexdHAiOjIwODAwMTE3NTl9.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
+            // KORRIGIERT: Der API-Schlüssel wurde auf den funktionsfähigen Wert zurückgesetzt!
+            var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
             
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             // !!! KRITISCHE SICHERHEITSWARNUNG: DIESER CODE IST UNSICHER             !!!
@@ -868,12 +868,10 @@
             let currentUserRole = null; 
             let isAuthReady = false;
             let articleToEdit = null; 
-            let articleToDelete = null; // NEU: Speichert den Artikel für die Löschbestätigung
+            let articleToDelete = null; 
             
-            // NEU: SVG-Strings für die Lagertypen
-            // Regal / Fach (Shelf/Rack) - JETZT: Schwerlastregal Icon
+            // SVG-Strings für die Lagertypen
             const SHELF_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4V4zm4 0v16m8-16v16M4 10h16M4 16h16"/></svg>';
-            // Blocklager (Warehouse/Building) - NEU: Stapel Paletten/Kisten Icon
             const WAREHOUSE_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l10 5l-10 5l-10-5zM2 12v6l10 5l10-5v-6M12 2v10"/></svg>';
 
 
@@ -1257,7 +1255,7 @@
             }
             
             /**
-             * NEU: Öffnet das benutzerdefinierte Bestätigungs-Popup.
+             * Öffnet das benutzerdefinierte Bestätigungs-Popup.
              */
             function showDeleteConfirmPopup(article) {
                 window.articleToDelete = article; // Artikel global für die Löschung speichern
@@ -1269,7 +1267,7 @@
             }
 
             /**
-             * NEU: Schließt das Lösch-Popup und setzt die Referenz zurück.
+             * Schließt das Lösch-Popup und setzt die Referenz zurück.
              */
             function hideDeleteConfirmPopup() {
                 document.getElementById('deleteConfirmPopupOverlay').classList.remove('show');
@@ -1277,6 +1275,7 @@
                 setTimeout(() => {
                     document.getElementById('deleteConfirmPopupOverlay').style.display = "none";
                     window.articleToDelete = null; 
+                    window.articleToEdit = null; // Setze articleToEdit zurück, nachdem die Lösch-Kette beendet ist.
                 }, 300);
             }
 
