@@ -10,17 +10,17 @@
 
         <script>
             // ---------------------------------------------------------
-            // KONFIGURATION: Supabase und Zugangs-Codes
+            // KONFIGURATION: Supabase und Master-Code
             // ---------------------------------------------------------
             var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
             var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
             
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             // !!! KRITISCHE SICHERHEITSWARNUNG: DIESER CODE IST UNSICHER             !!!
+            // !!! Jeder, der den Quellcode betrachtet, kennt diesen Code.            !!!
             // !!! BITTE DIESE LOGIK DURCH EINE SUPABASE AUTHENTIFIZIERUNG ERSETZEN!  !!!
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            var USER_ACCESS_CODE = "1234"; 
-            var ADMIN_ACCESS_CODE = "567890"; // 6-stellig für Admin-Zugriff
+            var MASTER_ACCESS_CODE = "123456"; 
             // ---------------------------------------------------------
 
             // Initialisierung
@@ -34,14 +34,13 @@
                 window.currentPin = ""; // Speichert den aktuell eingegebenen PIN-Code
                 window.lastCode = ""; // Für Debouncing des Scanners
                 window.currentTabId = "scannerTab"; // Aktueller Tab
-                window.currentUserRole = null; // NEU: Speichert die Rolle ('user', 'admin' oder null)
             })();
         </script>
 
         <style>
             /* --- GLOBALE STYLES & FONT --- */
             :root {
-                --color-bg-dark: #0a0b10;
+                --color-bg-dark: #0a0b10; /* Noch dunklerer Hintergrund */
                 --color-bg-card: #1d222e;
                 --color-accent-blue: #007aff;
                 --color-accent-green: #34c759;
@@ -188,7 +187,7 @@
                 font-weight: 500;
             }
             
-            /* Ladezustand für Login */
+            /* NEU: Ladezustand für Login */
             #loadingAuth {
                 text-align: center;
                 font-size: 1.1rem;
@@ -215,6 +214,7 @@
             }
 
             .pin-indicator.active {
+                /* KORREKTUR: CSS Variable vervollständigt */
                 background: var(--color-accent-blue);
                 border-color: var(--color-accent-blue);
                 box-shadow: 0 0 10px rgba(0, 122, 255, 0.6);
@@ -244,6 +244,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                /* Zentrierung im Grid-Bereich */
                 margin: 0 auto;
             }
 
@@ -425,8 +426,8 @@
                 background: rgba(255, 255, 255, 0.2);
             }
 
-            /* --- POPUP / REGISTRIEREN & ADMIN EDIT (REUSABLE STYLES) --- */
-            #popupOverlay, #adminEditPopupOverlay {
+            /* --- POPUP / REGISTRIEREN --- */
+            #popupOverlay {
                 position: fixed;
                 top: 0;
                 left: 0;
@@ -442,9 +443,8 @@
                 transition: opacity 0.2s ease-in-out;
             }
 
-            #popupOverlay.show, #adminEditPopupOverlay.show {
+            #popupOverlay.show {
                 opacity: 1;
-                display: flex; /* Wichtig, um nach der Transition sichtbar zu sein */
             }
 
             .popup-card {
@@ -457,7 +457,7 @@
                 transition: transform 0.3s ease-in-out;
             }
 
-            #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card {
+            #popupOverlay.show .popup-card {
                 transform: translateY(0);
             }
 
@@ -604,13 +604,6 @@
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                /* NEU: Visuelle Anzeige für Admin-Klickbarkeit */
-                transition: background 0.2s; 
-            }
-            
-            /* NEU: Admin-Elemente haben einen Hover-Effekt */
-            #articleList li[data-role="admin-editable"]:active {
-                background: #2a303e; 
             }
             
             .item-details strong {
@@ -674,32 +667,6 @@
                 </div>
             </form>
         </div>
-        
-        <div id="adminEditPopupOverlay">
-            <form class="popup-card" onsubmit="event.preventDefault(); saveAdminEdit();">
-                <h3>Artikel Bearbeiten (Admin)</h3>
-                <div class="input-group">
-                    <label for="adminEditName">Artikel Name</label>
-                    <input type="text" id="adminEditName" readonly>
-                </div>
-
-                <div class="input-group">
-                    <label for="adminEditBarcode">Barcode</label>
-                    <input type="text" id="adminEditBarcode" readonly>
-                </div>
-                
-                <div class="input-group">
-                    <label for="adminEditPlatz">Neuer Stellplatz</label>
-                    <input type="text" id="adminEditPlatz" required>
-                </div>
-                
-                <div class="action-button-group">
-                    <button type="button" class="action-button cancel" onclick="hideAdminEditPopup()">Abbrechen</button>
-                    <button type="submit" class="action-button register">Speichern</button>
-                </div>
-                <p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin-top: 15px;">Sie sind als Administrator angemeldet und können den Stellplatz ändern.</p>
-            </form>
-        </div>
 
 
         <div id="loginView" class="app-view-container active">
@@ -711,8 +678,7 @@
             </div>
 
             <div id="authContent" style="display: none; align-items: center; flex-direction: column;">
-                <p style="opacity: 0.7;" id="pinInstruction">Geben Sie Ihren PIN ein (User: 4-stellig | Admin: 6-stellig).</p> 
-                
+                <p style="opacity: 0.7;">Geben Sie Ihren 6-stelligen PIN ein.</p>
                 <div id="pinIndicators">
                     <div class="pin-indicator"></div>
                     <div class="pin-indicator"></div>
@@ -722,24 +688,25 @@
                     <div class="pin-indicator"></div>
                 </div>
 
-            <div id="keypad">
-    <button class="keypad-button" data-key="1" onclick="handlePinInput(1)">1</button>
-    <button class="keypad-button" data-key="2" onclick="handlePinInput(2)">2</button>
-    <button class="keypad-button" data-key="3" onclick="handlePinInput(3)">3</button>
-    <button class="keypad-button" data-key="4" onclick="handlePinInput(4)">4</button>
-    <button class="keypad-button" data-key="5" onclick="handlePinInput(5)">5</button>
-    <button class="keypad-button" data-key="6" onclick="handlePinInput(6)">6</button>
-    <button class="keypad-button" data-key="7" onclick="handlePinInput(7)">7</button>
-    <button class="keypad-button" data-key="8" onclick="handlePinInput(8)">8</button>
-    <button class="keypad-button" data-key="9" onclick="handlePinInput(9)">9</button>
-    <button class="keypad-button action" onclick="handleLoginButtonClick()" style="font-size: 1rem; opacity: 1;">Login</button>
-    <button class="keypad-button" data-key="0" onclick="handlePinInput(0)">0</button>
-    <button class="keypad-button action backspace" onclick="handlePinInput('backspace')">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M7 16L3 12M3 12L7 8M3 12H16.8C18.4565 12 20.0456 11.3151 21.2132 10.1475C22.3809 8.97994 23.0658 7.39082 23.0658 5.73449C23.0658 4.07817 22.3809 2.48905 21.2132 1.32148C20.0456 0.15392 18.4565 0 16.8 0H4" transform="translate(0 6)"/>
-        </svg>
-    </button>
-</div>
+                <div id="keypad">
+                    <button class="keypad-button" data-key="1" onclick="handlePinInput(1)">1</button>
+                    <button class="keypad-button" data-key="2" onclick="handlePinInput(2)">2</button>
+                    <button class="keypad-button" data-key="3" onclick="handlePinInput(3)">3</button>
+                    <button class="keypad-button" data-key="4" onclick="handlePinInput(4)">4</button>
+                    <button class="keypad-button" data-key="5" onclick="handlePinInput(5)">5</button>
+                    <button class="keypad-button" data-key="6" onclick="handlePinInput(6)">6</button>
+                    <button class="keypad-button" data-key="7" onclick="handlePinInput(7)">7</button>
+                    <button class="keypad-button" data-key="8" onclick="handlePinInput(8)">8</button>
+                    <button class="keypad-button" data-key="9" onclick="handlePinInput(9)">9</button>
+                    <div class="keypad-button action"></div>
+                    <button class="keypad-button" data-key="0" onclick="handlePinInput(0)">0</button>
+                    <button class="keypad-button action backspace" onclick="handlePinInput('backspace')">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7 16L3 12M3 12L7 8M3 12H16.8C18.4565 12 20.0456 11.3151 21.2132 10.1475C22.3809 8.97994 23.0658 7.39082 23.0658 5.73449C23.0658 4.07817 22.3809 2.48905 21.2132 1.32148C20.0456 0.15392 18.4565 0 16.8 0H4" transform="translate(0 6)"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
             
             <div id="loadingAuth">
                 Initialisiere App...
@@ -807,15 +774,16 @@
             let currentScannedBarcode = "";
             let currentTabId = "scannerTab";
             let currentUserId = null;
-            let currentUserRole = null; // NEU: Initialisierung
             let isAuthReady = false;
-            let articleToEdit = null; // NEU: Speichert den Artikel, der gerade im Admin-Popup bearbeitet wird
 
 
             /* --- HILFSFUNKTIONEN --- */
 
             /**
              * Zeigt eine temporäre, nicht-blockierende Nachricht an.
+             * @param {string} message - Die anzuzeigende Nachricht.
+             * @param {string} type - 'success', 'error', oder 'info'.
+             * @param {number} duration - Anzeigedauer in ms.
              */
             function showToast(message, type = 'info', duration = 3000) {
                 const container = document.getElementById('toastContainer');
@@ -872,14 +840,13 @@
 
                 if (key === 'backspace') {
                     window.currentPin = window.currentPin.slice(0, -1);
-                } else if (typeof key === 'number' && window.currentPin.length < 6) { // Maximal 6 Ziffern
+                } else if (typeof key === 'number' && window.currentPin.length < 6) {
                     window.currentPin += key.toString();
                 }
 
                 updatePinIndicators();
                 
-                // Prüfe, ob die PIN-Länge mit einer bekannten PIN übereinstimmt
-                if (window.currentPin.length === USER_ACCESS_CODE.length || window.currentPin.length === ADMIN_ACCESS_CODE.length) {
+                if (window.currentPin.length === 6) {
                     handlePinEntry(window.currentPin);
                     // PIN zurücksetzen, um weitere Versuche zu ermöglichen
                     window.currentPin = "";
@@ -887,63 +854,14 @@
                 }
             }
 
-            function handlePinInput(key) {
-                document.getElementById("authError").innerText = ""; 
-
-                if (key === 'backspace') {
-                    window.currentPin = window.currentPin.slice(0, -1);
-                } else if (typeof key === 'number' && window.currentPin.length < 6) { // Max 6 Ziffern
-                    window.currentPin += key.toString();
-                }
-
-                updatePinIndicators();
-                
-                // NEU: Die Logik zur automatischen Auslösung des Logins wird entfernt.
-                // Der Login erfolgt nun explizit über den neuen "Login"-Button.
-            }
-            
-            function handleLoginButtonClick() {
-                const pinLength = window.currentPin.length;
-                
-                // Wir erzwingen nun, dass die eingegebene PIN 4 oder 6 Stellen lang sein muss.
-                if (pinLength !== USER_ACCESS_CODE.length && pinLength !== ADMIN_ACCESS_CODE.length) {
-                    document.getElementById("authError").innerText = `PIN muss ${USER_ACCESS_CODE.length} oder ${ADMIN_ACCESS_CODE.length} Ziffern lang sein.`;
-                    showToast("Ungültige PIN-Länge.", 'error');
-                    // PIN zurücksetzen
-                    window.currentPin = "";
-                    setTimeout(updatePinIndicators, 300); 
-                    return;
-                }
-                
-                // Führe den Login-Versuch aus
-                handlePinEntry(window.currentPin);
-                // PIN zurücksetzen nach dem Versuch
-                window.currentPin = "";
-                setTimeout(updatePinIndicators, 300);
-            }
-
             function handlePinEntry(pin) {
-                // ... (Der Rest von handlePinEntry bleibt unverändert) ...
-                let role = null;
-                let success = false;
-                
-                if (pin === USER_ACCESS_CODE) {
-                    role = 'user';
-                    success = true;
-                } else if (pin === ADMIN_ACCESS_CODE) {
-                    role = 'admin';
-                    success = true;
-                }
-                
-                if (success) {
+                // KRITISCHE SICHERHEITSLÜCKE HIER: Code-Prüfung erfolgt im Client-Code!
+                if (pin === MASTER_ACCESS_CODE) {
                     document.getElementById("authError").innerText = "";
-                    window.currentUserRole = role; 
-                    
-                    const roleDisplay = (role === 'admin' ? "ADMIN" : "USER");
-                    document.getElementById("userDisplay").innerText = `${roleDisplay}`;
-                    
                     switchView('appView');
-                    changeTab('scannerTab');
+                    changeTab('scannerTab'); // Stelle sicher, dass der Scanner aktiv ist beim Login
+                    // In einer echten App: Hier müsste man sich mit Supabase Auth anmelden
+                    // und die Session in checkLogin() prüfen.
                 } else {
                     document.getElementById("authError").innerText = "Falscher Code. Bitte versuchen Sie es erneut.";
                     showToast("Falscher Code.", 'error');
@@ -965,6 +883,7 @@
                 authContent.style.display = "none";
 
                 // Warten auf die Session-Prüfung von Supabase (Wenn Auth verwendet würde)
+                // Da wir keine tatsächliche Supabase Auth verwenden, ist dies meistens leer.
                 const { data } = await window.appSupabaseClient.auth.getSession();
                 const currentSession = data.session;
                 
@@ -974,15 +893,16 @@
 
 
                 if (currentSession) {
-                    // Wenn eine Session existiert, setzen Sie die Rolle basierend auf Ihren eigenen Auth-Regeln
-                    // Da wir hier keine echte Supabase Auth verwenden, gehen wir davon aus, dass wir in der App sind.
-                    // Für diese Demo behalten wir die LoginView, bis ein PIN eingegeben wird.
-                    // Beim Login (via PIN) wird die Rolle gesetzt.
-                    switchView('loginView');
-                    authContent.style.display = "flex";
+                    currentUserId = currentSession.user.id;
+                    switchView('appView');
+                    document.getElementById("userDisplay").innerText = "ANONYM (ID: " + currentUserId.substring(0, 4) + ")";
+                    hideResultCard();
+                    loadArticleList();
+                    changeTab('scannerTab'); // Starte in Scanner-Ansicht
                 } else {
                     switchView('loginView');
-                    authContent.style.display = "flex";
+                    currentUserId = null;
+                    authContent.style.display = "flex"; // Zeige Keypad, da keine Session gefunden wurde
                 }
             }
 
@@ -1010,6 +930,7 @@
                     facingMode: "environment"
                 };
                 
+                // Wir übergeben "environment" anstelle einer ID
                 html5QrCode.start({ facingMode: { exact: "environment"} }, config, onScanSuccess, onScanError)
                 .catch(err => {
                     // Overlay wieder, falls der Start fehlschlägt
@@ -1035,6 +956,7 @@
             
             function onScanError(errorMessage) {
                 // Nur loggen, um die Konsole nicht zu überfluten.
+                // console.log(`Scanner Error: ${errorMessage}`);
             }
 
             async function onScanSuccess(code) {
@@ -1076,24 +998,19 @@
                     showResultCard(data.name, content, '✅');
                     document.getElementById("registerButton").style.display = "none"; // Registrieren verstecken
                     
-                    // Scans inkrementieren (ohne auf das Resultat zu warten)
-                    const { error: updateError } = await window.appSupabaseClient
-                        .from("artikel")
-                        .update({ scans: data.scans + 1 })
-                        .eq("barcode", code);
-                        
-                    if(updateError) console.error("Update Fehler:", updateError);
-                    
+                    // Scanner erst wieder starten, wenn Karte geschlossen wird
                 } else {
                     // ARTIKEL NICHT GEFUNDEN
                     const content = `<p>Der Barcode <strong>${code}</strong> wurde noch nicht registriert.</p>`;
                     showResultCard("Unbekannter Artikel", content, '❓');
                     document.getElementById("registerButton").style.display = "block"; // Registrieren anzeigen
                 }
+                
+                // Result Card anzeigen (resume/stop-Logik liegt jetzt in hideResultCard)
             }
             
             
-            /* --- ARTIKEL SPEICHERN LOGIK (FÜR NEUE ARTIKEL) --- */
+            /* --- ARTIKEL SPEICHERN LOGIK --- */
             
             function showPopup() {
                 document.getElementById('popupBarcode').value = currentScannedBarcode;
@@ -1110,7 +1027,6 @@
             }
 
             async function saveArticle() {
-                // ... (Logik bleibt unverändert) ...
                 const barcode = document.getElementById('popupBarcode').value.trim();
                 const baseName = document.getElementById('popupBaseName').value.trim();
                 const material = document.getElementById('popupMaterial').value.trim();
@@ -1128,7 +1044,7 @@
                     .from("artikel")
                     .insert([{ 
                         barcode: barcode, 
-                        name: name,
+                        name: name, // Verwende den generierten Namen
                         stellplatz: platz, 
                         blocklager: block, 
                         scans: 1 
@@ -1146,64 +1062,8 @@
                         '✅'
                     );
                     
-                    if (currentTabId === 'listTab') loadArticleList();
-                }
-            }
-
-
-            /* --- ADMIN EDIT LOGIK (NEU) --- */
-            
-            function showAdminEditPopup(article) {
-                if (window.currentUserRole !== 'admin') {
-                    showToast("Keine Berechtigung zum Bearbeiten.", 'error');
-                    return;
-                }
-                
-                window.articleToEdit = article;
-                
-                document.getElementById('adminEditName').value = article.name;
-                document.getElementById('adminEditBarcode').value = article.barcode;
-                document.getElementById('adminEditPlatz').value = article.stellplatz; // Aktuellen Wert setzen
-                
-                document.getElementById('adminEditPopupOverlay').style.display = "flex";
-                // Verzögerung für die CSS-Transition
-                setTimeout(() => document.getElementById('adminEditPopupOverlay').classList.add('show'), 10);
-            }
-
-            function hideAdminEditPopup() {
-                document.getElementById('adminEditPopupOverlay').classList.remove('show');
-                
-                // Timeout, um sicherzustellen, dass die Transition abgeschlossen ist
-                setTimeout(() => {
-                    document.getElementById('adminEditPopupOverlay').style.display = "none";
-                    window.articleToEdit = null;
-                }, 300);
-            }
-
-            async function saveAdminEdit() {
-                if (!window.articleToEdit) return;
-
-                const newPlatz = document.getElementById('adminEditPlatz').value.trim();
-
-                if (!newPlatz) {
-                    showToast("Der Stellplatz darf nicht leer sein.", "error");
-                    return;
-                }
-
-                const { error } = await window.appSupabaseClient
-                    .from("artikel")
-                    .update({ 
-                        stellplatz: newPlatz 
-                    })
-                    .eq("barcode", window.articleToEdit.barcode);
-
-                if (error) {
-                    showToast(`FEHLER beim Speichern des Stellplatzes.`, "error");
-                    console.error("Speicherfehler:", error);
-                } else {
-                    hideAdminEditPopup();
-                    showToast(`Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`, "success");
-                    loadArticleList(); // Liste aktualisieren
+                    // Artikel-Liste im Hintergrund neu laden, falls aktiv
+                    if (currentTabId === 'listTab') loadArticleList(document.getElementById('articleList'));
                 }
             }
 
@@ -1239,6 +1099,7 @@
                     .select("*")
                     .order("name", { ascending: true }); // Nach Name sortieren
                     
+                // KORREKTUR: Fehlerbehandlung hinzugefügt
                 if (error) {
                     showToast("Fehler beim Laden der Artikelliste.", 'error');
                     articleListContainer.innerHTML = '<li>FEHLER: Die Liste konnte nicht von der Datenbank geladen werden.</li>';
@@ -1255,14 +1116,6 @@
 
                 data.forEach(item => {
                     const listItem = document.createElement('li');
-                    
-                    // NEU: Füge den Klick-Handler nur für Admins hinzu
-                    if (window.currentUserRole === 'admin') {
-                        listItem.onclick = () => showAdminEditPopup(item);
-                        listItem.style.cursor = 'pointer'; 
-                        listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
-                    }
-
                     const details = `
                         <div class="item-details">
                             <strong>${item.name}</strong>
@@ -1279,13 +1132,15 @@
             /* --- NAVIGATION LOGIK --- */
             
             function changeTab(targetTabId) {
-                // ... (Logik bleibt unverändert) ...
+                // Alle Tab-Inhalte ausblenden
                 document.querySelectorAll('.tab-content').forEach(content => {
                     content.classList.remove('active');
                 });
 
+                // Ziel-Tab anzeigen
                 document.getElementById(targetTabId).classList.add('active');
 
+                // Navigation verwalten
                 document.querySelectorAll('.nav-item').forEach(item => {
                     item.classList.remove('active');
                     if (item.getAttribute('data-tab') === targetTabId) {
@@ -1293,38 +1148,38 @@
                     }
                 });
 
-                currentTabId = targetTabId;
-                hideResultCard();
+                currentTabId = targetTabId; // Globalen Tab-Status setzen
+                hideResultCard(); // Ergebnis-Karte verstecken
 
+                // Logik basierend auf dem neuen Tab
                 if (targetTabId === 'scannerTab') {
-                    activateCamera();
+                    activateCamera(); // Ruft activateCamera auf, um Overlay zu verstecken und startScanner zu rufen
                 } else {
-                    stopScanner();
+                    stopScanner(); // Kamera stoppen, wenn ein anderer Tab aktiv wird
                     
                     if (targetTabId === 'listTab') {
-                        loadArticleList();
+                        loadArticleList(); // Liste laden/aktualisieren
                     }
                 }
             }
             
             async function logout() {
-                stopScanner();
+                stopScanner(); // KORREKTUR: Scanner beim Logout stoppen
+                // Hier müsste die Supabase-Session zerstört werden:
+                // await window.appSupabaseClient.auth.signOut(); 
                 
                 // Für diese App-Logik: Einfach zur Login-Ansicht zurück
                 switchView('loginView');
                 window.currentPin = "";
-                window.currentUserRole = null; // WICHTIG: Rolle zurücksetzen
                 updatePinIndicators();
                 showToast("Erfolgreich abgemeldet.", 'info');
                 lastCode = "";
-                
-                // Setze die Anzeige im Header zurück (falls nicht automatisch aktualisiert)
-                document.getElementById("userDisplay").innerText = ""; 
             }
 
 
             // Start der Anwendung
             window.onload = function() {
+                // Keine onAuthStateChange-Listener mehr, da checkLogin jetzt die Hauptlogik steuert
                 checkLogin();
                 updatePinIndicators(); // Setze Indikatoren auf 0
             };
