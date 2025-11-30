@@ -660,15 +660,28 @@
             .item-count .item-label {
                 font-size: 0.6rem; 
                 font-weight: 600;
-                opacity: 0.8;
                 line-height: 1;
             }
             
-            /* Admin Log Liste Styles */
+            /* Admin Log Liste Styles - KORRIGIERT */
             #logTab {
-                /* Padding ist schon im ul-Element enthalten */
-                display: flex; /* Stellt sicher, dass das ul den Platz einnimmt */
+                padding: 15px 15px 20px 15px; /* Hinzugefügtes Padding */
+                display: flex; 
                 flex-direction: column;
+            }
+
+            #logList {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+            
+            #logList li {
+                /* Grund-Styles für die Konsistenz mit Artikelliste */
+                background: var(--color-bg-card);
+                padding: 15px;
+                border-radius: 10px;
+                margin-bottom: 10px;
             }
 
         </style>
@@ -852,7 +865,7 @@
                 </div>
                 
                 <div id="logTab" class="tab-content">
-                    <ul id="logList" style="list-style: none; padding: 15px 15px 20px 15px; margin: 0;">
+                    <ul id="logList">
                         <li>Lade Log-Protokoll...</li>
                     </ul>
                 </div>
@@ -1396,7 +1409,8 @@
             
             async function loadArticleList() {
                 const articleListContainer = document.getElementById('articleList');
-                articleListContainer.innerHTML = '<li>Lade Artikel...</li>'; // Lade-Status anzeigen
+                // Konsistentes Styling für Lade-Status
+                articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Artikel...</li>'; 
 
                 // DATENBANK-ABFRAGE
                 const { data, error } = await window.appSupabaseClient
@@ -1408,14 +1422,15 @@
                     showToast("Fehler beim Laden der Artikelliste.", 'error');
                     // KRITISCHER HINWEIS, DA DER FEHLER HIER HÄUFIG LIEGT:
                     console.error("Fehler beim Laden der Artikel (Prüfen Sie RLS-Policies!):", error);
-                    articleListContainer.innerHTML = '<li style="color: var(--color-error-red);">FEHLER: Die Liste konnte nicht von der Datenbank geladen werden. BITTE RLS-POLICIES PRÜFEN!</li>';
+                    articleListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Die Liste konnte nicht von der Datenbank geladen werden. BITTE RLS-POLICIES PRÜFEN!</li>';
                     return;
                 }
 
                 articleListContainer.innerHTML = ''; // Liste leeren
                 
                 if (data.length === 0) {
-                    articleListContainer.innerHTML = '<li style="border-left-color: rgba(255, 255, 255, 0.2);">Noch keine Artikel vorhanden. Scannen Sie einen Barcode, um zu starten.</li>';
+                    // KORRIGIERT: Fügt konsistentes Styling hinzu
+                    articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Noch keine Artikel vorhanden. Scannen Sie einen Barcode, um zu starten.</li>';
                     return;
                 }
 
@@ -1483,11 +1498,12 @@
                 
                 // NUR Admins dürfen Log sehen
                 if (window.currentUserRole !== 'admin') {
-                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); padding: 15px; background: none; border: none; font-size: 1rem;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
+                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
                     return;
                 }
                 
-                logListContainer.innerHTML = '<li style="padding: 15px; background: none; border: none;">Lade Admin-Protokoll...</li>'; 
+                // KORRIGIERT: Setze Grund-Styles für Ladezustand
+                logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>'; 
 
                 // DATENBANK-ABFRAGE
                 const { data, error } = await window.appSupabaseClient
@@ -1499,13 +1515,14 @@
                 if (error) {
                     showToast("Fehler beim Laden des Admin-Protokolls.", 'error');
                     console.error("Fehler beim Laden des Logs:", error);
-                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); padding: 15px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle prüfen.</li>';
+                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle prüfen.</li>';
                     return;
                 }
 
                 logListContainer.innerHTML = ''; // Liste leeren
                 
                 if (data.length === 0) {
+                    // KORRIGIERT: Konsistentes Styling
                     logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Protokolleinträge vorhanden.</li>';
                     return;
                 }
@@ -1518,10 +1535,7 @@
                     if (item.action_type.includes('ADDED')) color = 'var(--color-accent-green)';
                     if (item.action_type.includes('DELETED')) color = 'var(--color-error-red)';
                     
-                    listItem.style.background = 'var(--color-bg-card)';
-                    listItem.style.borderRadius = '10px';
-                    listItem.style.marginBottom = '10px';
-                    listItem.style.padding = '15px';
+                    // Das Styling für li wird nun von der CSS-Regel #logList li übernommen
                     listItem.style.borderLeft = `5px solid ${color}`;
                     
                     const details = `
