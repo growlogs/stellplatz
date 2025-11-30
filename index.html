@@ -141,7 +141,7 @@ header h1 {
     background: #111;
 }
 
-/* Buttons & Inputs */
+/* Buttons & Inputs (Generell) */
 input {
     width: 100%;
     padding: 15px;
@@ -195,6 +195,42 @@ button.secondary {
 .red { background: rgba(255, 0, 0, 0.1); color: #f55; border: 1px solid #f55; }
 .yellow { color: #fe0; }
 
+/* Glassmorphism/Pin Styles */
+#pinInputContainer {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 20px 0;
+}
+#pinInputContainer input {
+    /* Individuelle Pin-Felder */
+    width: 15%; 
+    padding: 0;
+    height: 60px;
+    text-align: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.05); /* Leichter Hintergrund */
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    color: white;
+    transition: all 0.2s;
+}
+#pinInputContainer input:focus {
+    border-color: #3e82f7;
+    background: rgba(62, 130, 247, 0.1);
+    outline: none;
+}
+/* Versteckt die Pfeile für Zahleneingaben auf manchen Browsern */
+#pinInputContainer input[type=tel]::-webkit-outer-spin-button,
+#pinInputContainer input[type=tel]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+
 /* Popup (Modal) */
 #popup {
     position: fixed;
@@ -228,9 +264,17 @@ button.secondary {
     <div style="text-align: center; margin-bottom: 30px; font-size: 3em;">📦</div>
     <h1 style="text-align: center;">Zugangscode</h1>
     
-    <!-- Code Eingabe -->
+    <!-- Code Eingabe - NEU: PIN-Felder -->
     <div id="accessPhase">
-        <input id="codeInput" type="password" placeholder="Zugangscode eingeben" />
+        <div id="pinInputContainer">
+            <!-- 6 Felder für den 6-stelligen Code -->
+            <input type="tel" maxlength="1" id="pin-0" data-pin-index="0" inputmode="numeric" />
+            <input type="tel" maxlength="1" id="pin-1" data-pin-index="1" inputmode="numeric" />
+            <input type="tel" maxlength="1" id="pin-2" data-pin-index="2" inputmode="numeric" />
+            <input type="tel" maxlength="1" id="pin-3" data-pin-index="3" inputmode="numeric" />
+            <input type="tel" maxlength="1" id="pin-4" data-pin-index="4" inputmode="numeric" />
+            <input type="tel" maxlength="1" id="pin-5" data-pin-index="5" inputmode="numeric" />
+        </div>
         <button onclick="loginWithCode()">Anmelden</button>
     </div>
     
@@ -291,6 +335,31 @@ button.secondary {
     var lastCode = "";
     var html5QrCode = null;
     var currentUserId = null; 
+    
+    // --- PIN-FELD LOGIK ---
+    function initializePinInput() {
+        const container = document.getElementById("pinInputContainer");
+        if (!container) return; 
+
+        // Listener für automatischen Fokuswechsel beim Tippen
+        container.addEventListener('input', (e) => {
+            const input = e.target;
+            // Nur auf PIN-Eingabefelder reagieren
+            if (input.matches('#pinInputContainer input[type="tel"]') && input.value.length === 1 && input.nextElementSibling) {
+                // Zum nächsten Feld springen
+                input.nextElementSibling.focus();
+            }
+        });
+
+        // Listener für den Backspace-Sprung
+        container.addEventListener('keydown', (e) => {
+            const input = e.target;
+            // Bei Backspace zum vorherigen Feld springen, wenn das aktuelle Feld leer ist
+            if (e.key === 'Backspace' && input.value.length === 0 && input.previousElementSibling) {
+                input.previousElementSibling.focus();
+            }
+        });
+    }
 
     // --- UI FUNKTIONEN ---
 
@@ -326,7 +395,8 @@ button.secondary {
             // Bereits initialisiert, nur starten
             html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess)
             .catch(err => {
-                alert("Kamera Fehler: " + err);
+                // Keine 'alert()' verwenden, stattdessen eine UI-Meldung anzeigen
+                showAuthError("Kamera Fehler: " + err);
                 document.getElementById("preScan").style.display = "flex";
             });
             return;
@@ -344,7 +414,8 @@ button.secondary {
             onScanSuccess
         ).catch(err => {
             console.error(err);
-            alert("Zugriff verweigert oder Fehler: " + err);
+            // Keine 'alert()' verwenden, stattdessen eine UI-Meldung anzeigen
+            showAuthError("Zugriff verweigert oder Fehler: " + err);
             document.getElementById("preScan").style.display = "flex";
         });
     }
@@ -403,6 +474,10 @@ button.secondary {
     function hidePopup() {
         document.getElementById("popup").style.display = "none";
         lastCode = "";
+        // Optional: Felder leeren
+        document.getElementById("name").value = "";
+        document.getElementById("platz").value = "";
+        document.getElementById("block").checked = false;
         html5QrCode.resume();
     }
 
@@ -412,8 +487,8 @@ button.secondary {
         const block = document.getElementById("block").checked;
 
         if(!name || !platz) {
-            // HINWEIS: alert() sollte vermieden werden. Hier sollte eine Modal-Fehlermeldung erscheinen.
             console.error("Bitte Name und Platz ausfüllen");
+            // Hier sollte eine Pop-up Fehlermeldung erscheinen, aber für jetzt nur console.error
             return;
         }
 
@@ -434,17 +509,17 @@ button.secondary {
     async function logout() {
         if (!window.appSupabaseClient) return;
         
-        // Stoppe den Scanner, falls er läuft
+        // Stoppe den Scanner, falls er läuft (nicht blockierend)
         if (html5QrCode) {
             html5QrCode.stop().catch(err => console.warn("Kamera Stoppen fehlgeschlagen:", err));
         }
 
+        // 1. Benutzer abmelden
         await window.appSupabaseClient.auth.signOut();
         
-        // NEU: Seite neu laden, um den Zustand komplett zurückzusetzen und zum Login zu springen
-        window.location.reload(); 
-        
-        // onAuthStateChange sollte checkLogin aufrufen, um die UI zu wechseln (wird durch reload nicht mehr benötigt, aber wir lassen es aus Konsistenz)
+        // 2. Anstatt die Seite neu zu laden, rufen wir checkLogin() manuell auf,
+        // um die UI sofort in den abgemeldeten Zustand zu versetzen (loginView anzeigen).
+        await checkLogin(null, null);
     }
 
 
@@ -454,8 +529,10 @@ button.secondary {
     async function loginWithCode() {
         console.log("Anmelden Button geklickt."); // Debugging Zeile
         
+        // NEU: Code aus den PIN-Feldern zusammensetzen
+        const pinInputs = document.querySelectorAll('#pinInputContainer input[type="tel"]');
+        const enteredCode = Array.from(pinInputs).map(input => input.value).join('');
 
-        const enteredCode = document.getElementById("codeInput").value.trim();
         showAuthError(""); // Fehler zurücksetzen
 
         // Überprüfung des API-Keys
@@ -469,15 +546,16 @@ button.secondary {
             showAuthError("❌ Datenbank-Verbindung nicht initialisiert. Bitte Seite neu laden und Konsole prüfen.");
             return;
         }
+        
+        // NEU: PIN-Länge prüfen
+        if (enteredCode.length !== 6) {
+            showAuthError("❌ Der Zugangscode muss 6 Stellen haben.");
+            return;
+        }
 
         if (enteredCode === MASTER_ACCESS_CODE) {
             
             try {
-                // Alte Sitzung abmelden, um eine saubere Neuanmeldung zu garantieren
-                // DIESE ZEILE WURDE ENTFERNT, da die logout()-Funktion bereits die Seite neu lädt
-                // und somit ein sauberer, abgemeldeter Zustand erwartet wird.
-                // await window.appSupabaseClient.auth.signOut(); 
-                
                 // Code ist korrekt, melde anonym bei Supabase an.
                 const { data, error } = await window.appSupabaseClient.auth.signInAnonymously();
                 
@@ -528,13 +606,23 @@ button.secondary {
             currentUserId = null;
             document.getElementById("loginView").style.display = "flex";
             document.getElementById("appView").style.display = "none";
-            // Leere das Eingabefeld
-            document.getElementById("codeInput").value = ""; 
+            
+            // Leere alle PIN-Eingabefelder
+            document.querySelectorAll('#pinInputContainer input[type="tel"]').forEach(input => input.value = "");
+            
+            // Setze den Fokus auf das erste PIN-Feld
+            const firstPinInput = document.getElementById("pin-0");
+            if (firstPinInput) {
+                firstPinInput.focus();
+            }
         }
     }
 
     // Start
     if (window.appSupabaseClient) {
+        // Initialisiert die PIN-Feld Logik
+        initializePinInput(); 
+
         // Registriert den Listener, der nun auch Event/Session verarbeitet
         window.appSupabaseClient.auth.onAuthStateChange((event, session) => checkLogin(event, session));
         // Führt initialen Check aus
