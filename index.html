@@ -305,8 +305,8 @@
             
             /* FIX: Sorgt dafür, dass das Video das Container-Element ausfüllt */
             #reader video {
-                width: 100 !important;
-                height: 100 !important;
+                width: 100% !important;
+                height: 100% !important;
                 object-fit: cover; 
             }
 
@@ -883,13 +883,14 @@
             }
 
             function startScanner() {
-                if (currentTabId !== 'scannerTab') return; // Nur starten, wenn Scanner-Tab aktiv ist
+                // Nur starten, wenn Scanner-Tab aktiv ist
+                if (currentTabId !== 'scannerTab') return; 
                 
+                // Verhindert mehrfaches Starten
                 if (html5QrCode && html5QrCode.isScanning) return;
                 
                 hideResultCard(); // Verstecke die Karte beim Scann-Start
 
-                // Wiederverwendung oder Initialisierung
                 const config = {
                     fps: 10,
                     qrbox: { width: 250, height: 250 },
@@ -1157,8 +1158,7 @@
                 // Logik basierend auf dem neuen Tab
                 if (targetTabId === 'scannerTab') {
                     // Wenn der Scanner-Tab aktiv wird, starte die Kamera
-                    startScanner();
-                    hideResultCard();
+                    activateCamera(); // Ruft activateCamera auf, um Overlay zu verstecken und startScanner zu rufen
                 } else {
                     // Wenn ein anderer Tab aktiv wird, stoppe die Kamera
                     stopScanner();
