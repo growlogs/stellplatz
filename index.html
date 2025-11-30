@@ -270,6 +270,13 @@
             /* Übergang, damit es sanfter erscheint */
             transition: all 0.5s ease;
         }
+        
+        /* FIX: Sorgt dafür, dass das Video das Container-Element ausfüllt */
+        #reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover; 
+        }
 
         /* Visual frame for scanning */
         .scan-frame {
@@ -697,9 +704,10 @@
             
             html5QrCode.start(videoConstraints, config, onScanSuccess)
                 .catch(err => {
+                    // Wichtig: Zeige das Overlay wieder, falls der Start fehlschlägt
                     document.getElementById("preScan").style.display = "flex";
                     document.getElementById("scanFrame").style.display = "none";
-                    showToast("Kamera Fehler: Zugriff verweigert.", 'error', 4000);
+                    showToast("Kamera Fehler: Zugriff verweigert oder Gerät nicht gefunden.", 'error', 4000);
                     console.error("Scanner Start Fehler:", err);
                 });
         }
