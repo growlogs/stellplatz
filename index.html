@@ -631,19 +631,30 @@
             
             /* NEU: Icon-Anzeige für Lagertyp - Angepasst für SVG */
             .item-count {
-                font-size: 0; /* Verhindert die Anzeige von Emoji-Fallback */
-                text-align: right;
-                width: 30px; /* Feste Breite für Layout */
-                height: 30px;
+                text-align: center; 
+                width: 40px; 
+                height: 50px; 
                 flex-shrink: 0;
                 margin-left: 10px;
+                display: flex; 
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
             }
             
             .item-count svg {
-                width: 30px;
-                height: 30px;
-                /* Farbe wird inline im JS gesetzt, um Konsistenz zu gewährleisten */
+                width: 28px; 
+                height: 28px;
+                margin-bottom: 2px; 
             }
+
+            .item-count .item-label {
+                font-size: 0.6rem; 
+                font-weight: 600;
+                opacity: 0.8;
+                line-height: 1;
+            }
+
 
         </style>
     </head>
@@ -825,7 +836,7 @@
             let articleToEdit = null; 
             
             // NEU: SVG-Strings für die Lagertypen
-            // Regal / Fach (Shelf/Rack) - NEU: Schwerlastregal Icon
+            // Regal / Fach (Shelf/Rack) - JETZT: Schwerlastregal Icon
             const SHELF_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4V4zm4 0v16m8-16v16M4 10h16M4 16h16"/></svg>';
             // Blocklager (Warehouse/Building) - NEU: Stapel Paletten/Kisten Icon
             const WAREHOUSE_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l10 5l-10 5l-10-5zM2 12v6l10 5l10-5v-6M12 2v10"/></svg>';
@@ -1246,15 +1257,20 @@
                         listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
                     }
                     
-                    // Lagertyp-Icon als SVG einfügen (basierend auf der Korrektur)
-                    const lagertypIconSvg = item.blocklager ? WAREHOUSE_ICON_SVG : SHELF_ICON_SVG;
+                    // Lagertyp-Icon als SVG einfügen
+                    const isBlocklager = item.blocklager;
+                    const lagertypIconSvg = isBlocklager ? WAREHOUSE_ICON_SVG : SHELF_ICON_SVG;
+                    const lagertypLabel = isBlocklager ? 'BLOCK' : 'REGAL'; // Text Label
 
                     const details = `
                         <div class="item-details">
                             <strong>${item.name}</strong>
                             <span>Stellplatz: ${item.stellplatz} | Barcode: ${item.barcode}</span>
                         </div>
-                        <div class="item-count">${lagertypIconSvg}</div>
+                        <div class="item-count">
+                            ${lagertypIconSvg}
+                            <span class="item-label">${lagertypLabel}</span>
+                        </div>
                     `;
                     listItem.innerHTML = details;
                     articleListContainer.appendChild(listItem);
