@@ -297,7 +297,12 @@ async function sendMagicLink() {
     });
 
     if (error) {
-        alert("❌ Fehler: " + error.message);
+        // Fehlerbehandlung für 401
+        if (error.status === 401) {
+            alert("❌ Fehler 401: Anmeldung nicht autorisiert. Bitte überprüfen Sie Ihre Supabase Auth-Einstellungen (Providers -> Email).");
+        } else {
+            alert("❌ Fehler: " + error.message);
+        }
     } else {
         alert("✅ Login-Link wurde per Mail gesendet.");
     }
