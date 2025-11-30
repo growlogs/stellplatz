@@ -23,6 +23,7 @@ var MASTER_ACCESS_CODE = "123456"; // <<<<<<<<<<<<<<< WICHTIG: Setzen Sie hier I
     if (window['supabase']) {
         window.appSupabaseClient = window['supabase'].createClient(APP_SUPABASE_URL, APP_SUPABASE_KEY);
     }
+    window.currentPin = ""; // Speichert den aktuell eingegebenen PIN-Code
 })();
 </script>
 
@@ -30,15 +31,16 @@ var MASTER_ACCESS_CODE = "123456"; // <<<<<<<<<<<<<<< WICHTIG: Setzen Sie hier I
 /* --- APP DESIGN & LAYOUT --- */
 * {
     box-sizing: border-box;
+    /* Optional: Einheitliche Schriftart */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background: #000;
     color: white;
-    height: 100dvh; /* Nutzt die dynamische Höhe mobiler Browser */
+    height: 100dvh; 
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -65,17 +67,17 @@ header h1 {
 /* Hauptbereich */
 #appView {
     flex: 1;
-    display: none; /* Wird per JS aktiviert */
+    display: none; 
     flex-direction: column;
     height: 100%;
     position: relative;
 }
 
-/* Scanner Bereich - Feste Höhe erzwingen! */
+/* Scanner Bereich */
 #reader-container {
     position: relative;
     width: 100%;
-    height: 60%; /* Scanner nimmt oben 60% ein */
+    height: 60%; 
     background: black;
     overflow: hidden;
 }
@@ -94,11 +96,11 @@ header h1 {
 
 /* Ergebnis Bereich (Unten) */
 #result-container {
-    height: 40%; /* Restliche 40% */
+    height: 40%; 
     background: #111;
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
-    margin-top: -20px; /* Leichter Überlappungseffekt */
+    margin-top: -20px; 
     z-index: 5;
     padding: 20px;
     display: flex;
@@ -131,28 +133,101 @@ header h1 {
     text-align: center;
 }
 
-/* Login View */
+/* Login View (Keypad) */
 #loginView {
     height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    padding: 40px;
-    background: #111;
+    justify-content: space-between; /* Verteilt Header, Indikatoren und Keypad */
+    align-items: center;
+    padding: 40px 20px;
+    background: #000;
 }
 
-/* Buttons & Inputs (Generell) */
-input {
+/* --- PIN ANZEIGE (INDIKATOR-PUNKTE) --- */
+#pinIndicators {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 50px;
+    height: 20px;
+}
+.pin-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    background: transparent;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.pin-indicator.active {
+    background: white;
+    border-color: white;
+}
+.pin-indicator.error {
+    background: #f55;
+    border-color: #f55;
+}
+
+/* --- KEYPAD STYLES (Glassmorphism) --- */
+#keypad {
     width: 100%;
-    padding: 15px;
-    margin: 10px 0;
-    background: #222;
-    border: 1px solid #333;
-    color: white;
-    border-radius: 8px;
-    font-size: 16px;
+    max-width: 350px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
 }
 
+.keypad-button {
+    height: 80px;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.05); /* Leichter Hintergrund */
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    color: white;
+    border-radius: 50px; /* Runde Buttons */
+    font-size: 1.8rem;
+    font-weight: 300;
+    cursor: pointer;
+    transition: background 0.1s, box-shadow 0.1s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    position: relative;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+.keypad-button small {
+    font-size: 0.6rem;
+    opacity: 0.7;
+    margin-top: 3px;
+    text-transform: uppercase;
+}
+
+.keypad-button:active {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 50px rgba(0, 0, 0, 0.2);
+}
+
+.keypad-button.action {
+    background: transparent;
+    border: none;
+    font-size: 1rem;
+    opacity: 0.7;
+}
+
+.keypad-button.backspace svg {
+    width: 24px;
+    height: 24px;
+    fill: white;
+}
+
+
+/* Sonstige Buttons & Inputs (Generell) */
 button {
     width: 100%;
     padding: 15px;
@@ -162,10 +237,9 @@ button {
     font-size: 16px;
     font-weight: bold;
     cursor: pointer;
-    background: #3e82f7; /* App Blau */
+    background: #3e82f7; 
     color: white;
 }
-/* Kleiner Button im Header */
 .header-button {
     width: auto;
     padding: 8px 15px;
@@ -183,6 +257,18 @@ button.secondary {
     margin-top: 10px;
 }
 
+input { /* Für Popups */
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    background: #222;
+    border: 1px solid #333;
+    color: white;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+
 /* Status Farben */
 .status-badge {
     display: inline-block;
@@ -194,42 +280,6 @@ button.secondary {
 .green { background: rgba(0, 255, 0, 0.1); color: #0f0; border: 1px solid #0f0; }
 .red { background: rgba(255, 0, 0, 0.1); color: #f55; border: 1px solid #f55; }
 .yellow { color: #fe0; }
-
-/* Glassmorphism/Pin Styles */
-#pinInputContainer {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    margin: 20px 0;
-}
-#pinInputContainer input {
-    /* Individuelle Pin-Felder */
-    width: 15%; 
-    padding: 0;
-    height: 60px;
-    text-align: center;
-    font-size: 1.5rem;
-    font-weight: bold;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(255, 255, 255, 0.05); /* Leichter Hintergrund */
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-    color: white;
-    transition: all 0.2s;
-}
-#pinInputContainer input:focus {
-    border-color: #3e82f7;
-    background: rgba(62, 130, 247, 0.1);
-    outline: none;
-}
-/* Versteckt die Pfeile für Zahleneingaben auf manchen Browsern */
-#pinInputContainer input[type=tel]::-webkit-outer-spin-button,
-#pinInputContainer input[type=tel]::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-
 
 /* Popup (Modal) */
 #popup {
@@ -259,26 +309,55 @@ button.secondary {
 
 <body>
 
-<!-- LOGIN SCREEN - Jetzt mit einfachem PIN/Code Login (Master Access Code) -->
+<!-- LOGIN SCREEN - PIN EINGABE ÜBER KEYPAD -->
 <div id="loginView">
-    <div style="text-align: center; margin-bottom: 30px; font-size: 3em;">📦</div>
-    <h1 style="text-align: center;">Zugangscode</h1>
-    
-    <!-- Code Eingabe - NEU: PIN-Felder -->
-    <div id="accessPhase">
-        <div id="pinInputContainer">
-            <!-- 6 Felder für den 6-stelligen Code -->
-            <input type="tel" maxlength="1" id="pin-0" data-pin-index="0" inputmode="numeric" />
-            <input type="tel" maxlength="1" id="pin-1" data-pin-index="1" inputmode="numeric" />
-            <input type="tel" maxlength="1" id="pin-2" data-pin-index="2" inputmode="numeric" />
-            <input type="tel" maxlength="1" id="pin-3" data-pin-index="3" inputmode="numeric" />
-            <input type="tel" maxlength="1" id="pin-4" data-pin-index="4" inputmode="numeric" />
-            <input type="tel" maxlength="1" id="pin-5" data-pin-index="5" inputmode="numeric" />
-        </div>
-        <button onclick="loginWithCode()">Anmelden</button>
+    <!-- Header (Symbol und Text) -->
+    <div style="text-align: center; margin-top: 50px;">
+        <div style="font-size: 3em; margin-bottom: 10px;">🔒</div>
+        <h2 style="font-size: 1.5rem; font-weight: 400; margin-bottom: 10px;">Zugangscode eingeben</h2>
+        <div id="authError" style="color: #f55; margin-top: 15px; height: 1.2em;"></div>
     </div>
     
-    <div id="authError" style="color: #f55; margin-top: 15px; text-align: center;"></div>
+    <!-- PIN Indikatoren -->
+    <div id="pinIndicators">
+        <div class="pin-indicator" data-index="0"></div>
+        <div class="pin-indicator" data-index="1"></div>
+        <div class="pin-indicator" data-index="2"></div>
+        <div class="pin-indicator" data-index="3"></div>
+        <div class="pin-indicator" data-index="4"></div>
+        <div class="pin-indicator" data-index="5"></div>
+    </div>
+    
+    <!-- Keypad -->
+    <div id="keypad" oncontextmenu="return false;">
+        <!-- Reihe 1 -->
+        <button class="keypad-button" onclick="handlePinInput('1')">1</button>
+        <button class="keypad-button" onclick="handlePinInput('2')">2<small>ABC</small></button>
+        <button class="keypad-button" onclick="handlePinInput('3')">3<small>DEF</small></button>
+        
+        <!-- Reihe 2 -->
+        <button class="keypad-button" onclick="handlePinInput('4')">4<small>GHI</small></button>
+        <button class="keypad-button" onclick="handlePinInput('5')">5<small>JKL</small></button>
+        <button class="keypad-button" onclick="handlePinInput('6')">6<small>MNO</small></button>
+        
+        <!-- Reihe 3 -->
+        <button class="keypad-button" onclick="handlePinInput('7')">7<small>PQRS</small></button>
+        <button class="keypad-button" onclick="handlePinInput('8')">8<small>TUV</small></button>
+        <button class="keypad-button" onclick="handlePinInput('9')">9<small>WXYZ</small></button>
+        
+        <!-- Reihe 4 (Aktionen) -->
+        <button class="keypad-button action" onclick="handlePinInput('clear')">LÖSCHEN</button>
+        <button class="keypad-button" onclick="handlePinInput('0')">0</button>
+        <button class="keypad-button backspace action" onclick="handlePinInput('backspace')">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M7 6L3 12L7 18H21V6H7Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M14 9L11 12L14 15" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+    
+    <!-- Optional: Manuelle Anmeldung (kann für Konsistenz entfernt werden) 
+    <button onclick="loginWithCode()">Anmelden</button> -->
 </div>
 
 <!-- APP SCREEN -->
@@ -337,28 +416,44 @@ button.secondary {
     var currentUserId = null; 
     
     // --- PIN-FELD LOGIK ---
-    function initializePinInput() {
-        const container = document.getElementById("pinInputContainer");
-        if (!container) return; 
 
-        // Listener für automatischen Fokuswechsel beim Tippen
-        container.addEventListener('input', (e) => {
-            const input = e.target;
-            // Nur auf PIN-Eingabefelder reagieren
-            if (input.matches('#pinInputContainer input[type="tel"]') && input.value.length === 1 && input.nextElementSibling) {
-                // Zum nächsten Feld springen
-                input.nextElementSibling.focus();
+    /**
+     * Aktualisiert die visuellen PIN-Indikatoren basierend auf der Länge des aktuellen Codes.
+     * @param {boolean} isError - Wenn true, werden die Punkte rot angezeigt (Fehler).
+     */
+    function updatePinIndicators(isError = false) {
+        const indicators = document.querySelectorAll('.pin-indicator');
+        indicators.forEach((indicator, index) => {
+            indicator.classList.remove('active', 'error');
+            if (isError) {
+                indicator.classList.add('error');
+            } else if (index < window.currentPin.length) {
+                indicator.classList.add('active');
             }
         });
+    }
 
-        // Listener für den Backspace-Sprung
-        container.addEventListener('keydown', (e) => {
-            const input = e.target;
-            // Bei Backspace zum vorherigen Feld springen, wenn das aktuelle Feld leer ist
-            if (e.key === 'Backspace' && input.value.length === 0 && input.previousElementSibling) {
-                input.previousElementSibling.focus();
-            }
-        });
+    /**
+     * Verarbeitet die Eingabe von Ziffern über den Ziffernblock.
+     * @param {string} value - Die eingegebene Ziffer ('0'-'9'), 'backspace' oder 'clear'.
+     */
+    async function handlePinInput(value) {
+        showAuthError(""); // Fehler zurücksetzen
+
+        if (value === 'backspace') {
+            window.currentPin = window.currentPin.slice(0, -1);
+        } else if (value === 'clear') {
+             window.currentPin = "";
+        } else if (value.match(/[0-9]/) && window.currentPin.length < MASTER_ACCESS_CODE.length) {
+            window.currentPin += value;
+        }
+
+        updatePinIndicators();
+
+        // Wenn die maximale Länge erreicht ist, wird versucht, sich anzumelden.
+        if (window.currentPin.length === MASTER_ACCESS_CODE.length) {
+            await loginWithCode(window.currentPin);
+        }
     }
 
     // --- UI FUNKTIONEN ---
@@ -371,7 +466,6 @@ button.secondary {
         if(type === "error") badgeClass = "status-badge red";
         if(type === "loading") badgeClass = "status-badge yellow";
 
-        // Schönere Formatierung
         if(type === "success" || type === "error") {
              r.innerHTML = `<div class="${badgeClass}">${type === "success" ? "GEFUNDEN" : "FEHLER"}</div><br>${html}`;
         } else {
@@ -392,38 +486,33 @@ button.secondary {
 
     function startScanner() {
         if (html5QrCode) {
-            // Bereits initialisiert, nur starten
             html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess)
             .catch(err => {
-                // Keine 'alert()' verwenden, stattdessen eine UI-Meldung anzeigen
                 showAuthError("Kamera Fehler: " + err);
                 document.getElementById("preScan").style.display = "flex";
             });
             return;
         }
 
-        // Neu erstellen
         html5QrCode = new Html5Qrcode("reader");
         html5QrCode.start(
             { facingMode: "environment" },
             { 
                 fps: 10, 
-                qrbox: { width: 250, height: 250 }, // Quadratische Box
-                aspectRatio: 1.0 // Zwingt das Video in ein Verhältnis
+                qrbox: { width: 250, height: 250 }, 
+                aspectRatio: 1.0 
             },
             onScanSuccess
         ).catch(err => {
             console.error(err);
-            // Keine 'alert()' verwenden, stattdessen eine UI-Meldung anzeigen
             showAuthError("Zugriff verweigert oder Fehler: " + err);
             document.getElementById("preScan").style.display = "flex";
         });
     }
 
     async function onScanSuccess(code) {
-        if (code === lastCode) return; // Debounce (einfach)
+        if (code === lastCode) return; 
         
-        // Pausieren
         if(html5QrCode) html5QrCode.pause();
 
         showResult("Lade Daten...", "loading");
@@ -433,7 +522,6 @@ button.secondary {
             return;
         }
 
-        // DB Abfrage: user_id Filter entfernt, um gemeinsamen Bestand zu ermöglichen
         const { data, error } = await window.appSupabaseClient
             .from("artikel")
             .select("*")
@@ -441,7 +529,6 @@ button.secondary {
             .single();
 
         if (data) {
-            // Update: user_id Filter entfernt
             await window.appSupabaseClient
                 .from("artikel")
                 .update({ scans: data.scans + 1 })
@@ -454,18 +541,15 @@ button.secondary {
                 "success"
             );
             
-            // Kurz warten, dann weiter scannen
             setTimeout(() => {
-                lastCode = ""; // Reset für nächsten Scan
+                lastCode = ""; 
                 html5QrCode.resume();
             }, 1500);
 
         } else {
-            // Unbekannt
             showResult(`Unbekannter Barcode:<br>${code}`, "error");
             lastCode = code;
             document.getElementById("popup").style.display = "flex";
-            // Scanner bleibt pausiert während Popup offen ist
         }
     }
 
@@ -474,7 +558,6 @@ button.secondary {
     function hidePopup() {
         document.getElementById("popup").style.display = "none";
         lastCode = "";
-        // Optional: Felder leeren
         document.getElementById("name").value = "";
         document.getElementById("platz").value = "";
         document.getElementById("block").checked = false;
@@ -488,11 +571,9 @@ button.secondary {
 
         if(!name || !platz) {
             console.error("Bitte Name und Platz ausfüllen");
-            // Hier sollte eine Pop-up Fehlermeldung erscheinen, aber für jetzt nur console.error
             return;
         }
 
-        // Speichern: user_id wurde entfernt, da alle Benutzer denselben Lagerbestand teilen
         await window.appSupabaseClient.from("artikel").insert([{
             barcode: lastCode,
             name: name,
@@ -509,47 +590,37 @@ button.secondary {
     async function logout() {
         if (!window.appSupabaseClient) return;
         
-        // Stoppe den Scanner, falls er läuft (nicht blockierend)
         if (html5QrCode) {
             html5QrCode.stop().catch(err => console.warn("Kamera Stoppen fehlgeschlagen:", err));
         }
 
-        // 1. Benutzer abmelden
         await window.appSupabaseClient.auth.signOut();
         
-        // 2. Anstatt die Seite neu zu laden, rufen wir checkLogin() manuell auf,
-        // um die UI sofort in den abgemeldeten Zustand zu versetzen (loginView anzeigen).
-        await checkLogin(null, null);
+        // Zwingt die App, die UI sofort in den Abmeldezustand zu versetzen (loginView anzeigen).
+        await checkLogin(null, null); 
     }
 
 
     // --- AUTHENTIFIZIERUNG (MASTER CODE) ---
     
-    // Anmeldefunktion mit lokalem Code-Check
-    async function loginWithCode() {
-        console.log("Anmelden Button geklickt."); // Debugging Zeile
-        
-        // NEU: Code aus den PIN-Feldern zusammensetzen
-        const pinInputs = document.querySelectorAll('#pinInputContainer input[type="tel"]');
-        const enteredCode = Array.from(pinInputs).map(input => input.value).join('');
+    /**
+     * Versucht, sich mit dem übergebenen Code anzumelden.
+     * @param {string} enteredCode - Der eingegebene 6-stellige Code.
+     */
+    async function loginWithCode(enteredCode) {
+        showAuthError(""); 
 
-        showAuthError(""); // Fehler zurücksetzen
-
-        // Überprüfung des API-Keys
+        // Überprüfung der Konfiguration
         if (APP_SUPABASE_KEY.includes("IHR_ANON_PUBLIC_KEY_HIER_EINFUEGEN")) {
-            showAuthError("⚠️ FEHLER: Bitte ersetzen Sie den Platzhalter 'IHR_ANON_PUBLIC_KEY_HIER_EINFUEGEN' im Code durch Ihren Supabase Anon Key!");
+            showAuthError("⚠️ FEHLER: Supabase Key fehlt.");
+            updatePinIndicators(true);
+            window.currentPin = "";
             return;
         }
-
-        // NEU: Sofortige Prüfung, ob der Supabase Client verfügbar ist.
         if (!window.appSupabaseClient) {
-            showAuthError("❌ Datenbank-Verbindung nicht initialisiert. Bitte Seite neu laden und Konsole prüfen.");
-            return;
-        }
-        
-        // NEU: PIN-Länge prüfen
-        if (enteredCode.length !== 6) {
-            showAuthError("❌ Der Zugangscode muss 6 Stellen haben.");
+            showAuthError("❌ Datenbank-Verbindung nicht initialisiert.");
+            updatePinIndicators(true);
+            window.currentPin = "";
             return;
         }
 
@@ -559,39 +630,48 @@ button.secondary {
                 // Code ist korrekt, melde anonym bei Supabase an.
                 const { data, error } = await window.appSupabaseClient.auth.signInAnonymously();
                 
-                // ZUSÄTZLICHE KONSOLE-AUSGABE für Debugging, falls login fehlschlägt
-                console.log("Supabase Anmeldeergebnis:", { data, error });
-                
                 if (error) {
-                    // Detailliertere Fehlermeldung bei Supabase-Fehler
-                    showAuthError("Fehler bei der Anmeldung: " + error.message + " (Prüfen Sie, ob 'Anonymous Sign In' in Supabase aktiviert ist.)");
+                    showAuthError("Fehler bei der Anmeldung: " + error.message);
+                    updatePinIndicators(true);
+                    window.currentPin = "";
                 } else if (data.user) {
-                    // Bei Erfolg checkLogin manuell aufrufen, um die UI sofort zu aktualisieren.
-                    // Das Session-Objekt wird direkt übergeben.
+                    // Erfolg: UI aktualisieren
                     await checkLogin(null, data.session); 
                 } else {
-                     // Diese Fehlermeldung wird angezeigt, wenn der Supabase-Aufruf weder einen Fehler noch einen Benutzer zurückgibt.
-                     showAuthError("Anmeldung fehlgeschlagen. Überprüfen Sie die Konsolen-Logs und Supabase-Einstellungen.");
+                     showAuthError("Anmeldung fehlgeschlagen.");
+                     updatePinIndicators(true);
+                     window.currentPin = "";
                 }
             } catch (e) {
-                // Fängt Laufzeitfehler ab, die sonst zu einer stillen UI führen würden
                 console.error("Kritischer Anmeldefehler:", e);
-                showAuthError("Kritischer Fehler während der Anmeldung. Prüfen Sie die Konsole.");
+                showAuthError("Kritischer Fehler während der Anmeldung.");
+                updatePinIndicators(true);
+                window.currentPin = "";
             }
         } else {
+            // Code ist falsch
             showAuthError("❌ Falscher Zugangscode.");
+            updatePinIndicators(true);
+            
+            // Fehlerhafte Anzeige nach kurzer Zeit zurücksetzen
+            setTimeout(() => {
+                window.currentPin = "";
+                updatePinIndicators();
+            }, 500);
         }
     }
 
 
-    // NEU: Nimmt optional Event und Session von onAuthStateChange entgegen, um reaktiver zu sein
+    /**
+     * Überprüft den Anmeldestatus und aktualisiert die UI (Login vs. App).
+     * @param {string} event - Das Auth-Event.
+     * @param {object} session - Die aktuelle Session.
+     */
     async function checkLogin(event, session) { 
         if(!window.appSupabaseClient) return;
 
         let currentSession = session;
 
-        // Wenn kein Session-Objekt übergeben wurde (z.B. beim initialen Aufruf),
-        // muss es manuell abgerufen werden.
         if (!currentSession) {
             const { data } = await window.appSupabaseClient.auth.getSession();
             currentSession = data.session;
@@ -602,27 +682,20 @@ button.secondary {
             document.getElementById("loginView").style.display = "none";
             document.getElementById("appView").style.display = "flex";
             document.getElementById("userDisplay").innerText = "ANONYM"; 
+            window.currentPin = ""; // PIN beim Wechsel zur App zurücksetzen
+            updatePinIndicators();
         } else {
             currentUserId = null;
             document.getElementById("loginView").style.display = "flex";
             document.getElementById("appView").style.display = "none";
-            
-            // Leere alle PIN-Eingabefelder
-            document.querySelectorAll('#pinInputContainer input[type="tel"]').forEach(input => input.value = "");
-            
-            // Setze den Fokus auf das erste PIN-Feld
-            const firstPinInput = document.getElementById("pin-0");
-            if (firstPinInput) {
-                firstPinInput.focus();
-            }
+            window.currentPin = ""; // PIN beim Wechsel zum Login zurücksetzen
+            updatePinIndicators();
+            showAuthError(""); // Fehlertext leeren
         }
     }
 
     // Start
     if (window.appSupabaseClient) {
-        // Initialisiert die PIN-Feld Logik
-        initializePinInput(); 
-
         // Registriert den Listener, der nun auch Event/Session verarbeitet
         window.appSupabaseClient.auth.onAuthStateChange((event, session) => checkLogin(event, session));
         // Führt initialen Check aus
