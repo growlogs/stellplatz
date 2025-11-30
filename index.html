@@ -1221,7 +1221,9 @@
                 setTimeout(() => {
                     document.getElementById('adminEditPopupOverlay').style.display = "none";
                     // articleToEdit nur löschen, wenn es nicht gerade für den Löschvorgang gebraucht wird
-                    if (!window.articleToDelete) {
+                    // Wichtig: articleToEdit muss bestehen bleiben, wenn wir das Delete-Popup aufrufen, 
+                    // aber den Bearbeitungs-Dialog schließen.
+                    if (!window.articleToDelete) { 
                         window.articleToEdit = null;
                     }
                 }, 300);
@@ -1255,31 +1257,6 @@
             }
             
             /**
-             * Öffnet das benutzerdefinierte Bestätigungs-Popup.
-             */
-            function showDeleteConfirmPopup(article) {
-                window.articleToDelete = article; // Artikel global für die Löschung speichern
-                
-                document.getElementById('deleteConfirmMessage').innerHTML = `<strong>"${article.name}"</strong> unwiderruflich löschen?`;
-                
-                document.getElementById('deleteConfirmPopupOverlay').style.display = "flex";
-                setTimeout(() => document.getElementById('deleteConfirmPopupOverlay').classList.add('show'), 10);
-            }
-
-            /**
-             * Schließt das Lösch-Popup und setzt die Referenz zurück.
-             */
-            function hideDeleteConfirmPopup() {
-                document.getElementById('deleteConfirmPopupOverlay').classList.remove('show');
-                
-                setTimeout(() => {
-                    document.getElementById('deleteConfirmPopupOverlay').style.display = "none";
-                    window.articleToDelete = null; 
-                    window.articleToEdit = null; // Setze articleToEdit zurück, nachdem die Lösch-Kette beendet ist.
-                }, 300);
-            }
-
-            /**
              * Öffnet das Lösch-Bestätigungs-Popup.
              */
             function deleteArticle() {
@@ -1288,11 +1265,42 @@
                     return;
                 }
                 
-                // Schließe den Bearbeiten-Dialog (articleToEdit wird beibehalten)
-                document.getElementById('adminEditPopupOverlay').classList.remove('show');
-                
-                // Öffne den Löschen-Dialog sofort
+                // NEU: Wir lassen den Admin-Edit-Dialog geöffnet und zeigen das Bestätigungs-Popup darüber
                 showDeleteConfirmPopup(window.articleToEdit);
+            }
+
+            /**
+             * Öffnet das benutzerdefinierte Bestätigungs-Popup.
+             */
+            function showDeleteConfirmPopup(article) {
+                window.articleToDelete = article; // Artikel global für die Löschung speichern
+                
+                document.getElementById('deleteConfirmMessage').innerHTML = `Sind Sie **SICHER**, dass Sie den Artikel<br><strong>"${article.name}"</strong><br>(Barcode: ${article.barcode}) unwiderruflich löschen möchten?`;
+                
+                document.getElementById('deleteConfirmPopupOverlay').style.display = "flex";
+                setTimeout(() => document.getElementById('deleteConfirmPopupOverlay').classList.add('show'), 10);
+            }
+
+            /**
+             * Schließt das Lösch-Popup und setzt die Referenz zurück.
+             * Wenn der Benutzer Abbricht, wird das Admin-Edit-Popup wiederhergestellt.
+             */
+            function hideDeleteConfirmPopup() {
+                document.getElementById('deleteConfirmPopupOverlay').classList.remove('show');
+                
+                setTimeout(() => {
+                    document.getElementById('deleteConfirmPopupOverlay').style.display = "none";
+                    
+                    // NEUE LOGIK: Wenn articleToEdit noch existiert (d.h. ABBRUCH),
+                    // mache das Admin-Edit-Popup wieder vollständig sichtbar.
+                    if (window.articleToEdit) {
+                        document.getElementById('adminEditPopupOverlay').style.display = "flex";
+                        document.getElementById('adminEditPopupOverlay').classList.add('show');
+                    }
+                    
+                    window.articleToDelete = null; // Lösche nur die delete-Referenz
+                    
+                }, 300);
             }
 
             /**
@@ -1307,8 +1315,6 @@
                 const articleName = window.articleToDelete.name;
                 const barcode = window.articleToDelete.barcode;
                 
-                hideDeleteConfirmPopup(); // Popup sofort schließen
-                
                 // Löschvorgang
                 const { error } = await window.appSupabaseClient
                     .from("artikel")
@@ -1318,9 +1324,17 @@
                 if (error) {
                     showToast(`FEHLER beim Löschen des Artikels.`, "error");
                     console.error("Löschfehler:", error);
+                    // Auch bei Fehler muss der Löschdialog weg und der Bearbeitungsdialog wiederhergestellt werden
+                    hideDeleteConfirmPopup(); 
                 } else {
                     showToast(`Artikel "${articleName}" wurde erfolgreich gelöscht.`, "success");
-                    loadArticleList(); // Liste aktualisieren
+                    
+                    // WICHTIG: Setze articleToEdit auf null, damit hideDeleteConfirmPopup 
+                    // den Admin-Edit-Dialog NICHT wiederherstellt.
+                    window.articleToEdit = null;
+                    
+                    hideDeleteConfirmPopup(); 
+                    loadArticleList(); 
                 }
             }
 
