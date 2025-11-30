@@ -9,18 +9,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // --- Globale Konstanten ---
-// WICHTIG: Ersetzen Sie den Platzhalter durch Ihren service_role Key! (Beginnt mit eyJ...)
-// Dieser wird nur für den Magic Link Aufruf benötigt, um Header-Fehler zu vermeiden.
-const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDQzNTc1OSwiZXhwIjoyMDgwMDExNzU5fQ.-hpaWFdLMsqUjCeYlAo2l1z_rF1vdWJsP9CtQlcCWEA"; 
+// WICHTIG: Ersetzen Sie den Platzhalter durch Ihren ANON PUBLIC KEY! (Beginnt mit eyJ...).
+// Dies ist der sicherste Schlüssel für clientseitige Nutzung.
+const SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
+const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK"; 
 
 // --- SUPABASE INITIALISIERUNG ---
-// Initialisiert den Client (für alle anderen Data API-Aufrufe, die den Auth-Token nutzen)
+// Initialisiert den Client (für alle anderen Data API-Aufrufe)
 (function() {
     // Erzeugt den Client und weist ihn der globalen Variable zu
-    // WICHTIG: HIER verwenden wir den service_role key nicht. Da wir den auth-Aufruf mit fetch machen,
-    // können wir hier den public key verwenden, der für die Datenbank-Operationen nach dem Login funktioniert.
-    // Falls Sie den public key in SUPABASE_KEY haben, wird er hier verwendet.
     window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 })();
 </script>
@@ -304,13 +301,13 @@ input {
 <script>
 // --- Global Login Script ---
 
-// NEU: Verwendet nativen Fetch, um den API-Schlüssel als Bearer Token zu übergeben
+// NEU: Verwendet nativen Fetch mit Triple-Key-Strategie für maximale Robustheit
 async function sendMagicLink() {
     const email = document.getElementById("emailInput").value;
     const redirectUrl = encodeURIComponent(window.location.href);
 
-    // Baut die URL auf (OHNE apikey Query-Parameter)
-    const url = `${SUPABASE_URL}/auth/v1/otp`;
+    // 1. FÜGT den apikey Query-Parameter hinzu
+    const url = `${SUPABASE_URL}/auth/v1/otp?apikey=${SUPABASE_KEY}`;
 
     const payload = {
         email: email,
@@ -324,7 +321,9 @@ async function sendMagicLink() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // Fügt den Schlüssel als Bearer Token hinzu (dies funktioniert oft besser mit dem service_role key)
+                // 2. Fügt den Schlüssel in den speziellen 'apikey' Header ein
+                'apikey': SUPABASE_KEY, 
+                // 3. Fügt den Schlüssel als Bearer Token hinzu
                 'Authorization': `Bearer ${SUPABASE_KEY}`, 
             },
             body: JSON.stringify(payload)
