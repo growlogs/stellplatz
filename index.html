@@ -2,395 +2,455 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Stellplatz App</title>
 
-<!-- Lade die Supabase Bibliothek -->
+<!-- Supabase & Scanner laden -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
+
 <script>
-// --- KONFIGURATION ---
-// BITTE HIER DEN SCHLÜSSEL EINFÜGEN (Muss mit eyJ beginnen)
-const APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-const APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
+// ---------------------------------------------------------
+// KONFIGURATION: HIER IHREN KEY EINFÜGEN
+// ---------------------------------------------------------
+var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
+var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
+// ---------------------------------------------------------
 
-// --- INITIALISIERUNG ---
+// Initialisierung
 (function() {
-    // Sicherheitscheck für den Key
-    if (APP_SUPABASE_KEY.includes("HIER_EINFUEGEN")) {
-        console.warn("⚠️ Bitte den Supabase API Key in index.html eintragen!");
-    }
-
-    // Wir nutzen window['supabase'], um Namenskonflikte zu vermeiden
-    // und speichern den Client in 'window.appSupabaseClient'
     if (window['supabase']) {
         window.appSupabaseClient = window['supabase'].createClient(APP_SUPABASE_URL, APP_SUPABASE_KEY);
-    } else {
-        alert("Fehler: Supabase Bibliothek konnte nicht geladen werden.");
     }
 })();
 </script>
 
-<!-- Lade die Scanner Bibliothek -->
-<script src="https://unpkg.com/html5-qrcode"></script>
-
 <style>
+/* --- APP DESIGN & LAYOUT --- */
+* {
+    box-sizing: border-box;
+}
+
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
-    background: #0d0d0d;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #000;
     color: white;
-    height: 100vh;
+    height: 100dvh; /* Nutzt die dynamische Höhe mobiler Browser */
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
-#loginView {
-    padding: 20px;
+/* Header Leiste */
+header {
+    height: 60px;
+    background: #1a1a1a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-bottom: 1px solid #333;
+    z-index: 10;
 }
 
-/* Stellt sicher, dass der Scanner-Bereich den Platz einnimmt */
-#reader { 
-    flex: 1; 
+header h1 {
+    font-size: 1.2rem;
+    margin: 0;
+    color: #fff;
+}
+
+/* Hauptbereich */
+#appView {
+    flex: 1;
+    display: none; /* Wird per JS aktiviert */
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+}
+
+/* Scanner Bereich - Feste Höhe erzwingen! */
+#reader-container {
+    position: relative;
+    width: 100%;
+    height: 60%; /* Scanner nimmt oben 60% ein */
     background: black;
+    overflow: hidden;
+}
+
+#reader {
+    width: 100%;
+    height: 100%;
+}
+
+/* Video-Element Fix für die Bibliothek */
+#reader video {
+    object-fit: cover;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Ergebnis Bereich (Unten) */
+#result-container {
+    height: 40%; /* Restliche 40% */
+    background: #111;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    margin-top: -20px; /* Leichter Überlappungseffekt */
+    z-index: 5;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
 }
 
 #result {
-    height: 45%;
+    font-size: 1.1em;
+    text-align: center;
+    line-height: 1.5;
+    width: 100%;
+}
+
+/* Start Screen Overlay */
+#preScan {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+}
+
+/* Login View */
+#loginView {
+    height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    align-items: center;
-    font-size: 1.2em;
-    text-align: center;
-    font-weight: bold;
-    padding: 10px;
+    padding: 40px;
+    background: #111;
 }
 
-.green { background: #0a3; }
-.red { background: #900; }
-.yellow { background: #b90; }
+/* Buttons & Inputs */
+input {
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    background: #222;
+    border: 1px solid #333;
+    color: white;
+    border-radius: 8px;
+    font-size: 16px;
+}
 
 button {
-    padding: 12px;
-    font-size: 1em;
-    background: black;
-    color: white;
-    border: 1px solid white;
-    margin-top: 10px;
     width: 100%;
+    padding: 15px;
+    margin-top: 10px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
     cursor: pointer;
-    border-radius: 6px;
-    transition: background 0.2s;
+    background: #3e82f7; /* App Blau */
+    color: white;
 }
 
-button:hover {
+button:active {
+    transform: scale(0.98);
+}
+
+button.secondary {
     background: #333;
+    margin-top: 10px;
 }
 
-/* POPUP */
+/* Status Farben */
+.status-badge {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 50px;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+.green { background: rgba(0, 255, 0, 0.1); color: #0f0; border: 1px solid #0f0; }
+.red { background: rgba(255, 0, 0, 0.1); color: #f55; border: 1px solid #f55; }
+.yellow { color: #fe0; }
+
+/* Popup (Modal) */
 #popup {
     position: fixed;
     top: 0; left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.85);
+    background: rgba(0,0,0,0.8);
     display: none;
     justify-content: center;
     align-items: center;
     z-index: 1000;
+    backdrop-filter: blur(5px);
 }
 
 #popupBox {
-    background: #111;
-    padding: 20px;
-    border-radius: 10px;
-    width: 80%;
-    max-width: 400px;
+    background: #1e1e1e;
+    padding: 25px;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 350px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
-
-input {
-    width: 100%;
-    padding: 10px;
-    margin-top: 5px;
-    margin-bottom: 15px;
-    box-sizing: border-box;
-    background: #333;
-    border: none;
-    color: white;
-    border-radius: 4px;
-}
-
-.error-box {
-    color: #ff5555;
-    border: 1px solid #ff5555;
-    padding: 10px;
-    margin-top: 10px;
-    border-radius: 5px;
-    font-size: 0.9em;
-    display: none; /* Initial versteckt */
-}
+#popupBox h3 { margin-top: 0; }
 </style>
 </head>
 
 <body>
 
-<div id="loginView" style="display:none;">
-    <h1>🔐 Stellplatz App</h1>
-    <input id="emailInput" type="email" placeholder="E-Mail eingeben" />
-    <button onclick="sendMagicLink()">Login-Link senden</button>
+<!-- LOGIN SCREEN -->
+<div id="loginView">
+    <div style="text-align: center; margin-bottom: 30px; font-size: 3em;">📦</div>
+    <h1 style="text-align: center;">Stellplatz Login</h1>
+    <input id="emailInput" type="email" placeholder="E-Mail Adresse" />
+    <button onclick="sendMagicLink()">Magic Link senden</button>
 </div>
 
-<div id="appView" style="display:none;">
+<!-- APP SCREEN -->
+<div id="appView">
+    <header>
+        <h1>Lager Scanner</h1>
+        <div style="font-size: 0.8em; opacity: 0.7;" id="userDisplay"></div>
+    </header>
 
-    <!-- Container für den Videostream -->
-    <div id="reader"></div>
-
-    <!-- START SCAN BUTTON & FEHLERANZEIGE -->
-    <div id="preScan" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; flex: 1;">
-        <h2>Kamera aktivieren</h2>
-        <p>Klicken Sie, um den Barcode-Scanner zu starten.</p>
-        <button onclick="startScannerAndHideButton()" style="max-width: 300px;">SCANNER STARTEN</button>
+    <!-- Scanner Bereich -->
+    <div id="reader-container">
+        <div id="reader"></div>
         
-        <!-- Bereich für Kamera-Fehler -->
-        <div id="cameraError" class="error-box">
-            <strong>Kamera-Zugriff verweigert!</strong><br>
-            Bitte erlauben Sie den Kamerazugriff in den Browser-Einstellungen (Schloss-Symbol neben der URL) und laden Sie die Seite neu.
+        <!-- Start Button Overlay (Liegt über dem Reader bis geklickt wird) -->
+        <div id="preScan">
+            <div style="font-size: 4em; margin-bottom: 20px;">📷</div>
+            <h2>Scanner bereit</h2>
+            <p style="opacity: 0.7; margin-bottom: 30px;">Kamera freigeben um zu starten</p>
+            <button onclick="activateCamera()">JETZT SCANNEN</button>
         </div>
     </div>
 
-    <div id="result">📦 Bereit zum Scannen</div>
+    <!-- Ergebnis Bereich -->
+    <div id="result-container">
+        <div style="width: 40px; height: 4px; background: #333; border-radius: 2px; margin-bottom: 20px;"></div>
+        <div id="result">
+            Scannen Sie einen Barcode...
+        </div>
+    </div>
 
-    <!-- POPUP -->
+    <!-- Popup für neue Artikel -->
     <div id="popup">
         <div id="popupBox">
-            <h3>Neuen Artikel anlegen</h3>
-
-            <label for="name">Name:</label>
-            <input id="name">
-
-            <label for="platz">Stellplatz:</label>
-            <input id="platz">
-
-            <label>
-                <input type="checkbox" id="block"> Blocklager
+            <h3>Neuer Artikel</h3>
+            <label>Name:</label>
+            <input id="name" placeholder="Produktname">
+            <label>Stellplatz:</label>
+            <input id="platz" placeholder="z.B. A-01">
+            <label style="display: flex; align-items: center; margin: 15px 0;">
+                <input type="checkbox" id="block" style="width: auto; margin-right: 10px;"> Blocklager
             </label>
-
             <button onclick="save()">Speichern</button>
-            <button onclick="hide()">Abbrechen</button>
+            <button class="secondary" onclick="hidePopup()">Abbrechen</button>
         </div>
     </div>
-
-    <script>
-        var lastCode = "";
-        var html5QrCode = null;
-        var currentUserId = null; 
-        
-        // --- Hilfsfunktionen ---
-        
-        function showResult(text, color) {
-            const r = document.getElementById("result");
-            r.className = color;
-            r.innerHTML = text;
-        }
-
-        async function lookup(code) {
-            if (!currentUserId) {
-                showResult("⚠️ Nicht eingeloggt.", "red");
-                return;
-            }
-
-            if (html5QrCode) {
-                await html5QrCode.stop().catch(err => console.warn("Stop error:", err));
-            }
-            
-            showResult("⏳ Prüfe Artikel...", "yellow");
-
-            // Verwende appSupabaseClient
-            const { data, error } = await window.appSupabaseClient
-                .from("artikel")
-                .select("*")
-                .eq("barcode", code)
-                .eq("user_id", currentUserId)
-                .single();
-            
-            if (data) {
-                await window.appSupabaseClient
-                    .from("artikel")
-                    .update({ scans: data.scans + 1 })
-                    .eq("barcode", code)
-                    .eq("user_id", currentUserId);
-
-                showResult(
-                    `✅ ${data.name}<br>
-                    📍 ${data.stellplatz}<br>
-                    🧱 Block: ${data.blocklager ? "JA" : "NEIN"}<br>
-                    📊 Scans: ${data.scans + 1}`,
-                    "green"
-                );
-                
-                // Neustart
-                if (html5QrCode) {
-                    html5QrCode.start(
-                        { facingMode: "environment" },
-                        { fps: 10, qrbox: 250 },
-                        code => lookup(code)
-                    ).catch(err => console.error("Restart error:", err));
-                }
-
-            } else {
-                showResult("❌ Unbekannter Artikel", "red");
-                lastCode = code;
-                
-                if (html5QrCode) {
-                    await html5QrCode.stop().catch(err => console.warn("Stop error:", err));
-                }
-                showPopup();
-            }
-        }
-
-        function showPopup() {
-            document.getElementById("popup").style.display = "flex";
-        }
-
-        function hide() {
-            document.getElementById("popup").style.display = "none";
-            startScanner();
-        }
-
-        async function save() {
-            if (!currentUserId) {
-                alert("Nicht eingeloggt.");
-                hide();
-                return;
-            }
-
-            await window.appSupabaseClient.from("artikel").insert([{ 
-                barcode: lastCode,
-                name: document.getElementById("name").value,
-                stellplatz: document.getElementById("platz").value,
-                blocklager: document.getElementById("block").checked,
-                scans: 0,
-                user_id: currentUserId 
-            }]);
-
-            hide();
-            lookup(lastCode); 
-        }
-        
-        function startScannerAndHideButton() {
-            document.getElementById("preScan").style.display = "none";
-            document.getElementById("reader").style.display = "block";
-            document.getElementById("cameraError").style.display = "none"; // Fehler ausblenden
-            startScanner();
-        }
-
-        function startScanner() {
-            // Falls Scanner-Instanz existiert, versuche Neustart
-            if (html5QrCode) {
-                return html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: 250 },
-                    code => lookup(code)
-                ).catch(handleCameraError);
-            }
-            
-            // Neu erstellen
-            html5QrCode = new Html5Qrcode("reader");
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: 250 },
-                    code => lookup(code)
-            ).catch(handleCameraError);
-        }
-
-        function handleCameraError(err) {
-            console.error("Kamera Fehler:", err);
-            
-            // UI zurücksetzen
-            document.getElementById("reader").style.display = "none";
-            document.getElementById("preScan").style.display = "flex";
-            
-            const errorBox = document.getElementById("cameraError");
-            errorBox.style.display = "block";
-            
-            if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-                errorBox.innerHTML = "<strong>⛔ Zugriff verweigert!</strong><br>Der Browser darf die Kamera nicht nutzen. Bitte klicken Sie auf das Schloss-Symbol in der Adressleiste und erlauben Sie den Zugriff.";
-            } else if (err.name === "NotFoundError") {
-                errorBox.innerHTML = "<strong>⚠️ Keine Kamera gefunden.</strong><br>Bitte prüfen Sie Ihr Gerät.";
-            } else {
-                errorBox.innerHTML = `<strong>⚠️ Fehler:</strong> ${err.name}<br>${err.message}`;
-            }
-        }
-    </script>
 </div>
+
 <script>
-// --- Login Script ---
+    var lastCode = "";
+    var html5QrCode = null;
+    var currentUserId = null; 
 
-async function sendMagicLink() {
-    const email = document.getElementById("emailInput").value;
-    const redirectUrl = encodeURIComponent(window.location.href);
+    // --- UI FUNKTIONEN ---
 
-    // URL mit API Key
-    const url = `${APP_SUPABASE_URL}/auth/v1/otp?apikey=${APP_SUPABASE_KEY}`;
+    function showResult(html, type) {
+        const r = document.getElementById("result");
+        let badgeClass = "";
+        
+        if(type === "success") badgeClass = "status-badge green";
+        if(type === "error") badgeClass = "status-badge red";
+        if(type === "loading") badgeClass = "status-badge yellow";
 
-    const payload = {
-        email: email,
-        options: {
-            emailRedirectTo: redirectUrl 
+        // Schönere Formatierung
+        if(type === "success" || type === "error") {
+             r.innerHTML = `<div class="${badgeClass}">${type === "success" ? "GEFUNDEN" : "FEHLER"}</div><br>${html}`;
+        } else {
+             r.innerHTML = html;
         }
-    };
-    
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                // API Key im Header UND in der URL für maximale Kompatibilität
-                'apikey': APP_SUPABASE_KEY,
-                'Authorization': `Bearer ${APP_SUPABASE_KEY}`, 
+    }
+
+    // --- KAMERA FUNKTIONEN ---
+
+    function activateCamera() {
+        document.getElementById("preScan").style.display = "none";
+        startScanner();
+    }
+
+    function startScanner() {
+        if (html5QrCode) {
+            // Bereits initialisiert, nur starten
+            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess)
+            .catch(err => {
+                alert("Kamera Fehler: " + err);
+                document.getElementById("preScan").style.display = "flex";
+            });
+            return;
+        }
+
+        // Neu erstellen
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" },
+            { 
+                fps: 10, 
+                qrbox: { width: 250, height: 250 }, // Quadratische Box
+                aspectRatio: 1.0 // Zwingt das Video in ein Verhältnis
             },
-            body: JSON.stringify(payload)
+            onScanSuccess
+        ).catch(err => {
+            console.error(err);
+            alert("Zugriff verweigert oder Fehler: " + err);
+            document.getElementById("preScan").style.display = "flex";
+        });
+    }
+
+    async function onScanSuccess(code) {
+        if (code === lastCode) return; // Debounce (einfach)
+        
+        // Pausieren
+        if(html5QrCode) html5QrCode.pause();
+
+        showResult("Lade Daten...", "loading");
+
+        if(!window.appSupabaseClient) {
+            showResult("Datenbank nicht verbunden.", "error");
+            return;
+        }
+
+        // DB Abfrage
+        const { data, error } = await window.appSupabaseClient
+            .from("artikel")
+            .select("*")
+            .eq("barcode", code)
+            .eq("user_id", currentUserId)
+            .single();
+
+        if (data) {
+            // Update
+            await window.appSupabaseClient
+                .from("artikel")
+                .update({ scans: data.scans + 1 })
+                .eq("barcode", code)
+                .eq("user_id", currentUserId);
+
+            showResult(
+                `<strong>${data.name}</strong><br>
+                 📍 Platz: ${data.stellplatz}<br>
+                 📊 Scans: ${data.scans + 1}`, 
+                "success"
+            );
+            
+            // Kurz warten, dann weiter scannen
+            setTimeout(() => {
+                lastCode = ""; // Reset für nächsten Scan
+                html5QrCode.resume();
+            }, 1500);
+
+        } else {
+            // Unbekannt
+            showResult(`Unbekannter Barcode:<br>${code}`, "error");
+            lastCode = code;
+            document.getElementById("popup").style.display = "flex";
+            // Scanner bleibt pausiert während Popup offen ist
+        }
+    }
+
+    // --- POPUP LOGIK ---
+
+    function hidePopup() {
+        document.getElementById("popup").style.display = "none";
+        lastCode = "";
+        html5QrCode.resume();
+    }
+
+    async function save() {
+        const name = document.getElementById("name").value;
+        const platz = document.getElementById("platz").value;
+        const block = document.getElementById("block").checked;
+
+        if(!name || !platz) {
+            alert("Bitte Name und Platz ausfüllen");
+            return;
+        }
+
+        await window.appSupabaseClient.from("artikel").insert([{
+            barcode: lastCode,
+            name: name,
+            stellplatz: platz,
+            blocklager: block,
+            scans: 1,
+            user_id: currentUserId
+        }]);
+
+        hidePopup();
+        showResult(`Gespeichert: ${name}`, "success");
+    }
+
+
+    // --- AUTHENTIFIZIERUNG ---
+
+    async function sendMagicLink() {
+        const email = document.getElementById("emailInput").value;
+        const redirectUrl = window.location.href; // Einfacher Redirect
+
+        // API Key Prüfung
+        if (APP_SUPABASE_KEY.includes("HIER")) {
+            alert("API Key fehlt im Code!");
+            return;
+        }
+
+        const { error } = await window.appSupabaseClient.auth.signInWithOtp({
+            email: email,
+            options: { emailRedirectTo: redirectUrl }
         });
 
-        const data = await response.json();
+        if (error) alert("Fehler: " + error.message);
+        else alert("Link gesendet! Bitte E-Mails prüfen.");
+    }
 
-        if (response.ok) {
-            alert("✅ Login-Link wurde per Mail gesendet.");
+    async function checkLogin() {
+        if(!window.appSupabaseClient) return;
+
+        const { data } = await window.appSupabaseClient.auth.getSession();
+
+        if (data.session) {
+            currentUserId = data.session.user.id;
+            document.getElementById("loginView").style.display = "none";
+            document.getElementById("appView").style.display = "flex";
+            document.getElementById("userDisplay").innerText = data.session.user.email;
         } else {
-            console.error("Supabase Auth Error:", data);
-            alert("❌ Fehler: " + (data.error_description || data.msg || data.message || "Unbekannt"));
+            document.getElementById("loginView").style.display = "flex";
+            document.getElementById("appView").style.display = "none";
         }
-    } catch (e) {
-        console.error("Network Fetch Error:", e);
-        alert("❌ Netzwerkfehler. Bitte Internet prüfen.");
     }
-}
 
-async function checkLogin() {
-    // Session holen via appSupabaseClient
-    const { data } = await window.appSupabaseClient.auth.getSession();
-
-    if (data.session) {
-        currentUserId = data.session.user.id; 
-        document.getElementById("loginView").style.display = "none";
-        document.getElementById("appView").style.display = "flex"; 
-        
-        // Zeige Start-Button
-        document.getElementById("preScan").style.display = "flex"; 
-        document.getElementById("reader").style.display = "none"; 
-    } else {
-        currentUserId = null; 
-        document.getElementById("loginView").style.display = "block";
-        document.getElementById("appView").style.display = "none";
+    // Start
+    if (window.appSupabaseClient) {
+        window.appSupabaseClient.auth.onAuthStateChange(checkLogin);
+        checkLogin();
     }
-}
 
-// Listener starten
-if (window.appSupabaseClient) {
-    window.appSupabaseClient.auth.onAuthStateChange(checkLogin);
-    checkLogin();
-}
 </script>
 
 </body>
