@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stellplatz App</title>
+
+<!-- Lade die Supabase Bibliothek -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// --- Globale Konstanten ---
+// WICHTIG: Ersetzen Sie den Platzhalter durch Ihren ANON PUBLIC KEY! (Beginnt mit eyJ...).
+// Dies ist der sicherste Schlüssel für clientseitige Nutzung.
+const SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
+
+// --- SUPABASE INITIALISIERUNG ---
+// Initialisiert den Client (für alle anderen Data API-Aufrufe)
+(function() {
+    // Erzeugt den Client und weist ihn der globalen Variable zu
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+})();
+</script>
+
+<!-- Lade die Scanner Bibliothek -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #0d0d0d;
+    color: white;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#loginView {
+    padding: 20px;
+}
+
+/* Stellt sicher, dass der Scanner-Bereich den Platz einnimmt */
+#reader { 
+    flex: 1; 
+}
+
+#result {
+    height: 45%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-size: 2em;
+    text-align: center;
+    font-weight: bold;
+}
+
+.green { background: #0a3; }
+.red { background: #900; }
+.yellow { background: #b90; }
+
+button {
+    padding: 12px;
+    font-size: 1em;
+    background: black;
+    color: white;
+    border: 1px solid white;
+    margin-top: 10px;
+    width: 100%;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+button:hover {
+    background: #333;
+}
+
+/* POPUP */
+#popup {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#popupBox {
+    background: #111;
+    padding: 20px;
+    border-radius: 10px;
+    width: 80%;
+    max-width: 400px;
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    margin-bottom: 15px;
+    box-sizing: border-box;
+    background: #333;
+    border: none;
+    color: white;
+    border-radius: 4px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="loginView" style="display:none;">
+    <h1>🔐 Stellplatz App</h1>
+    <input id="emailInput" type="email" placeholder="E-Mail eingeben" />
+    <button onclick="sendMagicLink()">Login-Link senden</button>
+</div>
+
+<div id="appView" style="display:none;">
+
+    <!-- Container für den Videostream -->
+    <div id="reader"></div>
+
+    <!-- START SCAN BUTTON: Zeigt den Button zur manuellen Aktivierung -->
+    <div id="preScan" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; flex: 1;">
+        <h2>Kamera aktivieren</h2>
+        <p>Klicken Sie, um den Barcode-Scanner zu starten.</p>
+        <button onclick="startScannerAndHideButton()" style="max-width: 300px;">SCANNER STARTEN</button>
+    </div>
+    <!-- ENDE START SCAN BUTTON -->
+
+    <div id="result">📦 Bereit zum Scannen</div>
+
+    <!-- POPUP -->
+    <div id="popup">
+        <div id="popupBox">
+            <h3>Neuen Artikel anlegen</h3>
+
+            <label for="name">Name:</label>
+            <input id="name">
+
+            <label for="platz">Stellplatz:</label>
+            <input id="platz">
+
+            <label>
+                <input type="checkbox" id="block"> Blocklager
+            </label>
+
+            <button onclick="save()">Speichern</button>
+            <button onclick="hide()">Abbrechen</button>
+        </div>
+    </div>
+
+    <script>
+        // Deklaration mit 'var' um sicherzustellen, dass die Variablen im gesamten Skript zugänglich sind
+        var lastCode = "";
+        var html5QrCode = null;
+        var currentUserId = null; // Globaler Benutzerstatus
+        
+        // --- Core Functions ---
+        
+        function showResult(text, color) {
+            const r = document.getElementById("result");
+            r.className = color;
+            r.innerHTML = text;
+        }
+
+        async function lookup(code) {
+            // Prüfen, ob der Benutzer eingeloggt ist
+            if (!currentUserId) {
+                showResult("⚠️ Nicht eingeloggt. Bitte zuerst anmelden.", "red");
+                return;
+            }
+
+            // Scanner kurz stoppen, um Mehrfachscans zu verhindern
+            if (html5QrCode) {
+                await html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
+            }
+            
+            showResult("⏳ Prüfe Artikel...", "yellow");
+
+            // *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
+            const { data, error } = await window.supabaseClient
+                .from("artikel")
+                .select("*")
+                .eq("barcode", code)
+                .eq("user_id", currentUserId) // WICHTIG: Filtern nach User-ID
+                .single();
+            
+            
+            if (data) {
+
+                await window.supabaseClient // *** VERWENDE GLOBALE INSTANZ ***
+                    .from("artikel")
+                    .update({ scans: data.scans + 1 })
+                    .eq("barcode", code)
+                    .eq("user_id", currentUserId); // Update nur eigene Artikel
+
+                showResult(
+                    `✅ ${data.name}<br>
+                    📍 ${data.stellplatz}<br>
+                    🧱 Blocklager: ${data.blocklager ? "JA" : "NEIN"}<br>
+                    📊 Scans: ${data.scans + 1}`,
+                    "green"
+                );
+                
+                // Scanner nach erfolgreichem Lookup wieder starten
+                if (html5QrCode) {
+                    html5QrCode.start(
+                        { facingMode: "environment" },
+                        { fps: 10, qrbox: 250 },
+                        code => lookup(code)
+                    ).catch(err => console.error("Kamera konnte nicht gestartet werden:", err));
+                }
+
+
+            } else {
+                showResult("❌ Unbekannter Artikel", "red");
+                lastCode = code;
+                
+                // Scanner stoppen, bevor das Popup erscheint, um Hintergrund-Scans zu verhindern
+                if (html5QrCode) {
+                    await html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
+                }
+
+                showPopup();
+            }
+        }
+
+        function showPopup() {
+            document.getElementById("popup").style.display = "flex";
+        }
+
+        function hide() {
+            document.getElementById("popup").style.display = "none";
+            // Scanner nach Schließen des Popups (ohne Speichern) neu starten
+            startScanner();
+        }
+
+        async function save() {
+            // Prüfen, ob der Benutzer eingeloggt ist, bevor gespeichert wird
+            if (!currentUserId) {
+                alert("Fehler: Kann nicht speichern, da kein Benutzer eingeloggt ist.");
+                hide();
+                return;
+            }
+
+            // Speichert den neuen Artikel
+            await window.supabaseClient.from("artikel").insert([{ // *** VERWENDE GLOBALE INSTANZ ***
+                barcode: lastCode,
+                name: document.getElementById("name").value,
+                stellplatz: document.getElementById("platz").value,
+                blocklager: document.getElementById("block").checked,
+                scans: 0,
+                user_id: currentUserId // WICHTIG: User-ID hinzufügen
+            }]);
+
+            hide();
+            // lookup() wird mit dem neuen Eintrag gestartet (dies startet den Scanner im Erfolgsfall neu)
+            lookup(lastCode); 
+        }
+        
+        // WICHTIGE FUNKTION: Wird nur beim Klick auf den Button aufgerufen (löst Browser-Sperre)
+        function startScannerAndHideButton() {
+            document.getElementById("preScan").style.display = "none";
+            document.getElementById("reader").style.display = "block";
+            startScanner();
+        }
+
+        // FUNKTION: Startet den Scanner
+        function startScanner() {
+            if (html5QrCode) {
+                // Wenn er schon initialisiert ist, aber gestoppt war (z.B. nach hide()), einfach starten
+                return html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: 250 },
+                    code => lookup(code)
+                ).catch(err => console.error("Kamera konnte nicht gestartet werden:", err));
+            }
+            
+            // Wenn er noch nicht initialisiert ist, neu erstellen und starten
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: 250 },
+                    code => lookup(code)
+            )
+            .catch(err => {
+                // Zeige dem Benutzer den Fehler an, falls der Browser den Zugriff verweigert
+                showResult(`⚠️ Kamerafehler: ${err.name}. Bitte Kameraberechtigungen prüfen.`, "red");
+                console.error("Kamera konnte nicht gestartet werden:", err);
+            });
+        }
+    </script>
+</div>
+<script>
+// --- Global Login Script ---
+
+// NEU: Verwendet nativen Fetch mit Triple-Key-Strategie für maximale Robustheit
+async function sendMagicLink() {
+    const email = document.getElementById("emailInput").value;
+    const redirectUrl = encodeURIComponent(window.location.href);
+
+    // 1. FÜGT den apikey Query-Parameter hinzu
+    const url = `${SUPABASE_URL}/auth/v1/otp?apikey=${SUPABASE_KEY}`;
+
+    const payload = {
+        email: email,
+        options: {
+            emailRedirectTo: redirectUrl 
+        }
+    };
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // 2. Fügt den Schlüssel in den speziellen 'apikey' Header ein
+                'apikey': SUPABASE_KEY, 
+                // 3. Fügt den Schlüssel als Bearer Token hinzu
+                'Authorization': `Bearer ${SUPABASE_KEY}`, 
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert("✅ Login-Link wurde per Mail gesendet.");
+        } else {
+            // Zeigt den Fehler aus der Supabase-Antwort an
+            console.error("Supabase Auth API Error:", data);
+            alert("❌ Fehler beim Senden des Magic-Links: " + (data.error_description || data.msg || "Unbekannter Fehler"));
+        }
+    } catch (e) {
+        console.error("Network Fetch Error:", e);
+        alert("❌ Netzwerkfehler: Konnte Supabase nicht erreichen. Bitte Internetverbindung prüfen.");
+    }
+}
+
+async function checkLogin() {
+    // *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
+    const { data } = await window.supabaseClient.auth.getSession();
+
+    if (data.session) {
+        // Setze die globale Benutzer-ID
+        currentUserId = data.session.user.id; 
+
+        document.getElementById("loginView").style.display = "none";
+        document.getElementById("appView").style.display = "flex"; 
+        
+        // Nach erfolgreichem Login: Zeige den Button zum manuellen Starten des Scanners an
+        document.getElementById("preScan").style.display = "flex"; 
+        document.getElementById("reader").style.display = "none"; 
+
+    } else {
+        // Setze die globale Benutzer-ID zurück, wenn nicht eingeloggt
+        currentUserId = null; 
+        document.getElementById("loginView").style.display = "block";
+        document.getElementById("appView").style.display = "none";
+    }
+}
+
+// Überwachung von Login-Status-Änderungen
+// *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
+window.supabaseClient.auth.onAuthStateChange(checkLogin);
+// Initialer Check beim Laden der Seite
+checkLogin();
+</script>
+
+</body>
+</html>
