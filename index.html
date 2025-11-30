@@ -5,16 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Stellplatz App</title>
 
-<link rel="manifest" href="/static/manifest.json">
-<meta name="theme-color" content="#0d0d0d">
+<!-- PWA-Metadaten entfernt, um Service Worker Fehler zu beheben -->
+
+<!-- Lade die Supabase Bibliothek -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// --- SUPABASE KONFIGURATION ---
+// --- SUPABASE KONFIGURATION UND GLOBALE DEFINITION ---
+// Wir verwenden 'var', um sicherzustellen, dass 'supabase' im gesamten Dokument verfügbar ist
+// und um den ReferenceError zu beheben.
 const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Initialisiere den Client und mache ihn global verfügbar
+var supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 </script>
 
+<!-- Lade die Scanner Bibliothek -->
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
@@ -61,6 +67,13 @@ button {
     border: 1px solid white;
     margin-top: 10px;
     width: 100%;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+button:hover {
+    background: #333;
 }
 
 /* POPUP */
@@ -81,14 +94,19 @@ button {
     padding: 20px;
     border-radius: 10px;
     width: 80%;
+    max-width: 400px;
 }
 
 input {
     width: 100%;
-    padding: 8px;
+    padding: 10px;
     margin-top: 5px;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
     box-sizing: border-box;
+    background: #333;
+    border: none;
+    color: white;
+    border-radius: 4px;
 }
 </style>
 </head>
@@ -103,15 +121,20 @@ input {
 
 <div id="appView" style="display:none;">
 
+    <!-- Container für den Videostream -->
     <div id="reader"></div>
 
+    <!-- START SCAN BUTTON: Zeigt den Button zur manuellen Aktivierung -->
     <div id="preScan" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; flex: 1;">
         <h2>Kamera aktivieren</h2>
         <p>Klicken Sie, um den Barcode-Scanner zu starten.</p>
         <button onclick="startScannerAndHideButton()" style="max-width: 300px;">SCANNER STARTEN</button>
     </div>
+    <!-- ENDE START SCAN BUTTON -->
+
     <div id="result">📦 Bereit zum Scannen</div>
 
+    <!-- POPUP -->
     <div id="popup">
         <div id="popupBox">
             <h3>Neuen Artikel anlegen</h3>
@@ -132,8 +155,9 @@ input {
     </div>
 
     <script>
-        let lastCode = "";
-        let html5QrCode = null;
+        // Deklaration mit 'var' um sicherzustellen, dass die Variablen im gesamten Skript zugänglich sind
+        var lastCode = "";
+        var html5QrCode = null;
         
         // --- Core Functions ---
         
@@ -152,6 +176,7 @@ input {
             
             showResult("⏳ Prüfe Artikel...", "yellow");
 
+            // ACHTUNG: Hier wird das globale 'supabase' verwendet, was nun funktioniert
             const { data, error } = await supabase
                 .from("artikel")
                 .select("*")
@@ -175,6 +200,7 @@ input {
                 );
                 
                 // Scanner nach erfolgreichem Lookup wieder starten
+                // Dies wird nur ausgeführt, wenn der Scanner gerade nicht gestoppt wurde (durch einen Fehler)
                 if (html5QrCode) {
                     html5QrCode.start(
                         { facingMode: "environment" },
@@ -188,7 +214,7 @@ input {
                 showResult("❌ Unbekannter Artikel", "red");
                 lastCode = code;
                 
-                // HIER: Scanner stoppen, bevor das Popup erscheint
+                // Scanner stoppen, bevor das Popup erscheint, um Hintergrund-Scans zu verhindern
                 if (html5QrCode) {
                     await html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
                 }
@@ -219,11 +245,11 @@ input {
             }]);
 
             hide();
-            // lookup() wird mit dem neuen Eintrag gestartet (dies startet den Scanner im Erfolgsfall)
+            // lookup() wird mit dem neuen Eintrag gestartet (dies startet den Scanner im Erfolgsfall neu)
             lookup(lastCode); 
         }
         
-        // NEUE FUNKTION: Wird nur beim Klick auf den Button aufgerufen
+        // WICHTIGE FUNKTION: Wird nur beim Klick auf den Button aufgerufen (löst Browser-Sperre)
         function startScannerAndHideButton() {
             document.getElementById("preScan").style.display = "none";
             document.getElementById("reader").style.display = "block";
@@ -249,15 +275,10 @@ input {
                 code => lookup(code)
             )
             .catch(err => {
-                showResult(`⚠️ Kamerafehler: ${err.name}`, "red");
+                // Zeige dem Benutzer den Fehler an, falls der Browser den Zugriff verweigert
+                showResult(`⚠️ Kamerafehler: ${err.name}. Bitte Kameraberechtigungen prüfen.`, "red");
                 console.error("Kamera konnte nicht gestartet werden:", err);
             });
-        }
-        
-        // --- PWA Service Worker ---
-
-        if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.register("/static/sw.js");
         }
     </script>
 </div>
@@ -270,6 +291,7 @@ async function sendMagicLink() {
     const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
+            // Stellt sicher, dass der User an dieselbe Seite zurückgeleitet wird (wichtig für Vercel)
             emailRedirectTo: window.location.href 
         }
     });
@@ -282,15 +304,16 @@ async function sendMagicLink() {
 }
 
 async function checkLogin() {
+    // ACHTUNG: Hier wird das globale 'supabase' verwendet, was nun funktioniert
     const { data } = await supabase.auth.getSession();
 
     if (data.session) {
         document.getElementById("loginView").style.display = "none";
         document.getElementById("appView").style.display = "flex"; 
         
-        // NEU: Zeige den Button zum manuellen Starten des Scanners an
+        // Nach erfolgreichem Login: Zeige den Button zum manuellen Starten des Scanners an
         document.getElementById("preScan").style.display = "flex"; 
-        document.getElementById("reader").style.display = "none"; // Reader-Feld verstecken, bis der Button geklickt wird
+        document.getElementById("reader").style.display = "none"; 
 
     } else {
         document.getElementById("loginView").style.display = "block";
