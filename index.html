@@ -305,8 +305,8 @@
             
             /* FIX: Sorgt dafür, dass das Video das Container-Element ausfüllt */
             #reader video {
-                width: 100% !important;
-                height: 100% !important;
+                width: 100 !important;
+                height: 100 !important;
                 object-fit: cover; 
             }
 
@@ -473,7 +473,7 @@
             }
 
             /* --- INPUT & BUTTON STYLES (GENERAL) --- */
-            input[type="text"], input[type="search"] {
+            input[type="text"], input[type="search"], select { /* SELECT HINZUGEFÜGT */
                 width: 100%;
                 padding: 12px;
                 margin: 8px 0 15px 0;
@@ -485,10 +485,24 @@
                 transition: border-color 0.3s;
             }
 
-            input:focus {
+            input:focus, select:focus {
                 border-color: var(--color-accent-blue);
                 outline: none;
             }
+            
+            /* Spezielles Styling für das Select-Element */
+            select {
+                /* Entfernt Standard-Pfeile */
+                -webkit-appearance: none;
+                -moz-appearance: none;
+                appearance: none;
+                /* Fügt benutzerdefiniertes Pfeil-Icon hinzu (SVG in base64) */
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 15px center;
+                background-size: 1.2em;
+            }
+
 
             button {
                 padding: 12px 20px;
@@ -710,10 +724,34 @@
                     <div id="popup">
                         <div id="popupBox">
                             <h3>Artikel anlegen (Barcode: <span id="popupBarcode"></span>)</h3>
-                            <label for="name">Name:</label>
-                            <input id="name" placeholder="Produktbezeichnung" autocomplete="off" type="text">
+                            
+                            <!-- NEU: Basis-Name -->
+                            <label for="baseName">Basis-Name:</label>
+                            <input id="baseName" placeholder="z.B. Fanta" autocomplete="off" type="text">
+                            
+                            <!-- NEU: Größe/Volumen Dropdown -->
+                            <label for="volume">Größe/Volumen:</label>
+                            <select id="volume">
+                                <option value="1.0L">1.0L</option>
+                                <option value="0.5L">0.5L</option>
+                                <option value="0.33L">0.33L</option>
+                                <option value="2.0L">2.0L</option>
+                                <option value="0.2L">0.2L</option>
+                            </select>
+                            
+                            <!-- NEU: Material Dropdown -->
+                            <label for="material">Material:</label>
+                            <select id="material">
+                                <option value="PET">PET</option>
+                                <option value="Glas">Glas</option>
+                                <option value="Dose">Dose</option>
+                                <option value="Karton">Karton</option>
+                            </select>
+                            
+                            <!-- Stellplatz (Platzhalter für das alte Name-Feld war "name") -->
                             <label for="platz">Stellplatz:</label>
                             <input id="platz" placeholder="z.B. A-01" autocomplete="off" type="text">
+                            
                             <label style="display: flex; align-items: center; margin: 15px 0 20px 0; font-size: 0.9em; opacity: 0.8;">
                                 <input type="checkbox" id="block" style="width: auto; margin-right: 10px; accent-color: var(--color-accent-blue);"> Blocklager
                             </label>
@@ -954,7 +992,7 @@
                     // Artikel nicht gefunden -> Popup anzeigen
                     document.getElementById("popupBarcode").innerText = code;
                     document.getElementById("popup").classList.add('visible');
-                    document.getElementById("name").focus(); // Fokus auf das erste Feld
+                    document.getElementById("baseName").focus(); // Fokus auf das erste Feld
                 }
             }
 
@@ -963,7 +1001,9 @@
                 document.getElementById("popup").classList.remove('visible');
                 
                 // Felder zurücksetzen
-                document.getElementById("name").value = "";
+                document.getElementById("baseName").value = "";
+                document.getElementById("volume").value = "1.0L";
+                document.getElementById("material").value = "PET";
                 document.getElementById("platz").value = "";
                 document.getElementById("block").checked = false;
 
@@ -974,18 +1014,23 @@
 
             async function save() {
                 const barcode = document.getElementById("popupBarcode").innerText;
-                const name = document.getElementById("name").value.trim();
+                const baseName = document.getElementById("baseName").value.trim();
+                const volume = document.getElementById("volume").value;
+                const material = document.getElementById("material").value;
                 const platz = document.getElementById("platz").value.trim();
                 const block = document.getElementById("block").checked;
+                
+                // Generiere den vollständigen Namen für die Datenbank
+                const name = `${baseName} ${volume} (${material})`;
 
-                if (!name || !platz) {
-                    showToast("Bitte Name und Stellplatz ausfüllen.", "error");
+                if (!baseName || !platz) {
+                    showToast("Bitte Basis-Name und Stellplatz ausfüllen.", "error");
                     return;
                 }
 
                 const result = await window.appSupabaseClient.from("artikel").insert([{
                     barcode: barcode,
-                    name: name,
+                    name: name, // Verwende den generierten Namen
                     stellplatz: platz,
                     blocklager: block,
                     scans: 1
