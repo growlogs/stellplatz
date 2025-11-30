@@ -629,7 +629,7 @@
                 opacity: 0.7;
             }
             
-            /* NEU: Icon-Anzeige für Lagertyp - Angepasst für SVG */
+            /* NEU: Icon-Anzeige für Lagertyp */
             .item-count {
                 text-align: center; 
                 width: 40px; 
@@ -671,25 +671,29 @@
                 </div>
                 
                 <div class="input-group">
-                    <label for="popupBaseName">Basis-Name (z.B. Schraube M8)</label>
-                    <input type="text" id="popupBaseName" required>
+                    <input type="text" id="popupBaseName" placeholder="Name (z.B. Apodis Medium)" required>
                 </div>
                 
                 <div class="input-group">
-                    <label for="popupMaterial">Material / Variante (z.B. Messing, 50 Stk)</label>
-                    <input type="text" id="popupMaterial">
+                    <select id="popupSize">
+                        <option value="0.2">0,2 Liter</option>
+                        <option value="0.33">0,33 Liter</option>
+                        <option value="0.5">0,5 Liter</option>
+                        <option value="0.7">0,7 Liter</option>
+                        <option value="1.0">1,0 Liter</option>
+                        <option value="1.5">1,5 Liter</option>
+                        <option value="2.0">2,0 Liter</option>
+                    </select>
                 </div>
                 
                 <div class="input-group">
-                    <label for="popupPlatz">Stellplatz (z.B. A-02-C)</label>
-                    <input type="text" id="popupPlatz" required>
+                    <input type="text" placeholder="Stellplatz (z.B. 4191)" id="popupPlatz" required>
                 </div>
                 
                 <div class="input-group">
-                    <label for="popupBlocklager">Lagertyp</label>
                     <select id="popupBlocklager">
-                        <option value="false">Regal / Fach</option>
-                        <option value="true">Blocklager</option>
+                        <option value="true">Regal</option>
+                        <option value="false">Blocklager</option>
                     </select>
                 </div>
 
@@ -1079,7 +1083,12 @@
                     // ARTIKEL NICHT GEFUNDEN
                     const content = `<p>Der Barcode <strong>${code}</strong> wurde noch nicht registriert.</p>`;
                     showResultCard("Unbekannter Artikel", content, '❓');
-                    document.getElementById("registerButton").style.display = "block"; // Registrieren anzeigen
+                    // NEU: Registrieren nur für Admin anzeigen
+                    if (window.currentUserRole === 'admin') {
+                        document.getElementById("registerButton").style.display = "block";
+                    } else {
+                        document.getElementById("registerButton").style.display = "none";
+                    }
                 }
             }
             
@@ -1087,6 +1096,12 @@
             /* --- ARTIKEL SPEICHERN LOGIK (FÜR NEUE ARTIKEL) --- */
             
             function showPopup() {
+                // NEU: Nur Admins dürfen registrieren
+                if (window.currentUserRole !== 'admin') {
+                    showToast("Nur Administratoren dürfen neue Artikel registrieren.", 'error');
+                    return;
+                }
+                
                 document.getElementById('popupBarcode').value = currentScannedBarcode;
                 document.getElementById('popupOverlay').classList.add('show');
             }
@@ -1095,7 +1110,7 @@
                 document.getElementById('popupOverlay').classList.remove('show');
                 // Formular zurücksetzen
                 document.getElementById('popupBaseName').value = '';
-                document.getElementById('popupMaterial').value = '';
+                document.getElementById('popupSize').value = ''; // NEU: Größe zurücksetzen
                 document.getElementById('popupPlatz').value = '';
                 document.getElementById('popupBlocklager').value = 'false';
             }
@@ -1103,11 +1118,18 @@
             async function saveArticle() {
                 const barcode = document.getElementById('popupBarcode').value.trim();
                 const baseName = document.getElementById('popupBaseName').value.trim();
-                const material = document.getElementById('popupMaterial').value.trim();
+                const sizeValue = document.getElementById('popupSize').value.trim(); // NEU: Größe lesen
                 const platz = document.getElementById('popupPlatz').value.trim();
                 const block = document.getElementById('popupBlocklager').value === 'true';
 
-                const name = baseName + (material ? ` (${material})` : '');
+                // NEU: Name Konstruktion mit optionaler Größe
+                let name = baseName;
+                if (sizeValue) {
+                    // Ersetze . durch , für die Anzeige im Namen
+                    const sizeDisplay = sizeValue.replace('.', ','); 
+                    name += ` (${sizeDisplay} L)`; 
+                }
+
                 const lagertyp = block ? 'Blocklager' : 'Regal/Fach'; // Text für die Karte
 
 
@@ -1120,7 +1142,7 @@
                     .from("artikel")
                     .insert([{ 
                         barcode: barcode, 
-                        name: name,
+                        name: name, // Verwende den neuen Namen
                         stellplatz: platz, 
                         blocklager: block, 
                         scans: 1 
