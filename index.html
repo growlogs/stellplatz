@@ -729,6 +729,7 @@ input:focus {
     if (window.appSupabaseClient) {
         window.appSupabaseClient.auth.onAuthStateChange((event, session) => checkLogin(event, session));
         checkLogin();
+        hidePopup();
     }
 
 </script>
