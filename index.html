@@ -5,45 +5,303 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Stellplatz App</title>
 
-<!-- Supabase & Scanner laden -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://unpkg.com/html5-qrcode"></script>
+<!-- Firebase/Firestore/Auth Module Imports -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { 
+        getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { 
+        getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, 
+        collection, query, where, getDocs, runTransaction 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-<script>
-// ---------------------------------------------------------
-// KONFIGURATION: HIER IHREN KEY EINFÜGEN
-// ---------------------------------------------------------
-var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
-// ---------------------------------------------------------
+    // Setze Firestore Log Level auf Debug (Hilfreich bei der Entwicklung)
+    setLogLevel('Debug');
+    
+    // --- CANVAS GLOBALE VARIABLEN ---
+    // Diese Variablen werden vom Canvas-System zur Verfügung gestellt und sind sicher.
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-// Initialisierung
-(function() {
-    if (window['supabase']) {
-        window.appSupabaseClient = window['supabase'].createClient(APP_SUPABASE_URL, APP_SUPABASE_KEY);
+    // --- FIREBASE INITIALISIERUNG ---
+    window.app = initializeApp(firebaseConfig);
+    window.db = getFirestore(window.app);
+    window.auth = getAuth(window.app);
+    
+    // Globaler Verweis für Master Code (Bleibt im Klartext, da es nur ein lokaler Vergleich ist)
+    window.MASTER_ACCESS_CODE = "123456"; 
+    window.currentPin = ""; // Speichert den aktuell eingegebenen PIN-Code
+
+    /**
+     * Berechnet den Pfad zur Artikelsammlung für den aktuellen Benutzer.
+     * Daten werden als privat im Benutzerbereich gespeichert.
+     * Pfad: /artifacts/{appId}/users/{userId}/artikel
+     */
+    function getArtikelCollectionRef(userId) {
+        if (!userId) {
+            console.error("Kann Collection nicht abrufen: Benutzer-ID fehlt.");
+            return null;
+        }
+        return collection(window.db, `artifacts/${appId}/users/${userId}/artikel`);
     }
-})();
+
+    /**
+     * Überprüft den Anmeldestatus und aktualisiert die UI.
+     */
+    async function checkLogin() { 
+        // 1. Authentifizierung durchführen oder Zustand prüfen
+        if (!window.auth.currentUser) {
+            try {
+                if (initialAuthToken) {
+                    // Signiert mit sicherem Custom Token
+                    await signInWithCustomToken(window.auth, initialAuthToken);
+                } else {
+                    // Fallback: Anonym anmelden (weniger sicher, aber funktioniert ohne Token)
+                    await signInAnonymously(window.auth);
+                }
+            } catch (error) {
+                console.error("Initialer Anmeldefehler:", error);
+                document.getElementById("authError").innerText = "Datenbankverbindung fehlgeschlagen.";
+                document.getElementById("loginView").style.display = "flex";
+                document.getElementById("appView").style.display = "none";
+                return;
+            }
+        }
+        
+        const user = window.auth.currentUser;
+
+        if (user) {
+            window.currentUserId = user.uid;
+            document.getElementById("loginView").style.display = "none";
+            document.getElementById("appView").style.display = "flex";
+            document.getElementById("userDisplay").innerText = user.uid.substring(0, 8) + '...'; // Gekürzte ID zeigen
+            window.currentPin = ""; 
+            updatePinIndicators();
+            document.getElementById("popup").style.display = "none"; 
+        } else {
+            window.currentUserId = null;
+            document.getElementById("loginView").style.display = "flex";
+            document.getElementById("appView").style.display = "none";
+            window.currentPin = ""; 
+            updatePinIndicators();
+            showAuthError("", false); 
+        }
+    }
+
+    /**
+     * Verarbeitet die Eingabe von Ziffern über den Ziffernblock.
+     */
+    window.handlePinInput = async function(value) {
+        // ... (PIN-Logik bleibt gleich)
+        showAuthError("", false); 
+
+        if (value === 'backspace') {
+            window.currentPin = window.currentPin.slice(0, -1);
+        } else if (value === 'clear') {
+             window.currentPin = "";
+        } else if (value.match(/[0-9]/) && window.currentPin.length < window.MASTER_ACCESS_CODE.length) {
+            window.currentPin += value;
+        }
+
+        updatePinIndicators();
+
+        if (window.currentPin.length === window.MASTER_ACCESS_CODE.length) {
+            await loginWithCode(window.currentPin);
+        }
+    }
+
+    /**
+     * Führt die Anmeldung mit dem Master Code durch.
+     */
+    async function loginWithCode(enteredCode) {
+        showAuthError("", false); 
+
+        if (enteredCode === window.MASTER_ACCESS_CODE) {
+            // Beim erfolgreichen Code-Check wird der Auth-State als "eingeloggt" betrachtet.
+            // Der User ist bereits anonym angemeldet (siehe checkLogin).
+            // Wir müssen hier nur die UI umschalten, da die Session bereits steht.
+            await checkLogin(); 
+            // Optional: Hier könnte man auf einen permanenten Account upgraden,
+            // aber für diesen Scope reicht die anonyme Session.
+        } else {
+            showAuthError("❌ Falscher Zugangscode.", true);
+            updatePinIndicators(true);
+            
+            setTimeout(() => {
+                window.currentPin = "";
+                updatePinIndicators();
+            }, 500);
+        }
+    }
+    
+    /**
+     * Barcode erfolgreich gescannt.
+     */
+    window.onScanSuccess = async function(code) {
+        if (code === window.lastCode) return; 
+        window.lastCode = code; 
+        
+        if(window.html5QrCode) window.html5QrCode.pause();
+
+        showResult("Lade Daten...", "loading");
+
+        if(!window.auth.currentUser) {
+            showResult("Fehler: Kein aktiver Benutzer angemeldet.", "error");
+            setTimeout(() => { window.lastCode = ""; if(window.html5QrCode) window.html5QrCode.resume(); }, 1000); 
+            return;
+        }
+
+        const artikelRef = getArtikelCollectionRef(window.currentUserId);
+        if (!artikelRef) return;
+        
+        let foundData = null;
+
+        // --- Suche den Artikel per Barcode ---
+        try {
+            const q = query(artikelRef, where("barcode", "==", code));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+                // Ein Artikel gefunden
+                const docSnap = querySnapshot.docs[0];
+                foundData = { id: docSnap.id, ...docSnap.data() };
+            }
+        } catch (e) {
+            console.error("Fehler beim Abrufen des Artikels:", e);
+            showResult(`Fehler beim Abrufen: ${e.message}`, "error");
+            setTimeout(() => { window.lastCode = ""; if(window.html5QrCode) window.html5QrCode.resume(); }, 2000);
+            return;
+        }
+
+
+        if (foundData) {
+            // --- Transaktion zum inkrementieren der Scans ---
+            const docRef = doc(artikelRef, foundData.id);
+            try {
+                await runTransaction(window.db, async (transaction) => {
+                    const freshDoc = await transaction.get(docRef);
+                    if (!freshDoc.exists()) {
+                        throw "Dokument existiert nicht mehr!";
+                    }
+                    const newScans = (freshDoc.data().scans || 0) + 1;
+                    transaction.update(docRef, { scans: newScans });
+                    
+                    showResult(
+                        `<strong>${freshDoc.data().name}</strong><br>
+                         📍 Platz: ${freshDoc.data().stellplatz}<br>
+                         📊 Scans: ${newScans}`, 
+                        "success"
+                    );
+                });
+            } catch (e) {
+                console.error("Transaktionsfehler:", e);
+                showResult(`Fehler beim Zähler-Update: ${e.message}`, "error");
+            }
+            
+            setTimeout(() => {
+                window.lastCode = ""; 
+                if(window.html5QrCode) window.html5QrCode.resume();
+            }, 2000);
+
+        } else {
+            showResult(`Unbekannter Barcode:<br><em>${code}</em>`, "error");
+            // Zeige das Popup an, wenn der Artikel unbekannt ist.
+            document.getElementById("popup").style.display = "flex";
+        }
+    }
+
+    /**
+     * Speichert den neuen Artikel in Firestore.
+     */
+    window.save = async function() {
+        const name = document.getElementById("name").value;
+        const platz = document.getElementById("platz").value;
+        const block = document.getElementById("block").checked;
+
+        if(!name || !platz) {
+            showResult(`FEHLER: Bitte Name und Platz ausfüllen.`, "error"); 
+            return;
+        }
+
+        const artikelRef = getArtikelCollectionRef(window.currentUserId);
+        if (!artikelRef) return;
+
+        try {
+            await addDoc(artikelRef, {
+                barcode: window.lastCode, // lastCode ist der aktuelle, unbekannte Code
+                name: name,
+                stellplatz: platz,
+                blocklager: block,
+                scans: 1,
+                createdAt: new Date().toISOString()
+            });
+
+            hidePopup();
+            showResult(`Gespeichert: <strong>${name}</strong>`, "success");
+        } catch (e) {
+             console.error("Fehler beim Speichern:", e);
+             showResult(`FEHLER beim Speichern: ${e.message}`, "error");
+        }
+    }
+
+    /**
+     * Meldet den Benutzer ab.
+     */
+    window.logout = async function() {
+        if (window.html5QrCode) {
+            window.html5QrCode.stop().catch(err => console.warn("Kamera Stoppen fehlgeschlagen:", err));
+        }
+        await signOut(window.auth);
+        window.currentUserId = null;
+        await checkLogin();
+    }
+    
+    // Initialer Aufruf
+    onAuthStateChanged(window.auth, () => {
+        checkLogin();
+    });
 </script>
 
+
 <style>
-/* --- APP DESIGN & LAYOUT --- */
+/* --- GLOBALE STYLES & HINTERGRUND --- */
 * {
     box-sizing: border-box;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: #000;
+    /* Tiefdunkler, subtiler Farbverlauf für Premium-Look */
+    background: linear-gradient(145deg, #09090b 0%, #1e1e24 100%);
     color: white;
-    height: 100dvh; /* Nutzt die dynamische Höhe mobiler Browser */
+    height: 100dvh; 
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
-/* Header Leiste */
+/* --- ANIMATIONEN --- */
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 0.8; }
+}
+.pulsating {
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-5px); }
+    40%, 80% { transform: translateX(5px); }
+}
+
+/* --- HEADER & LAYOUT --- */
 header {
     height: 60px;
     background: #1a1a1a;
@@ -52,59 +310,47 @@ header {
     justify-content: space-between;
     padding: 0 20px;
     border-bottom: 1px solid #333;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
     z-index: 10;
 }
 
 header h1 {
     font-size: 1.2rem;
     margin: 0;
-    color: #fff;
+    color: #f0f0f0;
 }
 
-/* Hauptbereich */
 #appView {
     flex: 1;
-    display: none; /* Wird per JS aktiviert */
+    display: none; 
     flex-direction: column;
     height: 100%;
     position: relative;
 }
 
-/* Scanner Bereich - Feste Höhe erzwingen! */
+/* --- SCANNER BEREICH --- */
 #reader-container {
     position: relative;
     width: 100%;
-    height: 60%; /* Scanner nimmt oben 60% ein */
+    height: 60%; 
     background: black;
     overflow: hidden;
 }
 
-#reader {
-    width: 100%;
-    height: 100%;
-}
-
-/* Video-Element Fix für die Bibliothek */
-#reader video {
-    object-fit: cover;
-    width: 100% !important;
-    height: 100% !important;
-}
-
-/* Ergebnis Bereich (Unten) */
 #result-container {
-    height: 40%; /* Restliche 40% */
-    background: #111;
-    border-top-left-radius: 20px;
-    border-top-right-radius: 20px;
-    margin-top: -20px; /* Leichter Überlappungseffekt */
+    height: 40%; 
+    background: #18181f; /* Dunkler als der Hintergrund, für Kontrast */
+    border-top-left-radius: 30px; /* Stärkere Rundung */
+    border-top-right-radius: 30px;
+    margin-top: -30px; 
     z-index: 5;
-    padding: 20px;
+    padding: 30px 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.8); /* Starker Schatten */
+    transition: all 0.3s ease;
 }
 
 #result {
@@ -112,128 +358,285 @@ header h1 {
     text-align: center;
     line-height: 1.5;
     width: 100%;
+    padding: 10px;
 }
 
-/* Start Screen Overlay */
-#preScan {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%;
-    height: 100%;
-    background: #000;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    text-align: center;
-}
-
-/* Login View */
+/* --- LOGIN VIEW --- */
 #loginView {
     height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    padding: 40px;
-    background: #111;
+    justify-content: space-between; 
+    align-items: center;
+    padding: 40px 20px;
 }
 
-/* Buttons & Inputs */
-input {
+/* Login Text/Status */
+#authError {
+    color: #f55; 
+    margin-top: 15px; 
+    height: 1.2em;
+    font-weight: 500;
+}
+.error-shake {
+    animation: shake 0.5s;
+}
+
+/* --- PIN ANZEIGE (INDIKATOR-PUNKTE) --- */
+#pinIndicators {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 50px;
+    height: 12px;
+}
+.pin-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    background: transparent;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.pin-indicator.active {
+    background: #4A90E2; /* Hellblau gefüllt */
+    border-color: #4A90E2;
+}
+.pin-indicator.error {
+    background: #ff4d4d;
+    border-color: #ff4d4d;
+    animation: shake 0.3s;
+}
+
+
+/* --- KEYPAD STYLES (Glassmorphism + Subtle Gradient) --- */
+#keypad {
     width: 100%;
-    padding: 15px;
-    margin: 10px 0;
-    background: #222;
-    border: 1px solid #333;
-    color: white;
-    border-radius: 8px;
-    font-size: 16px;
+    max-width: 380px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
 }
 
+.keypad-button {
+    height: 80px;
+    width: 100%;
+    /* Glaseffekt */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    
+    color: white;
+    border-radius: 50px; 
+    font-size: 1.8rem;
+    font-weight: 300;
+    cursor: pointer;
+    transition: all 0.15s ease-out;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    position: relative;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+.keypad-button small {
+    font-size: 0.6rem;
+    opacity: 0.5;
+    margin-top: 3px;
+    text-transform: uppercase;
+}
+
+.keypad-button:active {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    transform: scale(0.95);
+}
+
+.keypad-button.action {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    font-size: 1rem;
+    opacity: 0.6;
+}
+
+.keypad-button.backspace svg {
+    width: 28px;
+    height: 28px;
+    fill: none;
+    stroke: white;
+    stroke-width: 2;
+}
+
+/* --- GENERELLE BUTTONS --- */
 button {
     width: 100%;
     padding: 15px;
-    margin-top: 10px;
+    margin-top: 15px;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px; /* Weichere Kanten */
     font-size: 16px;
     font-weight: bold;
     cursor: pointer;
-    background: #3e82f7; /* App Blau */
+    /* Lebhafter Gradient für Hauptaktionen */
+    background: linear-gradient(90deg, #4A90E2 0%, #50C9C3 100%); 
     color: white;
+    box-shadow: 0 4px 15px rgba(74, 144, 226, 0.4);
+    transition: all 0.2s ease;
+}
+.header-button {
+    width: auto;
+    padding: 8px 15px;
+    font-size: 0.8em;
+    margin-top: 0;
+    background: #333;
+    box-shadow: none;
 }
 
 button:active {
     transform: scale(0.98);
+    box-shadow: 0 2px 10px rgba(74, 144, 226, 0.5);
 }
 
 button.secondary {
     background: #333;
     margin-top: 10px;
+    box-shadow: none;
 }
 
-/* Status Farben */
+/* --- STATUS BADGES --- */
 .status-badge {
     display: inline-block;
-    padding: 8px 16px;
+    padding: 8px 18px;
     border-radius: 50px;
     margin-bottom: 10px;
     font-weight: bold;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
 }
-.green { background: rgba(0, 255, 0, 0.1); color: #0f0; border: 1px solid #0f0; }
-.red { background: rgba(255, 0, 0, 0.1); color: #f55; border: 1px solid #f55; }
-.yellow { color: #fe0; }
+.green { background: rgba(0, 255, 0, 0.1); color: #4CAF50; border: 1px solid #4CAF50; }
+.red { background: rgba(255, 0, 0, 0.1); color: #ff4d4d; border: 1px solid #ff4d4d; }
+.yellow { color: #FFC107; }
 
-/* Popup (Modal) */
+/* --- POPUP (MODAL) --- */
 #popup {
+    /* Wichtig: Initial verstecken! */
+    display: none; 
     position: fixed;
-    top: 0; left: 0;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.8);
-    display: none;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 100;
     justify-content: center;
     align-items: center;
-    z-index: 1000;
-    backdrop-filter: blur(5px);
 }
 
 #popupBox {
-    background: #1e1e1e;
+    background: #1e1e24; 
     padding: 25px;
-    border-radius: 16px;
+    border-radius: 20px;
     width: 90%;
-    max-width: 350px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    max-width: 380px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.7);
 }
-#popupBox h3 { margin-top: 0; }
+
+input { 
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    background: #2a2a30;
+    border: 1px solid #3e3e4a;
+    color: white;
+    border-radius: 10px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+input:focus {
+    border-color: #4A90E2;
+    outline: none;
+}
 </style>
 </head>
 
 <body>
 
-<!-- LOGIN SCREEN -->
+<!-- LOGIN SCREEN - PIN EINGABE ÜBER KEYPAD -->
 <div id="loginView">
-    <div style="text-align: center; margin-bottom: 30px; font-size: 3em;">📦</div>
-    <h1 style="text-align: center;">Stellplatz Login</h1>
-    <input id="emailInput" type="email" placeholder="E-Mail Adresse" />
-    <button onclick="sendMagicLink()">Magic Link senden</button>
+    <!-- Header (Symbol und Text) -->
+    <div style="text-align: center; margin-top: 50px;">
+        <div style="font-size: 3em; margin-bottom: 10px; color: #4A90E2;">
+            <!-- Modernes Icon mit Licht-Effekt -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+        </div>
+        <h2 style="font-size: 1.5rem; font-weight: 500; margin-bottom: 10px;">Stellplatz Zugang</h2>
+        <div id="authError" style="color: #f55; margin-top: 15px; height: 1.2em;"></div>
+    </div>
+    
+    <!-- PIN Indikatoren -->
+    <div id="pinIndicators">
+        <div class="pin-indicator" data-index="0"></div>
+        <div class="pin-indicator" data-index="1"></div>
+        <div class="pin-indicator" data-index="2"></div>
+        <div class="pin-indicator" data-index="3"></div>
+        <div class="pin-indicator" data-index="4"></div>
+        <div class="pin-indicator" data-index="5"></div>
+    </div>
+    
+    <!-- Keypad -->
+    <div id="keypad" oncontextmenu="return false;">
+        <!-- Reihe 1 -->
+        <button class="keypad-button" onclick="handlePinInput('1')">1</button>
+        <button class="keypad-button" onclick="handlePinInput('2')">2<small>ABC</small></button>
+        <button class="keypad-button" onclick="handlePinInput('3')">3<small>DEF</small></button>
+        
+        <!-- Reihe 2 -->
+        <button class="keypad-button" onclick="handlePinInput('4')">4<small>GHI</small></button>
+        <button class="keypad-button" onclick="handlePinInput('5')">5<small>JKL</small></button>
+        <button class="keypad-button" onclick="handlePinInput('6')">6<small>MNO</small></button>
+        
+        <!-- Reihe 3 -->
+        <button class="keypad-button" onclick="handlePinInput('7')">7<small>PQRS</small></button>
+        <button class="keypad-button" onclick="handlePinInput('8')">8<small>TUV</small></button>
+        <button class="keypad-button" onclick="handlePinInput('9')">9<small>WXYZ</small></button>
+        
+        <!-- Reihe 4 (Aktionen) -->
+        <button class="keypad-button action" onclick="handlePinInput('clear')">LÖSCHEN</button>
+        <button class="keypad-button" onclick="handlePinInput('0')">0</button>
+        <button class="keypad-button backspace action" onclick="handlePinInput('backspace')">
+            <!-- Backspace-Icon (modernisiert) -->
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21 5H9L3 12L9 19H21V5Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 9L15 12L12 15" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
 </div>
 
 <!-- APP SCREEN -->
 <div id="appView">
     <header>
         <h1>Lager Scanner</h1>
-        <div style="font-size: 0.8em; opacity: 0.7;" id="userDisplay"></div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <!-- ID-Anzeige, gekürzt für UI-Zwecke -->
+            <div style="font-size: 0.8em; opacity: 0.7;" id="userDisplay">...</div>
+            <button class="header-button" onclick="logout()">Abmelden</button>
+        </div>
     </header>
 
     <!-- Scanner Bereich -->
     <div id="reader-container">
         <div id="reader"></div>
         
-        <!-- Start Button Overlay (Liegt über dem Reader bis geklickt wird) -->
+        <!-- Start Button Overlay -->
         <div id="preScan">
             <div style="font-size: 4em; margin-bottom: 20px;">📷</div>
             <h2>Scanner bereit</h2>
@@ -244,7 +647,7 @@ button.secondary {
 
     <!-- Ergebnis Bereich -->
     <div id="result-container">
-        <div style="width: 40px; height: 4px; background: #333; border-radius: 2px; margin-bottom: 20px;"></div>
+        <div style="width: 50px; height: 5px; background: #333; border-radius: 2px; margin-bottom: 20px;"></div>
         <div id="result">
             Scannen Sie einen Barcode...
         </div>
@@ -258,8 +661,8 @@ button.secondary {
             <input id="name" placeholder="Produktname">
             <label>Stellplatz:</label>
             <input id="platz" placeholder="z.B. A-01">
-            <label style="display: flex; align-items: center; margin: 15px 0;">
-                <input type="checkbox" id="block" style="width: auto; margin-right: 10px;"> Blocklager
+            <label style="display: flex; align-items: center; margin: 15px 0; font-size: 0.9em; opacity: 0.8;">
+                <input type="checkbox" id="block" style="width: auto; margin-right: 10px; accent-color: #4A90E2;"> Blocklager
             </label>
             <button onclick="save()">Speichern</button>
             <button class="secondary" onclick="hidePopup()">Abbrechen</button>
@@ -268,9 +671,28 @@ button.secondary {
 </div>
 
 <script>
-    var lastCode = "";
-    var html5QrCode = null;
-    var currentUserId = null; 
+    // --- Variablen außerhalb des Moduls definieren, damit sie global zugänglich sind ---
+    window.lastCode = "";
+    window.html5QrCode = null;
+    window.currentUserId = null; 
+    
+    // --- PIN-FELD LOGIK (funktioniert jetzt mit den globalen Variablen aus dem Modul) ---
+
+    /**
+     * Aktualisiert die visuellen PIN-Indikatoren basierend auf der Länge des aktuellen Codes.
+     * @param {boolean} isError - Wenn true, werden die Punkte rot angezeigt (Fehler).
+     */
+    function updatePinIndicators(isError = false) {
+        const indicators = document.querySelectorAll('.pin-indicator');
+        indicators.forEach((indicator, index) => {
+            indicator.classList.remove('active', 'error');
+            if (isError) {
+                indicator.classList.add('error');
+            } else if (index < window.currentPin.length) {
+                indicator.classList.add('active');
+            }
+        });
+    }
 
     // --- UI FUNKTIONEN ---
 
@@ -278,179 +700,78 @@ button.secondary {
         const r = document.getElementById("result");
         let badgeClass = "";
         
-        if(type === "success") badgeClass = "status-badge green";
+        if(type === "success") badgeClass = "status-badge green pulsating";
         if(type === "error") badgeClass = "status-badge red";
         if(type === "loading") badgeClass = "status-badge yellow";
 
-        // Schönere Formatierung
+        // Vorherige Pulsation entfernen
+        r.innerHTML = r.innerHTML.replace(' pulsating', ''); 
+
         if(type === "success" || type === "error") {
              r.innerHTML = `<div class="${badgeClass}">${type === "success" ? "GEFUNDEN" : "FEHLER"}</div><br>${html}`;
         } else {
              r.innerHTML = html;
         }
     }
+    
+    /**
+     * Zeigt einen Fehlertext an und wendet optional die Shake-Animation an.
+     * @param {string} message - Die Fehlermeldung.
+     * @param {boolean} shake - Ob die Shake-Animation angewendet werden soll.
+     */
+    function showAuthError(message, shake = true) {
+        const errorElement = document.getElementById("authError");
+        errorElement.innerText = message;
+        errorElement.classList.remove('error-shake');
+        if (shake && message) {
+            void errorElement.offsetWidth; 
+            errorElement.classList.add('error-shake');
+        }
+    }
 
     // --- KAMERA FUNKTIONEN ---
 
-    function activateCamera() {
-        document.getElementById("preScan").style.display = "none";
+    window.activateCamera = function() {
+        document.getElementById("preScan").style.display = "none"; 
         startScanner();
     }
 
     function startScanner() {
-        if (html5QrCode) {
-            // Bereits initialisiert, nur starten
-            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess)
+        if (window.html5QrCode) {
+            window.html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, window.onScanSuccess)
             .catch(err => {
-                alert("Kamera Fehler: " + err);
+                showAuthError("Kamera Fehler: " + err, true);
                 document.getElementById("preScan").style.display = "flex";
             });
             return;
         }
 
-        // Neu erstellen
-        html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start(
+        window.html5QrCode = new Html5Qrcode("reader");
+        window.html5QrCode.start(
             { facingMode: "environment" },
             { 
                 fps: 10, 
-                qrbox: { width: 250, height: 250 }, // Quadratische Box
-                aspectRatio: 1.0 // Zwingt das Video in ein Verhältnis
+                qrbox: { width: 250, height: 250 }, 
+                aspectRatio: 1.0 
             },
-            onScanSuccess
+            window.onScanSuccess
         ).catch(err => {
             console.error(err);
-            alert("Zugriff verweigert oder Fehler: " + err);
+            showAuthError("Zugriff verweigert oder Fehler: " + err, true);
             document.getElementById("preScan").style.display = "flex";
         });
     }
 
-    async function onScanSuccess(code) {
-        if (code === lastCode) return; // Debounce (einfach)
-        
-        // Pausieren
-        if(html5QrCode) html5QrCode.pause();
-
-        showResult("Lade Daten...", "loading");
-
-        if(!window.appSupabaseClient) {
-            showResult("Datenbank nicht verbunden.", "error");
-            return;
-        }
-
-        // DB Abfrage
-        const { data, error } = await window.appSupabaseClient
-            .from("artikel")
-            .select("*")
-            .eq("barcode", code)
-            .eq("user_id", currentUserId)
-            .single();
-
-        if (data) {
-            // Update
-            await window.appSupabaseClient
-                .from("artikel")
-                .update({ scans: data.scans + 1 })
-                .eq("barcode", code)
-                .eq("user_id", currentUserId);
-
-            showResult(
-                `<strong>${data.name}</strong><br>
-                 📍 Platz: ${data.stellplatz}<br>
-                 📊 Scans: ${data.scans + 1}`, 
-                "success"
-            );
-            
-            // Kurz warten, dann weiter scannen
-            setTimeout(() => {
-                lastCode = ""; // Reset für nächsten Scan
-                html5QrCode.resume();
-            }, 1500);
-
-        } else {
-            // Unbekannt
-            showResult(`Unbekannter Barcode:<br>${code}`, "error");
-            lastCode = code;
-            document.getElementById("popup").style.display = "flex";
-            // Scanner bleibt pausiert während Popup offen ist
-        }
-    }
-
     // --- POPUP LOGIK ---
 
-    function hidePopup() {
+    window.hidePopup = function() {
         document.getElementById("popup").style.display = "none";
-        lastCode = "";
-        html5QrCode.resume();
+        window.lastCode = "";
+        document.getElementById("name").value = "";
+        document.getElementById("platz").value = "";
+        document.getElementById("block").checked = false;
+        if(window.html5QrCode) window.html5QrCode.resume(); 
     }
-
-    async function save() {
-        const name = document.getElementById("name").value;
-        const platz = document.getElementById("platz").value;
-        const block = document.getElementById("block").checked;
-
-        if(!name || !platz) {
-            alert("Bitte Name und Platz ausfüllen");
-            return;
-        }
-
-        await window.appSupabaseClient.from("artikel").insert([{
-            barcode: lastCode,
-            name: name,
-            stellplatz: platz,
-            blocklager: block,
-            scans: 1,
-            user_id: currentUserId
-        }]);
-
-        hidePopup();
-        showResult(`Gespeichert: ${name}`, "success");
-    }
-
-
-    // --- AUTHENTIFIZIERUNG ---
-
-    async function sendMagicLink() {
-        const email = document.getElementById("emailInput").value;
-        const redirectUrl = window.location.href; // Einfacher Redirect
-
-        // API Key Prüfung
-        if (APP_SUPABASE_KEY.includes("HIER")) {
-            alert("API Key fehlt im Code!");
-            return;
-        }
-
-        const { error } = await window.appSupabaseClient.auth.signInWithOtp({
-            email: email,
-            options: { emailRedirectTo: redirectUrl }
-        });
-
-        if (error) alert("Fehler: " + error.message);
-        else alert("Link gesendet! Bitte E-Mails prüfen.");
-    }
-
-    async function checkLogin() {
-        if(!window.appSupabaseClient) return;
-
-        const { data } = await window.appSupabaseClient.auth.getSession();
-
-        if (data.session) {
-            currentUserId = data.session.user.id;
-            document.getElementById("loginView").style.display = "none";
-            document.getElementById("appView").style.display = "flex";
-            document.getElementById("userDisplay").innerText = data.session.user.email;
-        } else {
-            document.getElementById("loginView").style.display = "flex";
-            document.getElementById("appView").style.display = "none";
-        }
-    }
-
-    // Start
-    if (window.appSupabaseClient) {
-        window.appSupabaseClient.auth.onAuthStateChange(checkLogin);
-        checkLogin();
-    }
-
 </script>
 
 </body>
