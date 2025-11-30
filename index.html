@@ -5,19 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Stellplatz App</title>
 
-<!-- PWA-Metadaten entfernt, um Service Worker Fehler zu beheben -->
-
 <!-- Lade die Supabase Bibliothek -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // --- SUPABASE KONFIGURATION UND GLOBALE DEFINITION ---
-// Wir verwenden 'var', um sicherzustellen, dass 'supabase' im gesamten Dokument verfügbar ist
-// und um den ReferenceError zu beheben.
-const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
-const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
+// Geändert von 'const' zu 'var', um die Sichtbarkeit in der globalen Umgebung zu maximieren.
+var SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
+var SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
 
 // Initialisiere den Client und mache ihn global verfügbar
 var supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Globaler Status für den eingeloggten Benutzer (wird nach checkLogin gesetzt)
+var currentUserId = null;
 </script>
 
 <!-- Lade die Scanner Bibliothek -->
@@ -168,6 +168,11 @@ input {
         }
 
         async function lookup(code) {
+            // Prüfen, ob der Benutzer eingeloggt ist
+            if (!currentUserId) {
+                showResult("⚠️ Nicht eingeloggt. Bitte zuerst anmelden.", "red");
+                return;
+            }
 
             // Scanner kurz stoppen, um Mehrfachscans zu verhindern
             if (html5QrCode) {
@@ -176,11 +181,12 @@ input {
             
             showResult("⏳ Prüfe Artikel...", "yellow");
 
-            // ACHTUNG: Hier wird das globale 'supabase' verwendet, was nun funktioniert
+            // Suche nach Artikel mit Barcode UND der aktuellen Benutzer-ID (für RLS)
             const { data, error } = await supabase
                 .from("artikel")
                 .select("*")
                 .eq("barcode", code)
+                .eq("user_id", currentUserId) // WICHTIG: Filtern nach User-ID
                 .single();
             
             
@@ -189,7 +195,8 @@ input {
                 await supabase
                     .from("artikel")
                     .update({ scans: data.scans + 1 })
-                    .eq("barcode", code);
+                    .eq("barcode", code)
+                    .eq("user_id", currentUserId); // Update nur eigene Artikel
 
                 showResult(
                     `✅ ${data.name}<br>
@@ -200,7 +207,6 @@ input {
                 );
                 
                 // Scanner nach erfolgreichem Lookup wieder starten
-                // Dies wird nur ausgeführt, wenn der Scanner gerade nicht gestoppt wurde (durch einen Fehler)
                 if (html5QrCode) {
                     html5QrCode.start(
                         { facingMode: "environment" },
@@ -234,6 +240,12 @@ input {
         }
 
         async function save() {
+            // Prüfen, ob der Benutzer eingeloggt ist, bevor gespeichert wird
+            if (!currentUserId) {
+                alert("Fehler: Kann nicht speichern, da kein Benutzer eingeloggt ist.");
+                hide();
+                return;
+            }
 
             // Speichert den neuen Artikel
             await supabase.from("artikel").insert([{
@@ -241,7 +253,8 @@ input {
                 name: document.getElementById("name").value,
                 stellplatz: document.getElementById("platz").value,
                 blocklager: document.getElementById("block").checked,
-                scans: 0
+                scans: 0,
+                user_id: currentUserId // WICHTIG: User-ID hinzufügen
             }]);
 
             hide();
@@ -297,11 +310,13 @@ async function sendMagicLink() {
     });
 
     if (error) {
-        // Fehlerbehandlung für 401
+        // Allgemeine Fehlerbehandlung
         if (error.status === 401) {
-            alert("❌ Fehler 401: Anmeldung nicht autorisiert. Bitte überprüfen Sie Ihre Supabase Auth-Einstellungen (Providers -> Email).");
+            // Wir behalten die 401-Meldung bei, falls der Fehler tatsächlich wegen falscher Supabase-Konfiguration auftritt
+            alert("❌ Fehler 401: Anmeldung nicht autorisiert. Bitte überprüfen Sie: 1. Supabase Auth-Einstellungen (Providers -> Email aktiviert). 2. Korrekten 'anon public' Schlüssel.");
         } else {
-            alert("❌ Fehler: " + error.message);
+             // Zeigt den API Key-Fehler oder andere unerwartete Fehler an
+            alert("❌ Fehler beim Senden des Magic-Links: " + error.message);
         }
     } else {
         alert("✅ Login-Link wurde per Mail gesendet.");
@@ -309,10 +324,12 @@ async function sendMagicLink() {
 }
 
 async function checkLogin() {
-    // ACHTUNG: Hier wird das globale 'supabase' verwendet, was nun funktioniert
     const { data } = await supabase.auth.getSession();
 
     if (data.session) {
+        // Setze die globale Benutzer-ID
+        currentUserId = data.session.user.id; 
+
         document.getElementById("loginView").style.display = "none";
         document.getElementById("appView").style.display = "flex"; 
         
@@ -321,6 +338,8 @@ async function checkLogin() {
         document.getElementById("reader").style.display = "none"; 
 
     } else {
+        // Setze die globale Benutzer-ID zurück, wenn nicht eingeloggt
+        currentUserId = null; 
         document.getElementById("loginView").style.display = "block";
         document.getElementById("appView").style.display = "none";
     }
