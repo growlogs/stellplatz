@@ -9,11 +9,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // --- SUPABASE KONFIGURATION UND GLOBALE DEFINITION ---
-// Geändert von 'const' zu 'var', um die Sichtbarkeit in der globalen Umgebung zu maximieren.
 var SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
 var SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
 
-// Initialisiere den Client und mache ihn global verfügbar
+// Standard-Initialisierung: Da SUPABASE_URL und SUPABASE_KEY globale 'var's sind, funktioniert dies zuverlässig.
 var supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Globaler Status für den eingeloggten Benutzer (wird nach checkLogin gesetzt)
@@ -212,7 +211,7 @@ input {
                         { facingMode: "environment" },
                         { fps: 10, qrbox: 250 },
                         code => lookup(code)
-                    ).catch(err => console.error("Error restarting scanner:", err));
+                    ).catch(err => console.error("Kamera konnte nicht gestartet werden:", err));
                 }
 
 
