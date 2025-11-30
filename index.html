@@ -428,6 +428,16 @@
             .action-button.cancel:active {
                 background: rgba(255, 255, 255, 0.2);
             }
+            /* NEU: Style für Lösch-Button */
+            .action-button.delete {
+                background: var(--color-error-red);
+                color: white;
+                margin-top: 15px; /* Fügt Abstand zum Element darüber ein */
+            }
+            .action-button.delete:active {
+                background: #cc2a22;
+            }
+
 
             /* --- POPUP / REGISTRIEREN & ADMIN EDIT (REUSABLE STYLES) --- */
             #popupOverlay, #adminEditPopupOverlay {
@@ -671,12 +681,14 @@
                 </div>
                 
                 <div class="input-group">
-                    <input type="text" id="popupBaseName" placeholder="Name (z.B. Apodis Medium)" required>
+                    <label for="popupBaseName">Basis-Name (z.B. T-Shirt, Wasserflasche)</label>
+                    <input type="text" id="popupBaseName" required>
                 </div>
                 
                 <div class="input-group">
+                    <label for="popupSize">Größe / Volumen (Liter)</label>
                     <select id="popupSize">
-                        <option value="0.2">0,2 Liter</option>
+                        <option value="">(Optional)</option>
                         <option value="0.33">0,33 Liter</option>
                         <option value="0.5">0,5 Liter</option>
                         <option value="0.7">0,7 Liter</option>
@@ -687,13 +699,15 @@
                 </div>
                 
                 <div class="input-group">
-                    <input type="text" placeholder="Stellplatz (z.B. 4191)" id="popupPlatz" required>
+                    <label for="popupPlatz">Stellplatz (z.B. A-02-C)</label>
+                    <input type="text" id="popupPlatz" required>
                 </div>
                 
                 <div class="input-group">
+                    <label for="popupBlocklager">Lagertyp</label>
                     <select id="popupBlocklager">
-                        <option value="true">Regal</option>
-                        <option value="false">Blocklager</option>
+                        <option value="false">Regal / Fach</option>
+                        <option value="true">Blocklager</option>
                     </select>
                 </div>
 
@@ -726,6 +740,11 @@
                     <button type="button" class="action-button cancel" onclick="hideAdminEditPopup()">Abbrechen</button>
                     <button type="submit" class="action-button register">Speichern</button>
                 </div>
+
+                <button type="button" class="action-button delete" style="width: 100%;" onclick="deleteArticle()">
+                    Artikel unwiderruflich löschen
+                </button>
+
                 <p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin-top: 15px;">Sie sind als Administrator angemeldet und können den Stellplatz ändern.</p>
             </form>
         </div>
@@ -1218,6 +1237,44 @@
                 } else {
                     hideAdminEditPopup();
                     showToast(`Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`, "success");
+                    loadArticleList(); // Liste aktualisieren
+                }
+            }
+            
+            /**
+             * NEU: Löscht den aktuell im Admin Edit befindlichen Artikel nach Sicherheitsabfrage.
+             */
+            async function deleteArticle() {
+                if (window.currentUserRole !== 'admin') {
+                    showToast("Keine Berechtigung zum Löschen.", 'error');
+                    return;
+                }
+                
+                if (!window.articleToEdit) return;
+
+                const articleName = window.articleToEdit.name;
+                const barcode = window.articleToEdit.barcode;
+
+                // Sicherheitsabfrage
+                const confirmation = confirm(`Sind Sie SICHER, dass Sie den Artikel "${articleName}" (Barcode: ${barcode}) unwiderruflich löschen möchten?`);
+                
+                if (!confirmation) {
+                    showToast("Löschvorgang abgebrochen.", 'info');
+                    return;
+                }
+
+                // Löschvorgang
+                const { error } = await window.appSupabaseClient
+                    .from("artikel")
+                    .delete()
+                    .eq("barcode", barcode);
+
+                if (error) {
+                    showToast(`FEHLER beim Löschen des Artikels.`, "error");
+                    console.error("Löschfehler:", error);
+                } else {
+                    hideAdminEditPopup(); // Schließt den Edit-Dialog
+                    showToast(`Artikel "${articleName}" wurde erfolgreich gelöscht.`, "success");
                     loadArticleList(); // Liste aktualisieren
                 }
             }
