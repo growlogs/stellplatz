@@ -77,7 +77,8 @@
             window.currentUserId = user.uid;
             document.getElementById("loginView").style.display = "none";
             document.getElementById("appView").style.display = "flex";
-            document.getElementById("userDisplay").innerText = user.uid.substring(0, 8) + '...'; // Gekürzte ID zeigen
+            // Die gekürzte ID wird nur in der UI angezeigt, die volle ID (user.uid) für DB-Pfad genutzt
+            document.getElementById("userDisplay").innerText = user.uid.substring(0, 8) + '...'; 
             window.currentPin = ""; 
             updatePinIndicators();
             document.getElementById("popup").style.display = "none"; 
@@ -95,7 +96,6 @@
      * Verarbeitet die Eingabe von Ziffern über den Ziffernblock.
      */
     window.handlePinInput = async function(value) {
-        // ... (PIN-Logik bleibt gleich)
         showAuthError("", false); 
 
         if (value === 'backspace') {
@@ -120,12 +120,8 @@
         showAuthError("", false); 
 
         if (enteredCode === window.MASTER_ACCESS_CODE) {
-            // Beim erfolgreichen Code-Check wird der Auth-State als "eingeloggt" betrachtet.
-            // Der User ist bereits anonym angemeldet (siehe checkLogin).
-            // Wir müssen hier nur die UI umschalten, da die Session bereits steht.
+            // Beim erfolgreichen Code-Check wird die UI umgeschaltet, da die Session bereits steht (siehe onAuthStateChanged)
             await checkLogin(); 
-            // Optional: Hier könnte man auf einen permanenten Account upgraden,
-            // aber für diesen Scope reicht die anonyme Session.
         } else {
             showAuthError("❌ Falscher Zugangscode.", true);
             updatePinIndicators(true);
@@ -197,7 +193,7 @@
                     );
                 });
             } catch (e) {
-                console.error("Transaktionsfehler:", e);
+                console.error("Transaktionsfehler (Zähler):", e);
                 showResult(`Fehler beim Zähler-Update: ${e.message}`, "error");
             }
             
@@ -260,6 +256,7 @@
     }
     
     // Initialer Aufruf
+    // Stellt sicher, dass die Anmeldung überprüft wird, sobald Firebase bereit ist.
     onAuthStateChanged(window.auth, () => {
         checkLogin();
     });
