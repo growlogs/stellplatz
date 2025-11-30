@@ -11,28 +11,28 @@
 
 <script>
 // ---------------------------------------------------------
-// KONFIGURATION: Lese Schlüssel aus globalen Umgebungsvariablen
+// KONFIGURATION: Lese Schlüssel aus globalen Variablen und setze Supabase-Werte
 // ---------------------------------------------------------
-// WICHTIG: Diese Variablen werden von Vercel/Canvas in der Build-Zeit injiziert!
-// Im Entwicklungsmodus (lokal) oder ohne Vercel-Setup kann der Wert "undefined" sein.
-var APP_SUPABASE_URL = "%%VITE_SUPABASE_URL%%"; 
-var APP_SUPABASE_KEY = "%%VITE_SUPABASE_ANON_KEY%%"; 
-var MASTER_ACCESS_CODE = "%%VITE_MASTER_CODE%%"; 
 
-// Fallback für den lokalen Test (wenn Vercel/Canvas keine Variablen setzt)
-if (APP_SUPABASE_URL.startsWith('%%')) {
-    APP_SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co"; 
-    // Der "echte" Key darf hier nicht stehen, aber wir nutzen einen Platzhalter für die Funktion
-    APP_SUPABASE_KEY = "DEV_ANON_KEY_PLACEHOLDER"; 
-}
-if (MASTER_ACCESS_CODE.startsWith('%%')) {
-    MASTER_ACCESS_CODE = "123456"; // Lokaler Test-Code
-}
+// Canvas/Google-spezifische Variablen (für Firestore, hier nur zur Kenntnisnahme)
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+// Supabase-Konfiguration (MUSS MANUELL HIER EINGEFÜGT WERDEN)
+// BITTE ERSETZE DIE PLATZHALTER MIT DEINEN ECHTEN WERTEN!
+// ---------------------------------------------------------
+var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
+var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
+var MASTER_ACCESS_CODE = "123456"; // <<<<<<<<<<<<<<< WICHTIG: Setzen Sie hier Ihren Code fest
 // ---------------------------------------------------------
 
 // Initialisierung
 (function() {
-    if (window['supabase']) {
+    // Wenn der Key der Platzhalter ist, kann keine Verbindung hergestellt werden.
+    if (APP_SUPABASE_KEY === "DEV_ANON_KEY_PLACEHOLDER" || !APP_SUPABASE_URL) {
+        window.appSupabaseClient = null;
+        console.error("Supabase-Client konnte nicht initialisiert werden. Bitte KEY und URL setzen.");
+    } else if (window['supabase']) {
         window.appSupabaseClient = window['supabase'].createClient(APP_SUPABASE_URL, APP_SUPABASE_KEY);
     }
     window.currentPin = ""; // Speichert den aktuell eingegebenen PIN-Code
@@ -567,7 +567,12 @@ input:focus {
         showResult("Lade Daten...", "loading");
 
         if(!window.appSupabaseClient) {
-            showResult("Datenbank nicht verbunden.", "error");
+            showResult("Datenbank nicht verbunden. Bitte KEY und URL prüfen.", "error");
+            // Scanner wieder starten, da keine DB-Operation ausgeführt wurde
+            setTimeout(() => {
+                lastCode = ""; 
+                if(html5QrCode) html5QrCode.resume();
+            }, 1000); 
             return;
         }
 
@@ -648,6 +653,11 @@ input:focus {
             return;
         }
 
+        if(!window.appSupabaseClient) {
+             showResult("Datenbank nicht verbunden. Speichern nicht möglich.", "error");
+             return;
+        }
+
         const result = await window.appSupabaseClient.from("artikel").insert([{
             barcode: lastCode,
             name: name,
@@ -683,8 +693,9 @@ input:focus {
     async function loginWithCode(enteredCode) {
         showAuthError("", false); 
 
-        if (APP_SUPABASE_KEY.includes("PLACEHOLDER")) {
-            showAuthError("⚠️ FEHLER: Supabase Key fehlt (bitte in Vercel setzen).", true);
+        // Prüfen, ob der Supabase Key ein Platzhalter ist
+        if (APP_SUPABASE_KEY === "DEV_ANON_KEY_PLACEHOLDER") {
+            showAuthError("⚠️ FEHLER: Supabase Key fehlt (bitte im Code einfügen).", true);
             updatePinIndicators(true);
             window.currentPin = "";
             return;
@@ -699,6 +710,7 @@ input:focus {
         if (enteredCode === MASTER_ACCESS_CODE) {
             
             try {
+                // ANMERKUNG: Supabase Anonyme Anmeldung wird hier verwendet, um eine Session zu erhalten.
                 const { data, error } = await window.appSupabaseClient.auth.signInAnonymously();
                 
                 if (error) {
@@ -734,7 +746,12 @@ input:focus {
      * Überprüft den Anmeldestatus und aktualisiert die UI (Login vs. App).
      */
     async function checkLogin(event, session) { 
-        if(!window.appSupabaseClient) return;
+        if(!window.appSupabaseClient) {
+            document.getElementById("loginView").style.display = "flex";
+            document.getElementById("appView").style.display = "none";
+            showAuthError("⚠️ Supabase Konfiguration fehlt. App deaktiviert.", false);
+            return;
+        }
 
         let currentSession = session;
 
@@ -766,6 +783,8 @@ input:focus {
     if (window.appSupabaseClient) {
         window.appSupabaseClient.auth.onAuthStateChange((event, session) => checkLogin(event, session));
         checkLogin();
+    } else {
+        checkLogin(); // Zeigt den Fehler an, falls Supabase nicht initialisiert wurde
     }
 
 </script>
