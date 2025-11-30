@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stellplatz App</title>
+
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#0d0d0d">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+    // 👇 HIER später deinen NEUEN anon key einsetzen
+const SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
+const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+</script>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #0d0d0d;
+    color: white;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#reader { flex: 1; }
+
+#result {
+    height: 45%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-size: 2em;
+    text-align: center;
+    font-weight: bold;
+}
+
+.green { background: #0a3; }
+.red { background: #900; }
+.yellow { background: #b90; }
+
+.hidden { display: none; }
+
+button {
+    padding: 12px;
+    font-size: 1em;
+    background: black;
+    color: white;
+    border: 1px solid white;
+    margin-top: 10px;
+}
+
+/* POPUP */
+#popup {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+#popupBox {
+    background: #111;
+    padding: 20px;
+    border-radius: 10px;
+    width: 80%;
+}
+
+input {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="reader"></div>
+
+<div id="result">📦 Bereit zum Scannen</div>
+
+<div id="popup">
+<div id="popupBox">
+<h3>Neuen Artikel anlegen</h3>
+
+<label>Name:</label>
+<input id="name">
+
+<label>Stellplatz:</label>
+<input id="platz">
+
+<label>
+<input type="checkbox" id="block"> Blocklager
+</label>
+
+<button onclick="save()">Speichern</button>
+<button onclick="hide()">Abbrechen</button>
+</div>
+</div>
+
+<script>
+let lastCode = "";
+
+function showResult(text, color) {
+    const r = document.getElementById("result");
+    r.className = color;
+    r.innerHTML = text;
+}
+
+async function lookup(code) {
+
+    const { data, error } = await supabase
+        .from("artikel")
+        .select("*")
+        .eq("barcode", code)
+        .single();
+
+    if (data) {
+
+        await supabase
+            .from("artikel")
+            .update({ scans: data.scans + 1 })
+            .eq("barcode", code);
+
+        showResult(
+            `✅ ${data.name}<br>
+             📍 ${data.stellplatz}<br>
+             🧱 Blocklager: ${data.blocklager ? "JA" : "NEIN"}<br>
+             📊 Scans: ${data.scans + 1}`,
+            "green"
+        );
+
+    } else {
+        showResult("❌ Unbekannter Artikel", "red");
+        lastCode = code;
+        showPopup();
+    }
+}
+
+
+function showPopup() {
+    document.getElementById("popup").style.display = "flex";
+}
+
+function hide() {
+    document.getElementById("popup").style.display = "none";
+}
+
+async function save() {
+
+    await supabase.from("artikel").insert([{
+        barcode: lastCode,
+        name: document.getElementById("name").value,
+        stellplatz: document.getElementById("platz").value,
+        blocklager: document.getElementById("block").checked,
+        scans: 0
+    }]);
+
+    hide();
+    lookup(lastCode);
+}
+
+new Html5Qrcode("reader").start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    code => lookup(code)
+);
+
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/static/sw.js");
+}
+</script>
+
+</body>
+</html>
