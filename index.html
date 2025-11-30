@@ -14,7 +14,7 @@
             // ---------------------------------------------------------
             var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
             // WICHTIG: Der Schlüssel wurde korrigiert, um die Verbindung zur Datenbank wiederherzustellen!
-            var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
+            var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImexdHAiOjIwODAwMTE3NTl9.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
             
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             // !!! KRITISCHE SICHERHEITSWARNUNG: DIESER CODE IST UNSICHER             !!!
@@ -428,11 +428,10 @@
             .action-button.cancel:active {
                 background: rgba(255, 255, 255, 0.2);
             }
-            /* NEU: Style für Lösch-Button */
+            /* Style für Lösch-Button */
             .action-button.delete {
                 background: var(--color-error-red);
                 color: white;
-                margin-top: 15px; /* Fügt Abstand zum Element darüber ein */
             }
             .action-button.delete:active {
                 background: #cc2a22;
@@ -440,7 +439,7 @@
 
 
             /* --- POPUP / REGISTRIEREN & ADMIN EDIT (REUSABLE STYLES) --- */
-            #popupOverlay, #adminEditPopupOverlay {
+            #popupOverlay, #adminEditPopupOverlay, #deleteConfirmPopupOverlay {
                 position: fixed;
                 top: 0;
                 left: 0;
@@ -456,7 +455,7 @@
                 transition: opacity 0.2s ease-in-out;
             }
 
-            #popupOverlay.show, #adminEditPopupOverlay.show {
+            #popupOverlay.show, #adminEditPopupOverlay.show, #deleteConfirmPopupOverlay.show {
                 opacity: 1;
                 display: flex; /* Wichtig, um nach der Transition sichtbar zu sein */
             }
@@ -471,7 +470,7 @@
                 transition: transform 0.3s ease-in-out;
             }
 
-            #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card {
+            #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card, #deleteConfirmPopupOverlay.show .popup-card {
                 transform: translateY(0);
             }
 
@@ -741,12 +740,24 @@
                     <button type="submit" class="action-button register">Speichern</button>
                 </div>
 
-                <button type="button" class="action-button delete" style="width: 100%;" onclick="deleteArticle()">
-                    Artikel unwiderruflich löschen
+                <button type="button" class="action-button delete" style="width: 100%; margin-top: 15px;" onclick="deleteArticle()">
+                    Artikel löschen...
                 </button>
 
                 <p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin-top: 15px;">Sie sind als Administrator angemeldet und können den Stellplatz ändern.</p>
             </form>
+        </div>
+
+        <div id="deleteConfirmPopupOverlay">
+            <div class="popup-card">
+                <h3 id="deleteConfirmTitle">Artikel unwiderruflich löschen</h3>
+                <p id="deleteConfirmMessage" style="margin-bottom: 25px; text-align: center; font-weight: 500; font-size: 1.1rem; line-height: 1.4;"></p>
+
+                <div class="action-button-group">
+                    <button type="button" class="action-button cancel" onclick="hideDeleteConfirmPopup()">Abbrechen</button>
+                    <button type="button" class="action-button delete" onclick="confirmDeleteArticle()">Ja, unwiderruflich löschen</button>
+                </div>
+            </div>
         </div>
 
 
@@ -857,6 +868,7 @@
             let currentUserRole = null; 
             let isAuthReady = false;
             let articleToEdit = null; 
+            let articleToDelete = null; // NEU: Speichert den Artikel für die Löschbestätigung
             
             // NEU: SVG-Strings für die Lagertypen
             // Regal / Fach (Shelf/Rack) - JETZT: Schwerlastregal Icon
@@ -1210,7 +1222,10 @@
                 // Timeout, um sicherzustellen, dass die Transition abgeschlossen ist
                 setTimeout(() => {
                     document.getElementById('adminEditPopupOverlay').style.display = "none";
-                    window.articleToEdit = null;
+                    // articleToEdit nur löschen, wenn es nicht gerade für den Löschvorgang gebraucht wird
+                    if (!window.articleToDelete) {
+                        window.articleToEdit = null;
+                    }
                 }, 300);
             }
 
@@ -1242,27 +1257,59 @@
             }
             
             /**
-             * NEU: Löscht den aktuell im Admin Edit befindlichen Artikel nach Sicherheitsabfrage.
+             * NEU: Öffnet das benutzerdefinierte Bestätigungs-Popup.
              */
-            async function deleteArticle() {
-                if (window.currentUserRole !== 'admin') {
-                    showToast("Keine Berechtigung zum Löschen.", 'error');
+            function showDeleteConfirmPopup(article) {
+                window.articleToDelete = article; // Artikel global für die Löschung speichern
+                
+                document.getElementById('deleteConfirmMessage').innerHTML = `Sind Sie **SICHER**, dass Sie den Artikel<br><strong>"${article.name}"</strong><br>(Barcode: ${article.barcode}) unwiderruflich löschen möchten?`;
+                
+                document.getElementById('deleteConfirmPopupOverlay').style.display = "flex";
+                setTimeout(() => document.getElementById('deleteConfirmPopupOverlay').classList.add('show'), 10);
+            }
+
+            /**
+             * NEU: Schließt das Lösch-Popup und setzt die Referenz zurück.
+             */
+            function hideDeleteConfirmPopup() {
+                document.getElementById('deleteConfirmPopupOverlay').classList.remove('show');
+                
+                setTimeout(() => {
+                    document.getElementById('deleteConfirmPopupOverlay').style.display = "none";
+                    window.articleToDelete = null; 
+                }, 300);
+            }
+
+            /**
+             * Öffnet das Lösch-Bestätigungs-Popup.
+             */
+            function deleteArticle() {
+                if (window.currentUserRole !== 'admin' || !window.articleToEdit) {
+                    showToast("Keine Berechtigung oder Artikel nicht ausgewählt.", 'error');
                     return;
                 }
                 
-                if (!window.articleToEdit) return;
-
-                const articleName = window.articleToEdit.name;
-                const barcode = window.articleToEdit.barcode;
-
-                // Sicherheitsabfrage
-                const confirmation = confirm(`Sind Sie SICHER, dass Sie den Artikel "${articleName}" (Barcode: ${barcode}) unwiderruflich löschen möchten?`);
+                // Schließe den Bearbeiten-Dialog (articleToEdit wird beibehalten)
+                document.getElementById('adminEditPopupOverlay').classList.remove('show');
                 
-                if (!confirmation) {
-                    showToast("Löschvorgang abgebrochen.", 'info');
+                // Öffne den Löschen-Dialog sofort
+                showDeleteConfirmPopup(window.articleToEdit);
+            }
+
+            /**
+             * Führt die eigentliche Löschung nach Bestätigung aus.
+             */
+            async function confirmDeleteArticle() {
+                if (window.currentUserRole !== 'admin' || !window.articleToDelete) {
+                    hideDeleteConfirmPopup();
                     return;
                 }
-
+                
+                const articleName = window.articleToDelete.name;
+                const barcode = window.articleToDelete.barcode;
+                
+                hideDeleteConfirmPopup(); // Popup sofort schließen
+                
                 // Löschvorgang
                 const { error } = await window.appSupabaseClient
                     .from("artikel")
@@ -1273,7 +1320,6 @@
                     showToast(`FEHLER beim Löschen des Artikels.`, "error");
                     console.error("Löschfehler:", error);
                 } else {
-                    hideAdminEditPopup(); // Schließt den Edit-Dialog
                     showToast(`Artikel "${articleName}" wurde erfolgreich gelöscht.`, "success");
                     loadArticleList(); // Liste aktualisieren
                 }
