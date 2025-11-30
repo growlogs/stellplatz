@@ -9,18 +9,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // --- SUPABASE INITIALISIERUNG (Robuste IIFE) ---
-// Dies stellt sicher, dass die Variablen im korrekten Scope definiert und die Instanzen 
-// explizit dem globalen Fenster-Objekt zugewiesen werden.
+// Weist die Client-Instanz dem eindeutigen globalen Namen 'window.supabaseClient' zu, 
+// um Namenskonflikte mit der geladenen Bibliothek zu vermeiden.
 (function() {
     const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
     const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
 
-    // Initialisiere den Client mit dem globalen 'window.supabase'-Objekt 
-    // und weise die Instanz wieder dem globalen Scope zu (für alle Funktionen).
-    window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    // Globaler Status für den eingeloggten Benutzer
-    window.currentUserId = null;
+    // Initialisiere den Client und weise ihn einer neuen globalen Variable zu
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 })();
 </script>
 
@@ -162,6 +158,7 @@ input {
         // Deklaration mit 'var' um sicherzustellen, dass die Variablen im gesamten Skript zugänglich sind
         var lastCode = "";
         var html5QrCode = null;
+        var currentUserId = null; // Globaler Benutzerstatus
         
         // --- Core Functions ---
         
@@ -180,13 +177,13 @@ input {
 
             // Scanner kurz stoppen, um Mehrfachscans zu verhindern
             if (html5QrCode) {
-                 await html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
+                await html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
             }
             
             showResult("⏳ Prüfe Artikel...", "yellow");
 
-            // Suche nach Artikel mit Barcode UND der aktuellen Benutzer-ID (für RLS)
-            const { data, error } = await supabase
+            // *** VERWENDE NEUE GLOBALE INSTANZ: supabaseClient ***
+            const { data, error } = await window.supabaseClient
                 .from("artikel")
                 .select("*")
                 .eq("barcode", code)
@@ -196,7 +193,7 @@ input {
             
             if (data) {
 
-                await supabase
+                await window.supabaseClient // *** VERWENDE NEUE GLOBALE INSTANZ ***
                     .from("artikel")
                     .update({ scans: data.scans + 1 })
                     .eq("barcode", code)
@@ -204,9 +201,9 @@ input {
 
                 showResult(
                     `✅ ${data.name}<br>
-                     📍 ${data.stellplatz}<br>
-                     🧱 Blocklager: ${data.blocklager ? "JA" : "NEIN"}<br>
-                     📊 Scans: ${data.scans + 1}`,
+                    📍 ${data.stellplatz}<br>
+                    🧱 Blocklager: ${data.blocklager ? "JA" : "NEIN"}<br>
+                    📊 Scans: ${data.scans + 1}`,
                     "green"
                 );
                 
@@ -252,7 +249,7 @@ input {
             }
 
             // Speichert den neuen Artikel
-            await supabase.from("artikel").insert([{
+            await window.supabaseClient.from("artikel").insert([{ // *** VERWENDE NEUE GLOBALE INSTANZ ***
                 barcode: lastCode,
                 name: document.getElementById("name").value,
                 stellplatz: document.getElementById("platz").value,
@@ -276,8 +273,8 @@ input {
         // FUNKTION: Startet den Scanner
         function startScanner() {
             if (html5QrCode) {
-                 // Wenn er schon initialisiert ist, aber gestoppt war (z.B. nach hide()), einfach starten
-                 return html5QrCode.start(
+                // Wenn er schon initialisiert ist, aber gestoppt war (z.B. nach hide()), einfach starten
+                return html5QrCode.start(
                     { facingMode: "environment" },
                     { fps: 10, qrbox: 250 },
                     code => lookup(code)
@@ -305,8 +302,8 @@ input {
 async function sendMagicLink() {
     const email = document.getElementById("emailInput").value;
 
-    // Verwende das jetzt global zugängliche 'supabase' Objekt
-    const { error } = await supabase.auth.signInWithOtp({
+    // *** VERWENDE NEUE GLOBALE INSTANZ: supabaseClient ***
+    const { error } = await window.supabaseClient.auth.signInWithOtp({
         email,
         options: {
             // Stellt sicher, dass der User an dieselbe Seite zurückgeleitet wird (wichtig für Vercel)
@@ -320,7 +317,7 @@ async function sendMagicLink() {
             // Wir behalten die 401-Meldung bei, falls der Fehler tatsächlich wegen falscher Supabase-Konfiguration auftritt
             alert("❌ Fehler 401: Anmeldung nicht autorisiert. Bitte überprüfen Sie: 1. Supabase Auth-Einstellungen (Providers -> Email aktiviert). 2. Korrekten 'anon public' Schlüssel.");
         } else {
-             // Zeigt den API Key-Fehler oder andere unerwartete Fehler an
+            // Zeigt den API Key-Fehler oder andere unerwartete Fehler an
             alert("❌ Fehler beim Senden des Magic-Links: " + error.message);
         }
     } else {
@@ -329,8 +326,8 @@ async function sendMagicLink() {
 }
 
 async function checkLogin() {
-    // Verwende das jetzt global zugängliche 'supabase' Objekt
-    const { data } = await supabase.auth.getSession();
+    // *** VERWENDE NEUE GLOBALE INSTANZ: supabaseClient ***
+    const { data } = await window.supabaseClient.auth.getSession();
 
     if (data.session) {
         // Setze die globale Benutzer-ID
@@ -352,7 +349,8 @@ async function checkLogin() {
 }
 
 // Überwachung von Login-Status-Änderungen
-supabase.auth.onAuthStateChange(checkLogin);
+// *** VERWENDE NEUE GLOBALE INSTANZ: supabaseClient ***
+window.supabaseClient.auth.onAuthStateChange(checkLogin);
 // Initialer Check beim Laden der Seite
 checkLogin();
 </script>
