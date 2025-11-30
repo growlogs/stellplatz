@@ -284,6 +284,20 @@ button.secondary {
 .yellow { color: #FFC107; }
 
 /* --- POPUP (MODAL) --- */
+#popup {
+    /* Wichtig: Initial verstecken! */
+    display: none; 
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+}
+
 #popupBox {
     background: #1e1e24; 
     padding: 25px;
@@ -501,7 +515,8 @@ input:focus {
     // --- KAMERA FUNKTIONEN ---
 
     function activateCamera() {
-        document.getElementById("preScan").style.display = "none";
+        // Blende den Start-Overlay aus
+        document.getElementById("preScan").style.display = "none"; 
         startScanner();
     }
 
@@ -587,11 +602,12 @@ input:focus {
             
             setTimeout(() => {
                 lastCode = ""; 
-                html5QrCode.resume();
+                if(html5QrCode) html5QrCode.resume();
             }, 2000); // Längere Anzeigezeit für Erfolg
 
         } else {
             showResult(`Unbekannter Barcode:<br><em>${code}</em>`, "error");
+            // Wenn der Artikel unbekannt ist, zeige das Popup an.
             document.getElementById("popup").style.display = "flex";
         }
     }
@@ -604,7 +620,8 @@ input:focus {
         document.getElementById("name").value = "";
         document.getElementById("platz").value = "";
         document.getElementById("block").checked = false;
-        if(html5QrCode) html5QrCode.resume();
+        // Scanner wieder starten, wenn das Popup geschlossen wird
+        if(html5QrCode) html5QrCode.resume(); 
     }
 
     async function save() {
@@ -613,11 +630,13 @@ input:focus {
         const block = document.getElementById("block").checked;
 
         if(!name || !platz) {
-            alert("Bitte Name und Platz ausfüllen"); // Ersetzen Sie dies durch ein besseres UI-Feedback
+            // Wichtig: Keine alert() verwenden. Besser wäre ein eigenes Modal.
+            // Für diesen Fall zeigen wir einen Fehler im Result-Feld.
+            showResult(`FEHLER: Bitte Name und Platz ausfüllen.`, "error"); 
             return;
         }
 
-        await window.appSupabaseClient.from("artikel").insert([{
+        const result = await window.appSupabaseClient.from("artikel").insert([{
             barcode: lastCode,
             name: name,
             stellplatz: platz,
@@ -625,8 +644,12 @@ input:focus {
             scans: 1
         }]);
 
-        hidePopup();
-        showResult(`Gespeichert: ${name}`, "success");
+        if (result.error) {
+             showResult(`FEHLER beim Speichern: ${result.error.message}`, "error");
+        } else {
+            hidePopup();
+            showResult(`Gespeichert: <strong>${name}</strong>`, "success");
+        }
     }
 
     // --- LOGOUT FUNKTION ---
@@ -715,6 +738,8 @@ input:focus {
             document.getElementById("userDisplay").innerText = "ANONYM"; 
             window.currentPin = ""; 
             updatePinIndicators();
+            // Beim erfolgreichen Login das Popup verstecken, falls es aus Versehen sichtbar ist
+            document.getElementById("popup").style.display = "none"; 
         } else {
             currentUserId = null;
             document.getElementById("loginView").style.display = "flex";
@@ -729,7 +754,6 @@ input:focus {
     if (window.appSupabaseClient) {
         window.appSupabaseClient.auth.onAuthStateChange((event, session) => checkLogin(event, session));
         checkLogin();
-        hidePopup();
     }
 
 </script>
