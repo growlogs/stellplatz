@@ -8,15 +8,18 @@
 <!-- Lade die Supabase Bibliothek -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// --- SUPABASE INITIALISIERUNG (Robuste IIFE) ---
-// Weist die Client-Instanz dem eindeutigen globalen Namen 'window.supabaseClient' zu, 
-// um Namenskonflikte mit der geladenen Bibliothek zu vermeiden.
+// --- SUPABASE INITIALISIERUNG (Robuste IIFE mit URL-Fallback) ---
+// Fügt den API-Schlüssel explizit zur URL hinzu, um Header-Injektionsprobleme in restriktiven Umgebungen zu umgehen.
 (function() {
     const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
     const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
 
-    // Initialisiere den Client und weise ihn einer neuen globalen Variable zu
-    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // NEU: Fügt den API-Schlüssel als Query-Parameter zur URL hinzu (Fallback-Methode), 
+    // um sicherzustellen, dass er in jedem Request enthalten ist.
+    const clientUrlWithKey = `${SUPABASE_URL}?apikey=${SUPABASE_KEY}`;
+
+    // Initialisiere den Client mit der modifizierten URL.
+    window.supabaseClient = window.supabase.createClient(clientUrlWithKey, SUPABASE_KEY);
 })();
 </script>
 
@@ -182,7 +185,7 @@ input {
             
             showResult("⏳ Prüfe Artikel...", "yellow");
 
-            // *** VERWENDE NEUE GLOBALE INSTANZ: supabaseClient ***
+            // *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
             const { data, error } = await window.supabaseClient
                 .from("artikel")
                 .select("*")
@@ -193,7 +196,7 @@ input {
             
             if (data) {
 
-                await window.supabaseClient // *** VERWENDE NEUE GLOBALE INSTANZ ***
+                await window.supabaseClient // *** VERWENDE GLOBALE INSTANZ ***
                     .from("artikel")
                     .update({ scans: data.scans + 1 })
                     .eq("barcode", code)
@@ -249,7 +252,7 @@ input {
             }
 
             // Speichert den neuen Artikel
-            await window.supabaseClient.from("artikel").insert([{ // *** VERWENDE NEUE GLOBALE INSTANZ ***
+            await window.supabaseClient.from("artikel").insert([{ // *** VERWENDE GLOBALE INSTANZ ***
                 barcode: lastCode,
                 name: document.getElementById("name").value,
                 stellplatz: document.getElementById("platz").value,
@@ -302,7 +305,7 @@ input {
 async function sendMagicLink() {
     const email = document.getElementById("emailInput").value;
 
-    // *** VERWENDE NEUE GLOBALE INSTANZ: supabaseClient ***
+    // *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
     const { error } = await window.supabaseClient.auth.signInWithOtp({
         email,
         options: {
@@ -326,7 +329,7 @@ async function sendMagicLink() {
 }
 
 async function checkLogin() {
-    // *** VERWENDE NEUE GLOBALE INSTANZ: supabaseClient ***
+    // *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
     const { data } = await window.supabaseClient.auth.getSession();
 
     if (data.session) {
@@ -349,7 +352,7 @@ async function checkLogin() {
 }
 
 // Überwachung von Login-Status-Änderungen
-// *** VERWENDE NEUE GLOBALE INSTANZ: supabaseClient ***
+// *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
 window.supabaseClient.auth.onAuthStateChange(checkLogin);
 // Initialer Check beim Laden der Seite
 checkLogin();
