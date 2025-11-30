@@ -9,6 +9,8 @@
 <meta name="theme-color" content="#0d0d0d">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+// Es ist gute Praxis, die Keys nicht direkt im Quellcode zu hinterlegen, 
+// sondern über Umgebungsvariablen zu laden, wenn Sie die App deployen.
 const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -28,7 +30,14 @@ body {
     overflow: hidden;
 }
 
-#reader { flex: 1; }
+#loginView {
+    padding: 20px;
+}
+
+#reader { 
+    /* Stellt sicher, dass #reader den verfügbaren Platz im flex-Container einnimmt */
+    flex: 1; 
+}
 
 #result {
     height: 45%;
@@ -54,6 +63,7 @@ button {
     color: white;
     border: 1px solid white;
     margin-top: 10px;
+    width: 100%; /* Macht den Login-Button breiter */
 }
 
 /* POPUP */
@@ -66,6 +76,7 @@ button {
     display: none;
     justify-content: center;
     align-items: center;
+    z-index: 1000; /* Stellt sicher, dass das Popup über allem liegt */
 }
 
 #popupBox {
@@ -79,13 +90,15 @@ input {
     width: 100%;
     padding: 8px;
     margin-top: 5px;
+    margin-bottom: 10px;
+    box-sizing: border-box; /* Wichtig für konsistente Breite */
 }
 </style>
 </head>
 
 <body>
 
-    <div id="loginView" style="display:none;">
+<div id="loginView" style="display:none;">
     <h1>🔐 Stellplatz App</h1>
     <input id="emailInput" type="email" placeholder="E-Mail eingeben" />
     <button onclick="sendMagicLink()">Login-Link senden</button>
@@ -93,104 +106,137 @@ input {
 
 <div id="appView" style="display:none;">
 
+    <div id="reader"></div>
 
-<div id="reader"></div>
+    <div id="result">📦 Bereit zum Scannen</div>
 
-<div id="result">📦 Bereit zum Scannen</div>
+    <div id="popup">
+        <div id="popupBox">
+            <h3>Neuen Artikel anlegen</h3>
 
-<div id="popup">
-<div id="popupBox">
-<h3>Neuen Artikel anlegen</h3>
+            <label for="name">Name:</label>
+            <input id="name">
 
-<label>Name:</label>
-<input id="name">
+            <label for="platz">Stellplatz:</label>
+            <input id="platz">
 
-<label>Stellplatz:</label>
-<input id="platz">
+            <label>
+                <input type="checkbox" id="block"> Blocklager
+            </label>
 
-<label>
-<input type="checkbox" id="block"> Blocklager
-</label>
+            <button onclick="save()">Speichern</button>
+            <button onclick="hide()">Abbrechen</button>
+        </div>
+    </div>
 
-<button onclick="save()">Speichern</button>
-<button onclick="hide()">Abbrechen</button>
+    <script>
+        let lastCode = "";
+        let html5QrCode = null; // Variable, um den Scanner zu speichern
+        
+        // --- Core Functions ---
+        
+        function showResult(text, color) {
+            const r = document.getElementById("result");
+            r.className = color;
+            r.innerHTML = text;
+        }
+
+        async function lookup(code) {
+
+            // Scanner kurz stoppen, um Mehrfachscans zu verhindern
+            if (html5QrCode) {
+                 await html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
+            }
+            
+            showResult("⏳ Prüfe Artikel...", "yellow");
+
+            const { data, error } = await supabase
+                .from("artikel")
+                .select("*")
+                .eq("barcode", code)
+                .single();
+            
+            // Scanner nach der Datenbankoperation wieder starten
+            if (html5QrCode) {
+                html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: 250 },
+                    code => lookup(code)
+                ).catch(err => console.error("Error restarting scanner:", err));
+            }
+
+
+            if (data) {
+
+                await supabase
+                    .from("artikel")
+                    .update({ scans: data.scans + 1 })
+                    .eq("barcode", code);
+
+                showResult(
+                    `✅ ${data.name}<br>
+                     📍 ${data.stellplatz}<br>
+                     🧱 Blocklager: ${data.blocklager ? "JA" : "NEIN"}<br>
+                     📊 Scans: ${data.scans + 1}`,
+                    "green"
+                );
+
+            } else {
+                showResult("❌ Unbekannter Artikel", "red");
+                lastCode = code;
+                showPopup();
+            }
+        }
+
+        function showPopup() {
+            document.getElementById("popup").style.display = "flex";
+        }
+
+        function hide() {
+            document.getElementById("popup").style.display = "none";
+        }
+
+        async function save() {
+
+            await supabase.from("artikel").insert([{
+                barcode: lastCode,
+                name: document.getElementById("name").value,
+                stellplatz: document.getElementById("platz").value,
+                blocklager: document.getElementById("block").checked,
+                scans: 0
+            }]);
+
+            hide();
+            // Startet lookup() mit dem neuen Eintrag
+            lookup(lastCode); 
+        }
+
+        // NEUE FUNKTION: Startet den Scanner nur, wenn das Element sichtbar ist
+        function startScanner() {
+            if (html5QrCode) return; // Verhindert doppeltes Starten
+
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: 250 },
+                code => lookup(code)
+            )
+            .catch(err => {
+                // Hier können Sie Fehlermeldungen anzeigen, falls die Kamera blockiert wird
+                showResult(`⚠️ Kamerafehler: ${err.name}`, "red");
+                console.error("Kamera konnte nicht gestartet werden:", err);
+            });
+        }
+        
+        // --- PWA Service Worker ---
+
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("/static/sw.js");
+        }
+    </script>
 </div>
-</div>
-
 <script>
-let lastCode = "";
-
-function showResult(text, color) {
-    const r = document.getElementById("result");
-    r.className = color;
-    r.innerHTML = text;
-}
-
-async function lookup(code) {
-
-    const { data, error } = await supabase
-        .from("artikel")
-        .select("*")
-        .eq("barcode", code)
-        .single();
-
-    if (data) {
-
-        await supabase
-            .from("artikel")
-            .update({ scans: data.scans + 1 })
-            .eq("barcode", code);
-
-        showResult(
-            `✅ ${data.name}<br>
-             📍 ${data.stellplatz}<br>
-             🧱 Blocklager: ${data.blocklager ? "JA" : "NEIN"}<br>
-             📊 Scans: ${data.scans + 1}`,
-            "green"
-        );
-
-    } else {
-        showResult("❌ Unbekannter Artikel", "red");
-        lastCode = code;
-        showPopup();
-    }
-}
-
-
-function showPopup() {
-    document.getElementById("popup").style.display = "flex";
-}
-
-function hide() {
-    document.getElementById("popup").style.display = "none";
-}
-
-async function save() {
-
-    await supabase.from("artikel").insert([{
-        barcode: lastCode,
-        name: document.getElementById("name").value,
-        stellplatz: document.getElementById("platz").value,
-        blocklager: document.getElementById("block").checked,
-        scans: 0
-    }]);
-
-    hide();
-    lookup(lastCode);
-}
-
-new Html5Qrcode("reader").start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: 250 },
-    code => lookup(code)
-);
-
-if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/static/sw.js");
-}
-</script>
-</div>
-<script>
+// --- Global Login Script ---
 
 async function sendMagicLink() {
     const email = document.getElementById("emailInput").value;
@@ -198,7 +244,8 @@ async function sendMagicLink() {
     const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-            emailRedirectTo: window.location.href
+            // Stellt sicher, dass der User an dieselbe Seite zurückgeleitet wird
+            emailRedirectTo: window.location.href 
         }
     });
 
@@ -214,14 +261,20 @@ async function checkLogin() {
 
     if (data.session) {
         document.getElementById("loginView").style.display = "none";
-        document.getElementById("appView").style.display = "block";
+        document.getElementById("appView").style.display = "flex"; // Verwende 'flex' falls Sie body-Styling beibehalten
+        
+        // HIER: Der wichtige Schritt - Scanner wird erst gestartet, wenn appView sichtbar ist!
+        startScanner(); 
+
     } else {
         document.getElementById("loginView").style.display = "block";
         document.getElementById("appView").style.display = "none";
     }
 }
 
+// Überwachung von Login-Status-Änderungen
 supabase.auth.onAuthStateChange(checkLogin);
+// Initialer Check beim Laden der Seite
 checkLogin();
 </script>
 
