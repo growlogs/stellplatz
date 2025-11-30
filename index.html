@@ -440,7 +440,11 @@ button.secondary {
         }
 
         await window.appSupabaseClient.auth.signOut();
-        // onAuthStateChange sollte checkLogin aufrufen, um die UI zu wechseln
+        
+        // NEU: Seite neu laden, um den Zustand komplett zurückzusetzen und zum Login zu springen
+        window.location.reload(); 
+        
+        // onAuthStateChange sollte checkLogin aufrufen, um die UI zu wechseln (wird durch reload nicht mehr benötigt, aber wir lassen es aus Konsistenz)
     }
 
 
@@ -475,11 +479,14 @@ button.secondary {
                 // Code ist korrekt, melde anonym bei Supabase an.
                 const { data, error } = await window.appSupabaseClient.auth.signInAnonymously();
                 
+                // ZUSÄTZLICHE KONSOLE-AUSGABE für Debugging, falls login fehlschlägt
+                console.log("Supabase Anmeldeergebnis:", { data, error });
+                
                 if (error) {
                     // Detailliertere Fehlermeldung bei Supabase-Fehler
                     showAuthError("Fehler bei der Anmeldung: " + error.message + " (Prüfen Sie, ob 'Anonymous Sign In' in Supabase aktiviert ist.)");
                 } else if (data.user) {
-                    // NEU: Bei Erfolg checkLogin manuell aufrufen, um die UI sofort zu aktualisieren.
+                    // Bei Erfolg checkLogin manuell aufrufen, um die UI sofort zu aktualisieren.
                     // Das Session-Objekt wird direkt übergeben.
                     await checkLogin(null, data.session); 
                 } else {
