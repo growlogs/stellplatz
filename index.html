@@ -11,10 +11,11 @@
 
 <script>
 // ---------------------------------------------------------
-// KONFIGURATION: HIER IHREN KEY EINFÜGEN
+// KONFIGURATION: HIER IHREN KEY UND DEN MASTER-CODE EINFÜGEN
 // ---------------------------------------------------------
 var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
 var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
+var MASTER_ACCESS_CODE = "123456"; // <<<<<<<<<<<<<<< WICHTIG: Setzen Sie hier Ihren Code fest
 // ---------------------------------------------------------
 
 // Initialisierung
@@ -214,19 +215,26 @@ button.secondary {
 
 <body>
 
-<!-- LOGIN SCREEN -->
+<!-- LOGIN SCREEN - Jetzt mit einfachem PIN/Code Login (Master Access Code) -->
 <div id="loginView">
     <div style="text-align: center; margin-bottom: 30px; font-size: 3em;">📦</div>
-    <h1 style="text-align: center;">Stellplatz Login</h1>
-    <input id="emailInput" type="email" placeholder="E-Mail Adresse" />
-    <button onclick="sendMagicLink()">Magic Link senden</button>
+    <h1 style="text-align: center;">Zugangscode</h1>
+    
+    <!-- Code Eingabe -->
+    <div id="accessPhase">
+        <input id="codeInput" type="password" placeholder="Zugangscode eingeben" />
+        <button onclick="loginWithCode()">Anmelden</button>
+    </div>
+    
+    <div id="authError" style="color: #f55; margin-top: 15px; text-align: center;"></div>
 </div>
 
 <!-- APP SCREEN -->
 <div id="appView">
     <header>
         <h1>Lager Scanner</h1>
-        <div style="font-size: 0.8em; opacity: 0.7;" id="userDisplay"></div>
+        <!-- Zeigt anonymen Status oder Code, da keine E-Mail mehr da ist -->
+        <div style="font-size: 0.8em; opacity: 0.7;" id="userDisplay">ANONYM</div>
     </header>
 
     <!-- Scanner Bereich -->
@@ -288,6 +296,10 @@ button.secondary {
         } else {
              r.innerHTML = html;
         }
+    }
+    
+    function showAuthError(message) {
+        document.getElementById("authError").innerText = message;
     }
 
     // --- KAMERA FUNKTIONEN ---
@@ -408,26 +420,27 @@ button.secondary {
     }
 
 
-    // --- AUTHENTIFIZIERUNG ---
+    // --- AUTHENTIFIZIERUNG (MASTER CODE) ---
+    
+    // Anmeldefunktion mit lokalem Code-Check
+    async function loginWithCode() {
+        const enteredCode = document.getElementById("codeInput").value.trim();
+        showAuthError(""); // Fehler zurücksetzen
 
-    async function sendMagicLink() {
-        const email = document.getElementById("emailInput").value;
-        const redirectUrl = window.location.href; // Einfacher Redirect
-
-        // API Key Prüfung
-        if (APP_SUPABASE_KEY.includes("HIER")) {
-            alert("API Key fehlt im Code!");
-            return;
+        if (enteredCode === MASTER_ACCESS_CODE) {
+            // Code ist korrekt, melde anonym bei Supabase an.
+            // Dies gibt uns einen gültigen, aber anonymen User ID.
+            const { error } = await window.appSupabaseClient.auth.signInAnonymously();
+            
+            if (error) {
+                showAuthError("Fehler bei der Anmeldung: " + error.message);
+            }
+            // Bei Erfolg übernimmt checkLogin() den Wechsel zur App-Ansicht
+        } else {
+            showAuthError("❌ Falscher Zugangscode.");
         }
-
-        const { error } = await window.appSupabaseClient.auth.signInWithOtp({
-            email: email,
-            options: { emailRedirectTo: redirectUrl }
-        });
-
-        if (error) alert("Fehler: " + error.message);
-        else alert("Link gesendet! Bitte E-Mails prüfen.");
     }
+
 
     async function checkLogin() {
         if(!window.appSupabaseClient) return;
@@ -438,10 +451,13 @@ button.secondary {
             currentUserId = data.session.user.id;
             document.getElementById("loginView").style.display = "none";
             document.getElementById("appView").style.display = "flex";
-            document.getElementById("userDisplay").innerText = data.session.user.email;
+            // Zeige anonymen Status anstelle einer E-Mail
+            document.getElementById("userDisplay").innerText = "ANONYM"; 
         } else {
             document.getElementById("loginView").style.display = "flex";
             document.getElementById("appView").style.display = "none";
+            // Leere das Eingabefeld
+            document.getElementById("codeInput").value = ""; 
         }
     }
 
