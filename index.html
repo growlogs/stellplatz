@@ -112,24 +112,23 @@
                 overflow: hidden; /* Wichtig, um die Tabs im Container zu halten */
             }
             
+            /* KORREKTUR: Vereinfachung der Sichtbarkeitsregeln */
             .tab-content {
                 position: absolute;
                 top: 0;
                 left: 0;
                 width: 100%;
                 height: 100%;
-                display: none;
+                display: none; /* <-- Stellt sicher, dass inaktive Tabs NICHT sichtbar sind */
                 flex-direction: column;
                 overflow-y: auto; /* List- und Log-Tabs brauchen Scrolling */
                 
-                /* KORREKTUR 1: Hintergrund setzen, um Durchscheinen von Inhalten zu verhindern. */
+                /* WICHTIG: Expliziter Hintergrund, damit der aktive Tab den Hintergrund des Body überdeckt */
                 background: var(--color-bg-dark); 
-                z-index: 1; 
             }
             
             .tab-content.active {
-                display: flex;
-                z-index: 2; /* Aktiver Tab liegt immer oben */
+                display: flex; /* <-- Macht den aktiven Tab sichtbar */
             }
 
 
@@ -604,7 +603,7 @@
             
             /* --- ARTIKEL LIST VIEW STYLES --- */
             #listTab {
-                /* KORREKTUR 2: Erhöhung des Padding-Bottom auf 80px (60px Nav Bar + 20px Puffer) */
+                /* KORREKTUR: Erhöhung des Padding-Bottom auf 80px (60px Nav Bar + 20px Puffer) */
                 padding: 15px 15px 80px 15px;
             }
             
@@ -669,9 +668,9 @@
                 line-height: 1;
             }
             
-            /* Admin Log Liste Styles - KORRIGIERT */
+            /* Admin Log Liste Styles */
             #logTab {
-                padding: 15px 15px 20px 15px; /* Hinzugefügtes Padding */
+                padding: 15px 15px 80px 15px; /* Korrigiertes Padding */
                 display: flex; 
                 flex-direction: column;
             }
