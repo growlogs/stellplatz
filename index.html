@@ -434,35 +434,49 @@ button.secondary {
 
         if (enteredCode === MASTER_ACCESS_CODE) {
             
-            // NEU: Alte Sitzung abmelden, um eine saubere Neuanmeldung zu garantieren (Fix für Re-Login-Problem)
+            // Alte Sitzung abmelden, um eine saubere Neuanmeldung zu garantieren
             await window.appSupabaseClient.auth.signOut();
             
             // Code ist korrekt, melde anonym bei Supabase an.
-            const { error } = await window.appSupabaseClient.auth.signInAnonymously();
+            const { data, error } = await window.appSupabaseClient.auth.signInAnonymously();
             
             if (error) {
                 // Detailliertere Fehlermeldung bei Supabase-Fehler
                 showAuthError("Fehler bei der Anmeldung: " + error.message + " (Prüfen Sie, ob 'Anonymous Sign In' in Supabase aktiviert ist.)");
+            } else if (data.user) {
+                // NEU: Bei Erfolg checkLogin manuell aufrufen, um die UI sofort zu aktualisieren.
+                // Das Session-Objekt wird direkt übergeben.
+                await checkLogin(null, data.session); 
+            } else {
+                 showAuthError("Anmeldung fehlgeschlagen. Überprüfen Sie die Konsolen-Logs und Supabase-Einstellungen.");
             }
-            // Bei Erfolg übernimmt checkLogin() den Wechsel zur App-Ansicht
         } else {
             showAuthError("❌ Falscher Zugangscode.");
         }
     }
 
 
-    async function checkLogin() {
+    // NEU: Nimmt optional Event und Session von onAuthStateChange entgegen, um reaktiver zu sein
+    async function checkLogin(event, session) { 
         if(!window.appSupabaseClient) return;
 
-        const { data } = await window.appSupabaseClient.auth.getSession();
+        let currentSession = session;
 
-        if (data.session) {
-            currentUserId = data.session.user.id;
+        // Wenn kein Session-Objekt übergeben wurde (z.B. beim initialen Aufruf),
+        // muss es manuell abgerufen werden.
+        if (!currentSession) {
+            const { data } = await window.appSupabaseClient.auth.getSession();
+            currentSession = data.session;
+        }
+
+        if (currentSession) {
+            currentUserId = currentSession.user.id;
             document.getElementById("loginView").style.display = "none";
             document.getElementById("appView").style.display = "flex";
             // Zeige anonymen Status anstelle einer E-Mail
             document.getElementById("userDisplay").innerText = "ANONYM"; 
         } else {
+            currentUserId = null;
             document.getElementById("loginView").style.display = "flex";
             document.getElementById("appView").style.display = "none";
             // Leere das Eingabefeld
@@ -472,7 +486,9 @@ button.secondary {
 
     // Start
     if (window.appSupabaseClient) {
-        window.appSupabaseClient.auth.onAuthStateChange(checkLogin);
+        // NEU: Registriert den Listener, der nun auch Event/Session verarbeitet
+        window.appSupabaseClient.auth.onAuthStateChange((event, session) => checkLogin(event, session));
+        // Führt initialen Check aus
         checkLogin();
     }
 
