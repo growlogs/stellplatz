@@ -6,6 +6,7 @@
 <title>Stellplatz App</title>
 
 <!-- Supabase & Scanner laden -->
+ <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/html5-qrcode"></script>
 
@@ -21,9 +22,9 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 // Supabase-Konfiguration (MUSS MANUELL HIER EINGEFÜGT WERDEN)
 // BITTE ERSETZE DIE PLATZHALTER MIT DEINEN ECHTEN WERTEN!
 // ---------------------------------------------------------
-var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
-var MASTER_ACCESS_CODE = "123456"; // <<<<<<<<<<<<<<< WICHTIG: Setzen Sie hier Ihren Code fest
+var APP_SUPABASE_URL = window.APP_SUPABASE_URL;
+var APP_SUPABASE_KEY = window.APP_SUPABASE_KEY; 
+var MASTER_ACCESS_CODE = window.MASTER_ACCESS_CODE;
 // ---------------------------------------------------------
 
 // Initialisierung
