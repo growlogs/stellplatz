@@ -165,6 +165,14 @@ button {
     background: #3e82f7; /* App Blau */
     color: white;
 }
+/* Kleiner Button im Header */
+.header-button {
+    width: auto;
+    padding: 8px 15px;
+    font-size: 0.8em;
+    margin-top: 0;
+    background: #555;
+}
 
 button:active {
     transform: scale(0.98);
@@ -234,7 +242,11 @@ button.secondary {
     <header>
         <h1>Lager Scanner</h1>
         <!-- Zeigt anonymen Status oder Code, da keine E-Mail mehr da ist -->
-        <div style="font-size: 0.8em; opacity: 0.7;" id="userDisplay">ANONYM</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="font-size: 0.8em; opacity: 0.7;" id="userDisplay">ANONYM</div>
+            <!-- NEUER ABMELDEN BUTTON -->
+            <button class="header-button" onclick="logout()">Abmelden</button>
+        </div>
     </header>
 
     <!-- Scanner Bereich -->
@@ -418,11 +430,27 @@ button.secondary {
         showResult(`Gespeichert: ${name}`, "success");
     }
 
+    // --- LOGOUT FUNKTION ---
+    async function logout() {
+        if (!window.appSupabaseClient) return;
+        
+        // Stoppe den Scanner, falls er läuft
+        if (html5QrCode) {
+            html5QrCode.stop().catch(err => console.warn("Kamera Stoppen fehlgeschlagen:", err));
+        }
+
+        await window.appSupabaseClient.auth.signOut();
+        // onAuthStateChange sollte checkLogin aufrufen, um die UI zu wechseln
+    }
+
 
     // --- AUTHENTIFIZIERUNG (MASTER CODE) ---
     
     // Anmeldefunktion mit lokalem Code-Check
     async function loginWithCode() {
+        console.log("Anmelden Button geklickt."); // Debugging Zeile
+        
+
         const enteredCode = document.getElementById("codeInput").value.trim();
         showAuthError(""); // Fehler zurücksetzen
 
@@ -485,7 +513,6 @@ button.secondary {
             currentUserId = currentSession.user.id;
             document.getElementById("loginView").style.display = "none";
             document.getElementById("appView").style.display = "flex";
-            // Zeige anonymen Status anstelle einer E-Mail
             document.getElementById("userDisplay").innerText = "ANONYM"; 
         } else {
             currentUserId = null;
@@ -498,7 +525,7 @@ button.secondary {
 
     // Start
     if (window.appSupabaseClient) {
-        // NEU: Registriert den Listener, der nun auch Event/Session verarbeitet
+        // Registriert den Listener, der nun auch Event/Session verarbeitet
         window.appSupabaseClient.auth.onAuthStateChange((event, session) => checkLogin(event, session));
         // Führt initialen Check aus
         checkLogin();
