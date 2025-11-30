@@ -181,7 +181,7 @@
                 font-weight: 500;
             }
             
-            /* Ladezustand für Login */
+            /* NEU: Ladezustand für Login */
             #loadingAuth {
                 text-align: center;
                 font-size: 1.1rem;
@@ -259,11 +259,6 @@
                     -5px -5px 15px rgba(255, 255, 255, 0.05), /* Heller innerer Schatten (oben/links) */
                     5px 5px 15px rgba(0, 0, 0, 0.6), /* Dunkler äußerer Schatten (unten/rechts) */
                     inset 0 0 0 1px rgba(255, 255, 255, 0.03); /* Leichte Innenkontur */
-                
-                /* FIX: Entfernt den Standard-Fokus/Klick-Ring des Browsers */
-                outline: none; 
-                /* FIX: Entfernt das standardmäßige graue/blaue Overlay auf iOS/Android beim Tippen */
-                -webkit-tap-highlight-color: transparent; 
             }
 
             .keypad-button:active {
@@ -811,7 +806,7 @@
             var currentUserId = null;
             var currentTabId = 'scannerTab'; // Start-Tab
             var searchTimeout; // Für Debouncing der Suche
-            var isAuthReady = false; // Steuert, ob die PIN-Eingabe erlaubt ist
+            var isAuthReady = false; // NEU: Steuert, ob die PIN-Eingabe erlaubt ist
 
             // --- HILFSFUNKTIONEN ---
 
@@ -859,7 +854,7 @@
             }
 
             async function handlePinInput(value) {
-                // Sperre die Eingabe, bis der initiale Auth-Check abgeschlossen ist
+                // NEU: Sperre die Eingabe, bis der initiale Auth-Check abgeschlossen ist
                 if (!isAuthReady) {
                     showToast("Bitte warten Sie, bis die Session geprüft wurde.", 'info', 1500);
                     return;
@@ -1241,7 +1236,7 @@
                     return;
                 }
                 
-                // Setze isAuthReady temporär auf false, um Doppel-Logins während der Überprüfung zu vermeiden
+                // NEU: Setze isAuthReady temporär auf false, um Doppel-Logins während der Überprüfung zu vermeiden
                 isAuthReady = false; 
                 document.getElementById("authContent").style.display = "none";
                 document.getElementById("loadingAuth").style.display = "block";
@@ -1278,7 +1273,7 @@
                 setTimeout(() => {
                     window.currentPin = "";
                     updatePinIndicators();
-                    // Zeige AuthContent wieder, falls nicht zur App gewechselt wurde
+                    // NEU: Zeige AuthContent wieder, falls nicht zur App gewechselt wurde
                     if (document.getElementById('appView').classList.contains('active')) {
                         document.getElementById("loadingAuth").style.display = "none";
                     } else {
