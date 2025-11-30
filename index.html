@@ -1260,7 +1260,7 @@
             function showDeleteConfirmPopup(article) {
                 window.articleToDelete = article; // Artikel global für die Löschung speichern
                 
-                document.getElementById('deleteConfirmMessage').innerHTML = `Sind Sie **SICHER**, dass Sie den Artikel<br><strong>"${article.name}"</strong><br>(Barcode: ${article.barcode}) unwiderruflich löschen möchten?`;
+                document.getElementById('deleteConfirmMessage').innerHTML = `<strong>"${article.name}"</strong> unwiderruflich löschen?`;
                 
                 document.getElementById('deleteConfirmPopupOverlay').style.display = "flex";
                 setTimeout(() => document.getElementById('deleteConfirmPopupOverlay').classList.add('show'), 10);
