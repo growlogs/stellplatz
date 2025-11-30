@@ -8,15 +8,20 @@
 <!-- Lade die Supabase Bibliothek -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// --- SUPABASE KONFIGURATION UND GLOBALE DEFINITION ---
-var SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
-var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
+// --- SUPABASE INITIALISIERUNG (Robuste IIFE) ---
+// Dies stellt sicher, dass die Variablen im korrekten Scope definiert und die Instanzen 
+// explizit dem globalen Fenster-Objekt zugewiesen werden.
+(function() {
+    const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
 
-// Standard-Initialisierung: Da SUPABASE_URL und SUPABASE_KEY globale 'var's sind, funktioniert dies zuverlässig.
-var supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // Initialisiere den Client mit dem globalen 'window.supabase'-Objekt 
+    // und weise die Instanz wieder dem globalen Scope zu (für alle Funktionen).
+    window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Globaler Status für den eingeloggten Benutzer (wird nach checkLogin gesetzt)
-var currentUserId = null;
+    // Globaler Status für den eingeloggten Benutzer
+    window.currentUserId = null;
+})();
 </script>
 
 <!-- Lade die Scanner Bibliothek -->
@@ -300,6 +305,7 @@ input {
 async function sendMagicLink() {
     const email = document.getElementById("emailInput").value;
 
+    // Verwende das jetzt global zugängliche 'supabase' Objekt
     const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
@@ -323,6 +329,7 @@ async function sendMagicLink() {
 }
 
 async function checkLogin() {
+    // Verwende das jetzt global zugängliche 'supabase' Objekt
     const { data } = await supabase.auth.getSession();
 
     if (data.session) {
