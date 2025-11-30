@@ -9,8 +9,7 @@
 <meta name="theme-color" content="#0d0d0d">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// Es ist gute Praxis, die Keys nicht direkt im Quellcode zu hinterlegen, 
-// sondern über Umgebungsvariablen zu laden, wenn Sie die App deployen.
+// --- SUPABASE KONFIGURATION ---
 const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -34,8 +33,8 @@ body {
     padding: 20px;
 }
 
+/* Stellt sicher, dass der Scanner-Bereich den Platz einnimmt */
 #reader { 
-    /* Stellt sicher, dass #reader den verfügbaren Platz im flex-Container einnimmt */
     flex: 1; 
 }
 
@@ -54,8 +53,6 @@ body {
 .red { background: #900; }
 .yellow { background: #b90; }
 
-.hidden { display: none; }
-
 button {
     padding: 12px;
     font-size: 1em;
@@ -63,7 +60,7 @@ button {
     color: white;
     border: 1px solid white;
     margin-top: 10px;
-    width: 100%; /* Macht den Login-Button breiter */
+    width: 100%;
 }
 
 /* POPUP */
@@ -76,7 +73,7 @@ button {
     display: none;
     justify-content: center;
     align-items: center;
-    z-index: 1000; /* Stellt sicher, dass das Popup über allem liegt */
+    z-index: 1000;
 }
 
 #popupBox {
@@ -91,7 +88,7 @@ input {
     padding: 8px;
     margin-top: 5px;
     margin-bottom: 10px;
-    box-sizing: border-box; /* Wichtig für konsistente Breite */
+    box-sizing: border-box;
 }
 </style>
 </head>
@@ -108,6 +105,11 @@ input {
 
     <div id="reader"></div>
 
+    <div id="preScan" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; flex: 1;">
+        <h2>Kamera aktivieren</h2>
+        <p>Klicken Sie, um den Barcode-Scanner zu starten.</p>
+        <button onclick="startScannerAndHideButton()" style="max-width: 300px;">SCANNER STARTEN</button>
+    </div>
     <div id="result">📦 Bereit zum Scannen</div>
 
     <div id="popup">
@@ -131,7 +133,7 @@ input {
 
     <script>
         let lastCode = "";
-        let html5QrCode = null; // Variable, um den Scanner zu speichern
+        let html5QrCode = null;
         
         // --- Core Functions ---
         
@@ -156,16 +158,7 @@ input {
                 .eq("barcode", code)
                 .single();
             
-            // Scanner nach der Datenbankoperation wieder starten
-            if (html5QrCode) {
-                html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: 250 },
-                    code => lookup(code)
-                ).catch(err => console.error("Error restarting scanner:", err));
-            }
-
-
+            
             if (data) {
 
                 await supabase
@@ -180,10 +173,26 @@ input {
                      📊 Scans: ${data.scans + 1}`,
                     "green"
                 );
+                
+                // Scanner nach erfolgreichem Lookup wieder starten
+                if (html5QrCode) {
+                    html5QrCode.start(
+                        { facingMode: "environment" },
+                        { fps: 10, qrbox: 250 },
+                        code => lookup(code)
+                    ).catch(err => console.error("Error restarting scanner:", err));
+                }
+
 
             } else {
                 showResult("❌ Unbekannter Artikel", "red");
                 lastCode = code;
+                
+                // HIER: Scanner stoppen, bevor das Popup erscheint
+                if (html5QrCode) {
+                    await html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
+                }
+
                 showPopup();
             }
         }
@@ -194,10 +203,13 @@ input {
 
         function hide() {
             document.getElementById("popup").style.display = "none";
+            // Scanner nach Schließen des Popups (ohne Speichern) neu starten
+            startScanner();
         }
 
         async function save() {
 
+            // Speichert den neuen Artikel
             await supabase.from("artikel").insert([{
                 barcode: lastCode,
                 name: document.getElementById("name").value,
@@ -207,14 +219,29 @@ input {
             }]);
 
             hide();
-            // Startet lookup() mit dem neuen Eintrag
+            // lookup() wird mit dem neuen Eintrag gestartet (dies startet den Scanner im Erfolgsfall)
             lookup(lastCode); 
         }
+        
+        // NEUE FUNKTION: Wird nur beim Klick auf den Button aufgerufen
+        function startScannerAndHideButton() {
+            document.getElementById("preScan").style.display = "none";
+            document.getElementById("reader").style.display = "block";
+            startScanner();
+        }
 
-        // NEUE FUNKTION: Startet den Scanner nur, wenn das Element sichtbar ist
+        // FUNKTION: Startet den Scanner
         function startScanner() {
-            if (html5QrCode) return; // Verhindert doppeltes Starten
-
+            if (html5QrCode) {
+                 // Wenn er schon initialisiert ist, aber gestoppt war (z.B. nach hide()), einfach starten
+                 return html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: 250 },
+                    code => lookup(code)
+                ).catch(err => console.error("Kamera konnte nicht gestartet werden:", err));
+            }
+            
+            // Wenn er noch nicht initialisiert ist, neu erstellen und starten
             html5QrCode = new Html5Qrcode("reader");
             html5QrCode.start(
                 { facingMode: "environment" },
@@ -222,7 +249,6 @@ input {
                 code => lookup(code)
             )
             .catch(err => {
-                // Hier können Sie Fehlermeldungen anzeigen, falls die Kamera blockiert wird
                 showResult(`⚠️ Kamerafehler: ${err.name}`, "red");
                 console.error("Kamera konnte nicht gestartet werden:", err);
             });
@@ -244,7 +270,6 @@ async function sendMagicLink() {
     const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-            // Stellt sicher, dass der User an dieselbe Seite zurückgeleitet wird
             emailRedirectTo: window.location.href 
         }
     });
@@ -261,10 +286,11 @@ async function checkLogin() {
 
     if (data.session) {
         document.getElementById("loginView").style.display = "none";
-        document.getElementById("appView").style.display = "flex"; // Verwende 'flex' falls Sie body-Styling beibehalten
+        document.getElementById("appView").style.display = "flex"; 
         
-        // HIER: Der wichtige Schritt - Scanner wird erst gestartet, wenn appView sichtbar ist!
-        startScanner(); 
+        // NEU: Zeige den Button zum manuellen Starten des Scanners an
+        document.getElementById("preScan").style.display = "flex"; 
+        document.getElementById("reader").style.display = "none"; // Reader-Feld verstecken, bis der Button geklickt wird
 
     } else {
         document.getElementById("loginView").style.display = "block";
