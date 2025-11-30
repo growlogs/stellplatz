@@ -8,18 +8,17 @@
 <!-- Lade die Supabase Bibliothek -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// --- SUPABASE INITIALISIERUNG (Robuste IIFE mit URL-Fallback) ---
-// Fügt den API-Schlüssel explizit zur URL hinzu, um Header-Injektionsprobleme in restriktiven Umgebungen zu umgehen.
+// --- Globale Konstanten ---
+// Direkt zugänglich für den nativen Fetch-Aufruf
+const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
+
+// --- SUPABASE INITIALISIERUNG ---
+// Initialisiert den Client (für alle anderen Data API-Aufrufe, die den Auth-Token nutzen)
 (function() {
-    const SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_bAZKdCEeEDKrR9LZkpiDkQ_7z-47SuK";
-
-    // NEU: Fügt den API-Schlüssel als Query-Parameter zur URL hinzu (Fallback-Methode), 
-    // um sicherzustellen, dass er in jedem Request enthalten ist.
-    const clientUrlWithKey = `${SUPABASE_URL}?apikey=${SUPABASE_KEY}`;
-
-    // Initialisiere den Client mit der modifizierten URL.
-    window.supabaseClient = window.supabase.createClient(clientUrlWithKey, SUPABASE_KEY);
+    // Erzeugt den Client und weist ihn der globalen Variable zu
+    // Hier verwenden wir wieder die Standard-URL, da der Key/Token-Auth für Data-API-Anfragen besser funktioniert.
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 })();
 </script>
 
@@ -302,29 +301,44 @@ input {
 <script>
 // --- Global Login Script ---
 
+// NEU: Verwendet nativen Fetch, um den API-Schlüssel sicher als Query-Parameter zu übergeben
 async function sendMagicLink() {
     const email = document.getElementById("emailInput").value;
+    const redirectUrl = encodeURIComponent(window.location.href);
 
-    // *** VERWENDE GLOBALE INSTANZ: supabaseClient ***
-    const { error } = await window.supabaseClient.auth.signInWithOtp({
-        email,
+    // Baut die URL manuell mit dem API-Schlüssel als Query-Parameter auf
+    const url = `${SUPABASE_URL}/auth/v1/otp?apikey=${SUPABASE_KEY}`;
+
+    const payload = {
+        email: email,
         options: {
-            // Stellt sicher, dass der User an dieselbe Seite zurückgeleitet wird (wichtig für Vercel)
-            emailRedirectTo: window.location.href 
+            emailRedirectTo: redirectUrl 
         }
-    });
+    };
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // Optional: Fügt den Authorization Header hinzu, falls er doch benötigt wird.
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+            },
+            body: JSON.stringify(payload)
+        });
 
-    if (error) {
-        // Allgemeine Fehlerbehandlung
-        if (error.status === 401) {
-            // Wir behalten die 401-Meldung bei, falls der Fehler tatsächlich wegen falscher Supabase-Konfiguration auftritt
-            alert("❌ Fehler 401: Anmeldung nicht autorisiert. Bitte überprüfen Sie: 1. Supabase Auth-Einstellungen (Providers -> Email aktiviert). 2. Korrekten 'anon public' Schlüssel.");
+        const data = await response.json();
+
+        if (response.ok) {
+            alert("✅ Login-Link wurde per Mail gesendet.");
         } else {
-            // Zeigt den API Key-Fehler oder andere unerwartete Fehler an
-            alert("❌ Fehler beim Senden des Magic-Links: " + error.message);
+            // Zeigt den Fehler aus der Supabase-Antwort an
+            console.error("Supabase Auth API Error:", data);
+            alert("❌ Fehler beim Senden des Magic-Links: " + (data.error_description || data.msg || "Unbekannter Fehler"));
         }
-    } else {
-        alert("✅ Login-Link wurde per Mail gesendet.");
+    } catch (e) {
+        console.error("Network Fetch Error:", e);
+        alert("❌ Netzwerkfehler: Konnte Supabase nicht erreichen. Bitte Internetverbindung prüfen.");
     }
 }
 
