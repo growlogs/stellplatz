@@ -5,18 +5,22 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Inventar Scanner Pro</title>
 
-        <!-- Bibliotheken -->
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
         <script src="https://unpkg.com/html5-qrcode"></script>
 
-        <!-- Supabase Konfiguration -->
         <script>
             // ---------------------------------------------------------
-            // KONFIGURATION: Supabase und Master-Code
+            // KONFIGURATION: Supabase und Zugangs-Codes
             // ---------------------------------------------------------
             var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
             var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
-            var MASTER_ACCESS_CODE = "123456"; // <<<<<<<<<<<<<<< WICHTIG: Setzen Sie hier Ihren Code fest
+            
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            // !!! KRITISCHE SICHERHEITSWARNUNG: DIESER CODE IST UNSICHER             !!!
+            // !!! BITTE DIESE LOGIK DURCH EINE SUPABASE AUTHENTIFIZIERUNG ERSETZEN!  !!!
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            var USER_ACCESS_CODE = "1234"; // 4-stellig
+            var ADMIN_ACCESS_CODE = "4321"; // NEU: 4-stellig, um automatischen Login zu ermöglichen
             // ---------------------------------------------------------
 
             // Initialisierung
@@ -28,13 +32,16 @@
                     console.error("Supabase-Client konnte nicht initialisiert werden.");
                 }
                 window.currentPin = ""; // Speichert den aktuell eingegebenen PIN-Code
+                window.lastCode = ""; // Für Debouncing des Scanners
+                window.currentTabId = "scannerTab"; // Aktueller Tab
+                window.currentUserRole = null; // Speichert die Rolle ('user', 'admin' oder null)
             })();
         </script>
 
         <style>
             /* --- GLOBALE STYLES & FONT --- */
             :root {
-                --color-bg-dark: #0a0b10; /* Noch dunklerer Hintergrund */
+                --color-bg-dark: #0a0b10;
                 --color-bg-card: #1d222e;
                 --color-accent-blue: #007aff;
                 --color-accent-green: #34c759;
@@ -181,7 +188,7 @@
                 font-weight: 500;
             }
             
-            /* NEU: Ladezustand für Login */
+            /* Ladezustand für Login */
             #loadingAuth {
                 text-align: center;
                 font-size: 1.1rem;
@@ -196,6 +203,9 @@
                 gap: 15px;
                 margin-bottom: 30px;
                 height: 12px;
+                /* NEU: Beschränkt auf 4 Ziffern */
+                width: 130px; 
+                justify-content: center;
             }
 
             .pin-indicator {
@@ -208,67 +218,41 @@
             }
 
             .pin-indicator.active {
-                /* Füllung mit Gradient, um es etwas heller zu machen */
                 background: var(--color-accent-blue);
                 border-color: var(--color-accent-blue);
+                box-shadow: 0 0 10px rgba(0, 122, 255, 0.6);
             }
 
-            .pin-indicator.error {
-                background: var(--color-error-red);
-                border-color: var(--color-error-red);
-                animation: shake 0.3s;
-            }
-
-            @keyframes shake {
-                0%, 100% {
-                    transform: translateX(0);
-                }
-                20%, 60% {
-                    transform: translateX(-5px);
-                }
-                40%, 80% {
-                    transform: translateX(5px);
-                }
-            }
-
-            /* --- NEUES KEYPAD STYLING (CHIC) --- */
+            /* --- KEYPAD --- */
             #keypad {
-                width: 100%;
-                max-width: 380px;
                 display: grid;
                 grid-template-columns: repeat(3, 1fr);
-                gap: 20px; /* Mehr Abstand */
-                padding-bottom: 50px;
+                gap: 20px;
+                width: 100%;
+                max-width: 320px;
+                padding: 10px 0;
             }
 
             .keypad-button {
-                height: 80px; /* Etwas größer */
                 width: 80px;
-                justify-self: center; /* Zentriert die Tasten im Grid-Feld */
-                border: 1px solid rgba(255, 255, 255, 0.05); /* Sehr feine, helle Linie */
-                background: linear-gradient(145deg, rgba(30, 30, 40, 0.6), rgba(20, 20, 30, 0.6)); /* Dunkler Glass-Verlauf */
-                backdrop-filter: blur(5px); /* Leichte Unschärfe */
-                color: white;
+                height: 80px;
                 border-radius: 50%;
-                font-size: 1.8rem; /* Größere Schrift */
+                background: var(--color-bg-card);
+                color: white;
+                font-size: 1.8rem;
                 font-weight: 500;
+                border: none;
                 cursor: pointer;
-                transition: all 0.1s ease-out;
-                /* Neumorphismus-Schatten für Tiefe */
-                box-shadow: 
-                    -5px -5px 15px rgba(255, 255, 255, 0.05), /* Heller innerer Schatten (oben/links) */
-                    5px 5px 15px rgba(0, 0, 0, 0.6), /* Dunkler äußerer Schatten (unten/rechts) */
-                    inset 0 0 0 1px rgba(255, 255, 255, 0.03); /* Leichte Innenkontur */
+                transition: background 0.1s, box-shadow 0.1s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto;
             }
 
             .keypad-button:active {
-                /* Simuliert den Druck auf die Taste */
-                background: var(--color-bg-dark); /* Taster wird dunkler */
-                transform: scale(0.95);
-                box-shadow: 
-                    2px 2px 5px rgba(0, 0, 0, 0.8) inset, /* Tiefer innerer Schatten */
-                    -2px -2px 5px rgba(255, 255, 255, 0.01) inset, /* Heller innerer Schatten */
-                    0 0 5px rgba(0, 122, 255, 0.3); /* Leichter Akzent-Glüheffekt */
+                background: rgba(255, 255, 255, 0.15);
+                box-shadow: 0 0 15px 5px rgba(0, 122, 255, 0.3); /* Leichter Akzent-Glüheffekt */
             }
 
             .keypad-button.action {
@@ -279,7 +263,7 @@
                 font-size: 1rem;
                 font-weight: 400;
             }
-            
+
             .keypad-button.action:active {
                 background: rgba(255, 255, 255, 0.1);
             }
@@ -293,124 +277,244 @@
             /* --- APP VIEW / SCANNER --- */
             #scannerTab {
                 position: relative;
-                flex-grow: 1;
-                /* Alle Inhalte, die nicht zum Scanner gehören, sind absolut positioniert */
-            }
-            
-            #reader-container {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: black;
                 overflow: hidden;
+            }
+
+            #reader-container {
+                flex-grow: 1;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                /* Übergang, damit es sanfter erscheint */
-                transition: all 0.5s ease;
+                position: relative;
+                overflow: hidden;
+            }
+
+            #reader {
+                width: 100%;
+                height: 100%;
+                background: black;
+                /* Stellt sicher, dass das Video den Container ausfüllt */
+                object-fit: cover;
             }
             
-            /* FIX: Sorgt dafür, dass das Video das Container-Element ausfüllt */
             #reader video {
-                width: 100% !important;
-                height: 100% !important;
-                object-fit: cover; 
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
             }
 
-            /* Visual frame for scanning */
+
             .scan-frame {
                 position: absolute;
-                width: 250px;
-                height: 250px;
-                border: 2px solid var(--color-accent-green);
-                box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5);
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 70%;
+                max-width: 300px;
+                aspect-ratio: 1 / 1;
+                border: 3px solid var(--color-accent-green);
+                border-radius: 12px;
+                box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.7);
                 pointer-events: none;
-                z-index: 2;
-                animation: scan-pulse 1.5s infinite alternate;
             }
 
-            @keyframes scan-pulse {
-                from {
-                    border-color: var(--color-accent-green);
-                    box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5);
-                }
-                to {
-                    border-color: #50C9C3;
-                    box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.7);
-                }
-            }
-
+            /* Overlay vor dem Scannen */
             #preScan {
                 position: absolute;
                 top: 0;
                 left: 0;
                 width: 100%;
                 height: 100%;
+                background: var(--color-bg-dark);
                 display: flex;
                 flex-direction: column;
-                justify-content: center;
                 align-items: center;
-                background: rgba(15, 15, 15, 0.98);
+                justify-content: center;
                 text-align: center;
                 z-index: 5;
-                padding: 20px;
             }
 
-            /* --- RESULT / DETAIL CARD (Pull-Up) --- */
+            .primary-button {
+                padding: 12px 25px;
+                font-size: 1rem;
+                font-weight: 600;
+                background: var(--color-accent-blue);
+                color: white;
+                border: none;
+                border-radius: 10px;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+
+            .primary-button:active {
+                background: #0066cc;
+            }
+
+
+            /* --- Result Card (Pull-Up) --- */
             #result-card {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100%;
                 background: var(--color-bg-card);
                 border-top-left-radius: 20px;
                 border-top-right-radius: 20px;
                 padding: 20px;
-                position: absolute;
-                bottom: 0;
-                width: 100%;
-                min-height: 120px; /* Start-Höhe */
-                max-height: 80%;
-                box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.6);
-                transition: transform 0.4s ease-out;
-                transform: translateY(0); /* Standardzustand */
-                z-index: 50;
-            }
-
-            #result-card.hidden {
+                box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.4);
                 transform: translateY(100%);
+                transition: transform var(--transition-duration) ease-out;
+                z-index: 10;
             }
 
-            #result-content {
-                font-size: 1em;
-                text-align: left;
-                padding: 5px 0;
-                opacity: 0.8;
-                transition: opacity 0.3s;
+            #result-card.active {
+                transform: translateY(0);
             }
 
-            .result-title {
-                font-size: 1.2rem;
+            .card-handle {
+                width: 40px;
+                height: 4px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 2px;
+                margin: 0 auto 15px;
+            }
+
+            #cardTitle {
+                font-size: 1.4rem;
                 font-weight: 700;
-                margin-bottom: 5px;
-                color: var(--color-accent-blue);
+                margin-bottom: 10px;
+                display: flex;
+                align-items: center;
             }
-            
-            /* --- TOAST NOTIFICATIONS (Professional Feedback) --- */
+
+            #cardStatusIcon {
+                margin-right: 10px;
+                font-size: 1.1em;
+            }
+
+            #cardContent p {
+                margin: 5px 0;
+                font-size: 0.9rem;
+                opacity: 0.8;
+            }
+
+            .action-button-group {
+                display: flex;
+                gap: 10px;
+                margin-top: 15px;
+            }
+
+            .action-button {
+                flex: 1;
+                padding: 12px;
+                border: none;
+                border-radius: 8px;
+                font-weight: 600;
+                cursor: pointer;
+            }
+
+            .action-button.register {
+                background: var(--color-accent-green);
+                color: var(--color-bg-card);
+            }
+            .action-button.register:active {
+                background: #2cb74b;
+            }
+            .action-button.cancel {
+                background: rgba(255, 255, 255, 0.1);
+                color: white;
+            }
+            .action-button.cancel:active {
+                background: rgba(255, 255, 255, 0.2);
+            }
+
+            /* --- POPUP / REGISTRIEREN & ADMIN EDIT (REUSABLE STYLES) --- */
+            #popupOverlay, #adminEditPopupOverlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                backdrop-filter: blur(5px);
+                z-index: 100;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transition: opacity 0.2s ease-in-out;
+            }
+
+            #popupOverlay.show, #adminEditPopupOverlay.show {
+                opacity: 1;
+                display: flex; /* Wichtig, um nach der Transition sichtbar zu sein */
+            }
+
+            .popup-card {
+                background: var(--color-bg-card);
+                padding: 25px;
+                border-radius: 15px;
+                width: 90%;
+                max-width: 400px;
+                transform: translateY(20px);
+                transition: transform 0.3s ease-in-out;
+            }
+
+            #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card {
+                transform: translateY(0);
+            }
+
+            .popup-card h3 {
+                margin-top: 0;
+                font-size: 1.3rem;
+                border-bottom: 1px solid var(--color-border);
+                padding-bottom: 10px;
+                margin-bottom: 20px;
+            }
+
+            .input-group {
+                margin-bottom: 15px;
+            }
+
+            .input-group label {
+                display: block;
+                font-size: 0.9rem;
+                margin-bottom: 5px;
+                opacity: 0.8;
+            }
+
+            .input-group input[type="text"],
+            .input-group select {
+                width: 100%;
+                padding: 10px;
+                border-radius: 8px;
+                border: 1px solid var(--color-border);
+                background: var(--color-bg-dark);
+                color: white;
+                font-size: 1rem;
+            }
+            .input-group input[type="text"]:focus,
+            .input-group select:focus {
+                outline: none;
+                border-color: var(--color-accent-blue);
+            }
+
+            /* --- TOASTS --- */
             #toastContainer {
                 position: fixed;
-                bottom: 100px;
+                top: 15px;
                 left: 50%;
                 transform: translateX(-50%);
-                z-index: 1000;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                pointer-events: none;
+                width: 90%;
+                max-width: 350px;
+                z-index: 200;
+                pointer-events: none; /* Macht Toasts nicht klickbar */
             }
 
             .toast {
-                background: rgba(30, 30, 40, 0.95);
+                background: var(--color-bg-card);
                 color: white;
-                padding: 10px 20px;
+                padding: 10px 15px;
                 border-radius: 10px;
                 margin-bottom: 10px;
                 opacity: 0;
@@ -432,123 +536,23 @@
                 margin-right: 10px;
                 font-size: 1.2em;
             }
-            
-            .toast.success .toast-icon { color: var(--color-accent-green); }
-            .toast.error .toast-icon { color: var(--color-error-red); }
-            .toast.info .toast-icon { color: var(--color-accent-blue); }
 
-            /* --- POPUP (MODAL) STYLES --- */
-            #popup {
-                display: none;
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.8);
-                z-index: 100;
-                justify-content: center;
-                align-items: center;
-                opacity: 0;
-                transition: opacity 0.3s;
-            }
-            
-            #popup.visible {
-                display: flex;
-                opacity: 1;
+            .toast.success .toast-icon {
+                color: var(--color-accent-green);
             }
 
-            #popupBox {
-                background: var(--color-bg-card);
-                padding: 25px;
-                border-radius: 15px;
-                width: 90%;
-                max-width: 400px;
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-                transform: scale(0.9);
-                transition: transform 0.3s ease-out;
+            .toast.error .toast-icon {
+                color: var(--color-error-red);
             }
-            
-            #popup.visible #popupBox {
-                transform: scale(1);
-            }
-            
-            #popupBox h3 {
-                margin-top: 0;
-                border-bottom: 1px solid var(--color-border);
-                padding-bottom: 10px;
-                font-weight: 600;
+
+            .toast.info .toast-icon {
                 color: var(--color-accent-blue);
             }
 
-            /* --- INPUT & BUTTON STYLES (GENERAL) --- */
-            input[type="text"], input[type="search"], select { /* SELECT HINZUGEFÜGT */
-                width: 100%;
-                padding: 12px;
-                margin: 8px 0 15px 0;
-                background: #2a303f;
-                border: 1px solid #3e4453;
-                color: white;
-                border-radius: 8px;
-                font-size: 16px;
-                transition: border-color 0.3s;
-            }
-
-            input:focus, select:focus {
-                border-color: var(--color-accent-blue);
-                outline: none;
-            }
-            
-            /* Spezielles Styling für das Select-Element */
-            select {
-                /* Entfernt Standard-Pfeile */
-                -webkit-appearance: none;
-                -moz-appearance: none;
-                appearance: none;
-                /* Fügt benutzerdefiniertes Pfeil-Icon hinzu (SVG in base64) */
-                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E");
-                background-repeat: no-repeat;
-                background-position: right 15px center;
-                background-size: 1.2em;
-            }
-
-
-            button {
-                padding: 12px 20px;
-                border: none;
-                border-radius: 10px;
-                font-size: 16px;
-                font-weight: bold;
-                cursor: pointer;
-                color: white;
-                transition: all 0.2s ease;
-                user-select: none;
-            }
-            
-            .primary-button {
-                width: 100%;
-                margin-top: 15px;
-                background: linear-gradient(135deg, var(--color-accent-blue) 0%, #00aaff 100%);
-                box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
-            }
-            
-            .primary-button:active {
-                box-shadow: 0 2px 5px rgba(0, 122, 255, 0.6);
-                transform: scale(0.98);
-            }
-
-            .secondary-button {
-                width: 100%;
-                margin-top: 10px;
-                background: var(--color-bg-dark);
-                border: 1px solid var(--color-border);
-                box-shadow: none;
-            }
-            
-            /* --- BOTTOM NAVIGATION & TABS --- */
-            #navBar {
+            /* --- FOOTER / NAVIGATION --- */
+            footer {
                 display: flex;
-                height: 60px;
+                height: 70px;
                 background: rgba(30, 30, 40, 0.9);
                 backdrop-filter: blur(8px);
                 border-top: 1px solid var(--color-border);
@@ -566,6 +570,7 @@
                 font-size: 0.8rem;
                 cursor: pointer;
                 transition: color 0.2s;
+                user-select: none; /* Verhindert Auswahl beim Tippen */
             }
 
             .nav-item.active {
@@ -585,142 +590,180 @@
             #listTab {
                 overflow-y: auto;
                 padding: 15px 15px 20px 15px;
-                height: 100%;
             }
-
-            #articleSearch {
-                margin-top: 0;
-                margin-bottom: 20px;
-                background: #2a303f;
-                border-color: #3e4453;
-                box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+            
+            #articleList {
+                list-style: none;
+                padding: 0;
+                margin: 0;
             }
-
-            .article-item {
+            
+            #articleList li {
+                background: var(--color-bg-card);
+                padding: 15px;
+                border-radius: 10px;
+                margin-bottom: 10px;
+                border-left: 5px solid var(--color-accent-blue);
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 15px;
-                background: var(--color-bg-card);
-                border-radius: 12px;
-                margin-bottom: 10px;
-                transition: transform 0.2s, box-shadow 0.2s;
-                border-left: 5px solid var(--color-bg-card);
+                /* Visuelle Anzeige für Admin-Klickbarkeit */
+                transition: background 0.2s; 
             }
             
-            .article-item.block {
-                 border-left-color: #50C9C3; /* Leichterer Akzent für Blocklager */
+            /* Admin-Elemente haben einen Hover-Effekt */
+            #articleList li[data-role="admin-editable"]:active {
+                background: #2a303e; 
             }
             
-            .article-item-details strong {
-                font-size: 1.1rem;
-                font-weight: 600;
+            .item-details strong {
                 display: block;
-                margin-bottom: 4px;
-                color: white;
+                font-size: 1.rem;
+                font-weight: 600;
+                margin-bottom: 2px;
             }
-
-            .article-item-details span {
+            
+            .item-details span {
                 font-size: 0.85rem;
                 opacity: 0.7;
-                display: block;
-            }
-
-            .article-item-scans {
-                text-align: right;
             }
             
-            .article-item-scans .count {
-                font-size: 1.2rem;
+            .item-count {
+                font-size: 1.5rem;
                 font-weight: 700;
                 color: var(--color-accent-green);
-                display: block;
             }
-            
-            .article-item-scans .label {
-                font-size: 0.75rem;
-                opacity: 0.6;
-            }
+
         </style>
     </head>
-
     <body>
 
-        <!-- TOAST/NOTIFICATION CONTAINER -->
         <div id="toastContainer"></div>
+        
+        <div id="popupOverlay">
+            <form class="popup-card" onsubmit="event.preventDefault(); saveArticle();">
+                <h3>Artikel Registrieren</h3>
+                <div class="input-group">
+                    <label for="popupBarcode">Barcode</label>
+                    <input type="text" id="popupBarcode" readonly>
+                </div>
+                
+                <div class="input-group">
+                    <label for="popupBaseName">Basis-Name (z.B. Schraube M8)</label>
+                    <input type="text" id="popupBaseName" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="popupMaterial">Material / Variante (z.B. Messing, 50 Stk)</label>
+                    <input type="text" id="popupMaterial">
+                </div>
+                
+                <div class="input-group">
+                    <label for="popupPlatz">Stellplatz (z.B. A-02-C)</label>
+                    <input type="text" id="popupPlatz" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="popupBlocklager">Lagertyp</label>
+                    <select id="popupBlocklager">
+                        <option value="false">Regal / Fach</option>
+                        <option value="true">Blocklager</option>
+                    </select>
+                </div>
 
-        <!-- LOGIN SCREEN (PIN EINGABE) -->
+                <div class="action-button-group">
+                    <button type="button" class="action-button cancel" onclick="hidePopup()">Abbrechen</button>
+                    <button type="submit" class="action-button register">Speichern</button>
+                </div>
+            </form>
+        </div>
+        
+        <div id="adminEditPopupOverlay">
+            <form class="popup-card" onsubmit="event.preventDefault(); saveAdminEdit();">
+                <h3>Artikel Bearbeiten (Admin)</h3>
+                <div class="input-group">
+                    <label for="adminEditName">Artikel Name</label>
+                    <input type="text" id="adminEditName" readonly>
+                </div>
+
+                <div class="input-group">
+                    <label for="adminEditBarcode">Barcode</label>
+                    <input type="text" id="adminEditBarcode" readonly>
+                </div>
+                
+                <div class="input-group">
+                    <label for="adminEditPlatz">Neuer Stellplatz</label>
+                    <input type="text" id="adminEditPlatz" required>
+                </div>
+                
+                <div class="action-button-group">
+                    <button type="button" class="action-button cancel" onclick="hideAdminEditPopup()">Abbrechen</button>
+                    <button type="submit" class="action-button register">Speichern</button>
+                </div>
+                <p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin-top: 15px;">Sie sind als Administrator angemeldet und können den Stellplatz ändern.</p>
+            </form>
+        </div>
+
+
         <div id="loginView" class="app-view-container active">
+
             <div class="login-header">
                 <div class="app-icon">🔐</div>
-                <h2>Inventar Zugang</h2>
+                <h2>Inventar Scanner Pro</h2>
                 <div id="authError"></div>
             </div>
 
-            <div id="loadingAuth">
-                Authentifiziere Session...
-            </div>
-
-            <!-- PIN Indikatoren & Keypad (Wird erst nach Session-Check angezeigt) -->
             <div id="authContent" style="display: none; align-items: center; flex-direction: column;">
-                <!-- PIN Indikatoren -->
+                <p style="opacity: 0.7;" id="pinInstruction">Geben Sie Ihren 4-stelligen PIN ein.</p> 
+                
                 <div id="pinIndicators">
-                    <div class="pin-indicator" data-index="0"></div>
-                    <div class="pin-indicator" data-index="1"></div>
-                    <div class="pin-indicator" data-index="2"></div>
-                    <div class="pin-indicator" data-index="3"></div>
-                    <div class="pin-indicator" data-index="4"></div>
-                    <div class="pin-indicator" data-index="5"></div>
+                    <div class="pin-indicator"></div>
+                    <div class="pin-indicator"></div>
+                    <div class="pin-indicator"></div>
+                    <div class="pin-indicator"></div>
                 </div>
 
-                <!-- Keypad -->
-                <div id="keypad" oncontextmenu="return false;">
-                    <button class="keypad-button" onclick="handlePinInput('1')">1</button>
-                    <button class="keypad-button" onclick="handlePinInput('2')">2</button>
-                    <button class="keypad-button" onclick="handlePinInput('3')">3</button>
-
-                    <button class="keypad-button" onclick="handlePinInput('4')">4</button>
-                    <button class="keypad-button" onclick="handlePinInput('5')">5</button>
-                    <button class="keypad-button" onclick="handlePinInput('6')">6</button>
-
-                    <button class="keypad-button" onclick="handlePinInput('7')">7</button>
-                    <button class="keypad-button" onclick="handlePinInput('8')">8</button>
-                    <button class="keypad-button" onclick="handlePinInput('9')">9</button>
-
-                    <!-- Aktionen -->
-                    <button class="keypad-button action" onclick="handlePinInput('clear')">LÖSCHEN</button>
-                    <button class="keypad-button" onclick="handlePinInput('0')">0</button>
+                <div id="keypad">
+                    <button class="keypad-button" data-key="1" onclick="handlePinInput(1)">1</button>
+                    <button class="keypad-button" data-key="2" onclick="handlePinInput(2)">2</button>
+                    <button class="keypad-button" data-key="3" onclick="handlePinInput(3)">3</button>
+                    <button class="keypad-button" data-key="4" onclick="handlePinInput(4)">4</button>
+                    <button class="keypad-button" data-key="5" onclick="handlePinInput(5)">5</button>
+                    <button class="keypad-button" data-key="6" onclick="handlePinInput(6)">6</button>
+                    <button class="keypad-button" data-key="7" onclick="handlePinInput(7)">7</button>
+                    <button class="keypad-button" data-key="8" onclick="handlePinInput(8)">8</button>
+                    <button class="keypad-button" data-key="9" onclick="handlePinInput(9)">9</button>
+                    <div class="keypad-button action"></div>
+                    <button class="keypad-button" data-key="0" onclick="handlePinInput(0)">0</button>
                     <button class="keypad-button action backspace" onclick="handlePinInput('backspace')">
-                        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 5H9L3 12L9 19H21V5Z" stroke-width="2" />
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7 16L3 12M3 12L7 8M3 12H16.8C18.4565 12 20.0456 11.3151 21.2132 10.1475C22.3809 8.97994 23.0658 7.39082 23.0658 5.73449C23.0658 4.07817 22.3809 2.48905 21.2132 1.32148C20.0456 0.15392 18.4565 0 16.8 0H4" transform="translate(0 6)"/>
                         </svg>
                     </button>
                 </div>
             </div>
+            
+            <div id="loadingAuth">
+                Initialisiere App...
+            </div>
+            
         </div>
 
-        <!-- APP SCREEN (SCANNER & LISTE) -->
+
         <div id="appView" class="app-view-container">
+
             <header>
-                <h1>Lager Scanner Pro</h1>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 0.8em; opacity: 0.7;" id="userDisplay">ANONYM</span>
-                    <button class="header-button" onclick="logout()">Logout</button>
-                </div>
+                <h1>Inventar Scanner Pro</h1>
+                <button class="header-button" onclick="logout()">Logout (<span id="userDisplay"></span>)</button>
             </header>
 
-            <!-- TAB CONTAINER (Inhalt) -->
             <div id="tabContentContainer">
-                
-                <!-- Tab 1: Scanner -->
+
                 <div id="scannerTab" class="tab-content active">
-                    
-                    <!-- Scanner Bereich -->
                     <div id="reader-container">
                         <div id="reader"></div>
                         <div class="scan-frame" id="scanFrame" style="display:none;"></div>
 
-                        <!-- Start Button Overlay -->
                         <div id="preScan">
                             <div style="font-size: 4em; margin-bottom: 20px;">📦</div>
                             <h2>Scanner bereit</h2>
@@ -729,103 +772,62 @@
                         </div>
                     </div>
 
-                    <!-- Ergebnis Karte (Pull-Up) -->
-                    <div id="result-card" class="hidden">
-                        <div id="result-content">
-                            <!-- Dynamischer Inhalt hier -->
-                        </div>
-                    </div>
-
-                    <!-- Popup für neue Artikel -->
-                    <div id="popup">
-                        <div id="popupBox">
-                            <h3>Artikel anlegen (Barcode: <span id="popupBarcode"></span>)</h3>
-                            
-                            <!-- NEU: Basis-Name -->
-                            <label for="baseName">Basis-Name:</label>
-                            <input id="baseName" placeholder="z.B. Fanta" autocomplete="off" type="text">
-                            
-                            <!-- NEU: Größe/Volumen Dropdown -->
-                            <label for="volume">Größe/Volumen:</label>
-                            <select id="volume">
-                                <option value="1.0L">1.0L</option>
-                                <option value="0.5L">0.5L</option>
-                                <option value="0.33L">0.33L</option>
-                                <option value="2.0L">2.0L</option>
-                                <option value="0.2L">0.2L</option>
-                            </select>
-                            
-                            <!-- NEU: Material Dropdown -->
-                            <label for="material">Material:</label>
-                            <select id="material">
-                                <option value="PET">PET</option>
-                                <option value="Glas">Glas</option>
-                                <option value="Dose">Dose</option>
-                                <option value="Karton">Karton</option>
-                            </select>
-                            
-                            <!-- Stellplatz (Platzhalter für das alte Name-Feld war "name") -->
-                            <label for="platz">Stellplatz:</label>
-                            <input id="platz" placeholder="z.B. A-01" autocomplete="off" type="text">
-                            
-                            <label style="display: flex; align-items: center; margin: 15px 0 20px 0; font-size: 0.9em; opacity: 0.8;">
-                                <input type="checkbox" id="block" style="width: auto; margin-right: 10px; accent-color: var(--color-accent-blue);"> Blocklager
-                            </label>
-                            <button class="primary-button" onclick="save()">Speichern</button>
-                            <button class="secondary-button" onclick="hidePopup()">Abbrechen</button>
+                    <div id="result-card" class="result-card">
+                        <div class="card-handle"></div>
+                        <div id="cardTitle"><span id="cardStatusIcon"></span> <span id="cardTitleText"></span></div>
+                        <div id="cardContent"></div>
+                        <div class="action-button-group">
+                            <button class="action-button cancel" onclick="hideResultCard()">Fertig</button>
+                            <button class="action-button register" id="registerButton" onclick="showPopup()">Registrieren</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Tab 2: Artikelliste (NEU) -->
                 <div id="listTab" class="tab-content">
-                    <input type="search" id="articleSearch" placeholder="Artikel, Barcode oder Stellplatz suchen..." oninput="handleSearchInput()">
-                    <div id="articleList">
-                        <p style="text-align: center; opacity: 0.5; margin-top: 40px;">Lade Artikel...</p>
-                    </div>
+                    <ul id="articleList">
+                        <li>Lade Artikel...</li>
+                    </ul>
                 </div>
-
             </div>
-            
-            <!-- Bottom Navigation Bar (NEU) -->
-            <nav id="navBar">
-                <div class="nav-item active" data-tab="scannerTab" onclick="switchTab('scannerTab')">
-                    <svg viewBox="0 0 24 24"><path d="M4 8V6C4 5.44772 4.44772 5 5 5H8" /><path d="M4 16V18C4 18.5523 4.44772 19 5 19H8" /><path d="M16 5H19C19.5523 5 20 5.44772 20 6V8" /><path d="M16 19H19C19.5523 19 20 18.5523 20 18V16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
-                    <span>Scanner</span>
+
+            <footer>
+                <div class="nav-item active" data-tab="scannerTab" onclick="changeTab('scannerTab')">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h.01M7 7h.01M11 11h.01M15 15h.01M21 3h-6l-3 3H3v18h18V3z"/></svg>
+                    <span>Scannen</span>
                 </div>
-                <div class="nav-item" data-tab="listTab" onclick="switchTab('listTab')">
-                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
-                    <span>Artikel</span>
+                <div class="nav-item" data-tab="listTab" onclick="changeTab('listTab')">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                    <span>Liste</span>
                 </div>
-            </nav>
+            </footer>
         </div>
 
-        <script>
-            var lastCode = "";
-            var html5QrCode = null;
-            var currentUserId = null;
-            var currentTabId = 'scannerTab'; // Start-Tab
-            var searchTimeout; // Für Debouncing der Suche
-            var isAuthReady = false; // NEU: Steuert, ob die PIN-Eingabe erlaubt ist
 
-            // --- HILFSFUNKTIONEN ---
+        <script>
+            let html5QrCode = null;
+            let lastCode = "";
+            let currentScannedBarcode = "";
+            let currentTabId = "scannerTab";
+            let currentUserId = null;
+            let currentUserRole = null; 
+            let isAuthReady = false;
+            let articleToEdit = null; 
+
+
+            /* --- HILFSFUNKTIONEN --- */
 
             /**
              * Zeigt eine temporäre, nicht-blockierende Nachricht an.
-             * @param {string} message - Die anzuzeigende Nachricht.
-             * @param {string} type - 'success', 'error', oder 'info'.
-             * @param {number} duration - Anzeigedauer in ms.
              */
             function showToast(message, type = 'info', duration = 3000) {
                 const container = document.getElementById('toastContainer');
                 const toast = document.createElement('div');
                 toast.className = `toast ${type}`;
-                
                 let icon = 'ℹ️';
                 if (type === 'success') icon = '✅';
                 if (type === 'error') icon = '❌';
-
                 toast.innerHTML = `<span class="toast-icon">${icon}</span>${message}`;
+
                 container.appendChild(toast);
 
                 // Trigger CSS transition
@@ -834,341 +836,416 @@
                 // Hide and remove after duration
                 setTimeout(() => {
                     toast.classList.remove('show');
-                    // Allow transition to finish before removal
-                    toast.addEventListener('transitionend', () => toast.remove());
+                    // Remove from DOM after transition
+                    setTimeout(() => {
+                        if (toast.parentNode === container) {
+                            container.removeChild(toast);
+                        }
+                    }, 300);
                 }, duration);
             }
-
-            // --- PIN-FELD LOGIK ---
-
-            function updatePinIndicators(isError = false) {
-                const indicators = document.querySelectorAll('.pin-indicator');
-                indicators.forEach((indicator, index) => {
-                    indicator.classList.remove('active', 'error');
-                    if (isError) {
-                        indicator.classList.add('error');
-                    } else if (index < window.currentPin.length) {
-                        indicator.classList.add('active');
+            
+            /** Ansicht zwischen Login und App wechseln */
+            function switchView(targetViewId) {
+                const views = document.querySelectorAll('.app-view-container');
+                views.forEach(view => {
+                    view.classList.remove('active');
+                    if (view.id === targetViewId) {
+                        view.classList.add('active');
                     }
                 });
             }
 
-            async function handlePinInput(value) {
-                // NEU: Sperre die Eingabe, bis der initiale Auth-Check abgeschlossen ist
-                if (!isAuthReady) {
-                    showToast("Bitte warten Sie, bis die Session geprüft wurde.", 'info', 1500);
-                    return;
-                }
+            /* --- LOGIN LOGIK --- */
 
-                document.getElementById("authError").innerText = ""; // Fehler zurücksetzen
+            function updatePinIndicators() {
+                // HINWEIS: Wählt nur die 4 vorhandenen Indikatoren
+                const indicators = document.querySelectorAll('#pinIndicators .pin-indicator'); 
+                indicators.forEach((indicator, index) => {
+                    if (index < window.currentPin.length) {
+                        indicator.classList.add('active');
+                    } else {
+                        indicator.classList.remove('active');
+                    }
+                });
+            }
 
-                if (value === 'backspace') {
+            // NEU: Logik für automatischen 4-stelligen Login
+            function handlePinInput(key) {
+                document.getElementById("authError").innerText = ""; 
+                const MAX_PIN_LENGTH = 4; // Max 4 Ziffern
+
+                if (key === 'backspace') {
                     window.currentPin = window.currentPin.slice(0, -1);
-                } else if (value === 'clear') {
-                    window.currentPin = "";
-                } else if (value.match(/[0-9]/) && window.currentPin.length < MASTER_ACCESS_CODE.length) {
-                    window.currentPin += value;
+                } else if (typeof key === 'number' && window.currentPin.length < MAX_PIN_LENGTH) { 
+                    window.currentPin += key.toString();
                 }
 
                 updatePinIndicators();
-
-                if (window.currentPin.length === MASTER_ACCESS_CODE.length) {
-                    await loginWithCode(window.currentPin);
+                
+                // Automatischer Login-Versuch, sobald 4 Ziffern eingegeben wurden
+                if (window.currentPin.length === MAX_PIN_LENGTH) {
+                    handlePinEntry(window.currentPin);
+                    // PIN zurücksetzen, um den nächsten Versuch zu ermöglichen
+                    window.currentPin = "";
+                    setTimeout(updatePinIndicators, 300); 
                 }
             }
 
-            // --- UI STATUS FUNKTIONEN ---
+
+            function handlePinEntry(pin) {
+                let role = null;
+                let success = false;
+                
+                if (pin === USER_ACCESS_CODE) {
+                    role = 'user';
+                    success = true;
+                } else if (pin === ADMIN_ACCESS_CODE) {
+                    role = 'admin';
+                    success = true;
+                }
+                
+                if (success) {
+                    document.getElementById("authError").innerText = "";
+                    window.currentUserRole = role; // Rolle setzen
+                    
+                    // Anpassung der Anzeige
+                    const roleDisplay = (role === 'admin' ? "ADMIN" : "USER");
+                    document.getElementById("userDisplay").innerText = `${roleDisplay}`;
+                    
+                    switchView('appView');
+                    changeTab('scannerTab');
+                } else {
+                    document.getElementById("authError").innerText = "Falscher Code. Bitte versuchen Sie es erneut.";
+                    showToast("Falscher Code.", 'error');
+                }
+            }
+
+            // Beim Start die Login- oder App-Ansicht festlegen
+            async function checkLogin() {
+                const authContent = document.getElementById("authContent");
+                const loadingIndicator = document.getElementById("loadingAuth");
+                
+                if (isAuthReady) {
+                    authContent.style.display = "flex";
+                    loadingIndicator.style.display = "none";
+                    return;
+                }
+                
+                loadingIndicator.style.display = "block";
+                authContent.style.display = "none";
+
+                // Warten auf die Session-Prüfung von Supabase (Simuliert)
+                const { data } = await window.appSupabaseClient.auth.getSession();
+                const currentSession = data.session;
+                
+                // Session-Check beendet
+                isAuthReady = true;
+                loadingIndicator.style.display = "none";
+
+                // Zeige immer die Login-Ansicht anfangs
+                switchView('loginView');
+                authContent.style.display = "flex";
+            }
+
+            /* --- SCANNEN LOGIK --- */
             
-            /**
-             * Zeigt die Ergebnis-Karte an und befüllt sie mit Inhalt.
-             */
-            function showResultCard(title, content) {
-                const card = document.getElementById("result-card");
-                const resultContent = document.getElementById("result-content");
-                
-                resultContent.innerHTML = `<div class="result-title">${title}</div>${content}`;
-                card.classList.remove("hidden");
+            async function activateCamera() {
+                if (html5QrCode) {
+                    // Falls bereits initialisiert, einfach starten (oder neustarten)
+                    await startScanner();
+                    return;
+                }
+
+                html5QrCode = new Html5Qrcode("reader");
+                await startScanner();
             }
             
-            /**
-             * Versteckt die Ergebnis-Karte.
-             */
-            function hideResultCard() {
-                document.getElementById("result-card").classList.add("hidden");
-            }
+            async function startScanner() {
+                 document.getElementById("preScan").style.display = "none";
+                 document.getElementById("scanFrame").style.display = "block";
 
-
-            // --- KAMERA UND SCANNER LOGIK ---
-            function activateCamera() {
-                document.getElementById("preScan").style.display = "none";
-                document.getElementById("scanFrame").style.display = "block";
-                startScanner();
-            }
-
-            function startScanner() {
-                // Nur starten, wenn Scanner-Tab aktiv ist
-                if (currentTabId !== 'scannerTab') return; 
-                
-                // Verhindert mehrfaches Starten
-                if (html5QrCode && html5QrCode.isScanning) return;
-                
-                hideResultCard(); // Verstecke die Karte beim Scann-Start
-
-                const config = {
-                    fps: 10,
+                const config = { 
+                    fps: 10, 
                     qrbox: { width: 250, height: 250 },
-                    aspectRatio: 1.0
+                    // Bevorzuge die rückwärtige Kamera auf mobilen Geräten
+                    facingMode: "environment"
                 };
-                const readerElementId = "reader";
-                const videoConstraints = { facingMode: "environment" };
-
-                if (!html5QrCode) {
-                    html5QrCode = new Html5Qrcode(readerElementId);
-                }
                 
-                html5QrCode.start(videoConstraints, config, onScanSuccess)
-                    .catch(err => {
-                        // Wichtig: Zeige das Overlay wieder, falls der Start fehlschlägt
-                        document.getElementById("preScan").style.display = "flex";
-                        document.getElementById("scanFrame").style.display = "none";
-                        showToast("Kamera Fehler: Zugriff verweigert oder Gerät nicht gefunden.", 'error', 4000);
-                        console.error("Scanner Start Fehler:", err);
-                    });
+                html5QrCode.start({ facingMode: { exact: "environment"} }, config, onScanSuccess, onScanError)
+                .catch(err => {
+                    // Overlay wieder, falls der Start fehlschlägt
+                    document.getElementById("preScan").style.display = "flex";
+                    document.getElementById("scanFrame").style.display = "none";
+                    showToast("Kamera Fehler: Zugriff verweigert oder Gerät nicht gefunden.", 'error', 4000);
+                    console.error("Scanner Start Fehler:", err);
+                });
             }
-            
+
             async function stopScanner() {
                 if (html5QrCode && html5QrCode.isScanning) {
                     try {
-                         await html5QrCode.stop();
-                         // Wichtig: Visuals zurücksetzen, falls die Kamera gestoppt wird
-                         document.getElementById("preScan").style.display = "flex";
-                         document.getElementById("scanFrame").style.display = "none";
+                        await html5QrCode.stop();
+                        // Wichtig: Visuals zurücksetzen, falls die Kamera gestoppt wird
+                        document.getElementById("preScan").style.display = "flex";
+                        document.getElementById("scanFrame").style.display = "none";
                     } catch (err) {
                         console.warn("Kamera Stoppen fehlgeschlagen:", err);
                     }
                 }
             }
-
+            
+            function onScanError(errorMessage) {
+                // Nur loggen, um die Konsole nicht zu überfluten.
+            }
 
             async function onScanSuccess(code) {
                 if (code === lastCode) return;
-                lastCode = code; 
+                lastCode = code;
 
-                if (html5QrCode) html5QrCode.pause();
-                showToast("🔍 Scanne Barcode...", 'info', 1500);
+                // Scanner temporär stoppen, um den Code zu verarbeiten
+                if (html5QrCode) html5QrCode.pause(true); 
 
-                if (!window.appSupabaseClient) {
-                    showToast("Datenbank nicht verbunden.", "error");
-                    // Scanner nach kurzem Warten wieder starten
-                    setTimeout(() => { lastCode = ""; if (html5QrCode) html5QrCode.resume(); }, 2000);
+                currentScannedBarcode = code;
+                showToast(`Barcode gescannt: ${code}`, 'info', 2000);
+
+                // 1. Suche Artikel in der Datenbank
+                const { data, error } = await window.appSupabaseClient
+                    .from("artikel")
+                    .select("*")
+                    .eq("barcode", code)
+                    .single();
+
+                if (error && error.code !== 'PGRST116') { // PGRST116 = kein Eintrag gefunden
+                    showToast("Fehler bei der Datenbankabfrage.", 'error');
+                    console.error(error);
+                    showResultCard("Fehler", "Datenbankfehler beim Suchen.", '❌');
+                    // Scanner nach Fehler wieder starten
+                    html5QrCode.resume();
+                    lastCode = ""; // Code-Debouncing zurücksetzen
                     return;
                 }
 
-                // --- Datenbank-Abfrage mit Retry ---
-                const MAX_RETRIES = 3;
-                let data = null;
-                let error = null;
-
-                for (let i = 0; i < MAX_RETRIES; i++) {
-                    const result = await window.appSupabaseClient
-                        .from("artikel")
-                        .select("*")
-                        .eq("barcode", code)
-                        .single();
-
-                    data = result.data;
-                    error = result.error;
-
-                    if (data || !error || error.code !== '500') break; // Erfolg oder nicht-serverbedingter Fehler
-                    const delay = Math.pow(2, i) * 100;
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-
                 if (data) {
-                    // Artikel gefunden
-                    const newScans = data.scans + 1;
+                    // ARTIKEL GEFUNDEN
+                    const content = `
+                        <p><strong>Stellplatz:</strong> ${data.stellplatz}</p>
+                        <p><strong>Typ:</strong> ${data.blocklager ? 'Blocklager' : 'Regal'}</p>
+                        <p><strong>Erster Scan:</strong> ${new Date(data.created_at).toLocaleDateString()}</p>
+                        <p><strong>Scans (DB):</strong> ${data.scans}</p>
+                        <p><strong>Barcode:</strong> ${data.barcode}</p>
+                    `;
+                    showResultCard(data.name, content, '✅');
+                    document.getElementById("registerButton").style.display = "none"; // Registrieren verstecken
                     
-                    // Update Scan-Zähler
+                    // Scans inkrementieren (ohne auf das Resultat zu warten)
                     const { error: updateError } = await window.appSupabaseClient
                         .from("artikel")
-                        .update({ scans: newScans })
+                        .update({ scans: data.scans + 1 })
                         .eq("barcode", code);
-
-                    if (updateError) {
-                        console.error("Update Fehler:", updateError);
-                    }
-
-                    showResultCard(
-                        data.name,
-                        `<p><strong>Stellplatz:</strong> ${data.stellplatz}</p>
-                        <p><strong>Typ:</strong> ${data.blocklager ? 'Blocklager' : 'Regal'}</p>
-                        <p><strong>Scans:</strong> ${newScans}</p>`
-                    );
-                    showToast(`Artikel "${data.name}" gefunden!`, "success", 2500);
-
-                    // Scanner nach Pause wieder starten
-                    setTimeout(() => {
-                        lastCode = "";
-                        if (html5QrCode) html5QrCode.resume();
-                    }, 3000);
+                        
+                    if(updateError) console.error("Update Fehler:", updateError);
                     
                 } else {
-                    // Artikel nicht gefunden -> Popup anzeigen
-                    document.getElementById("popupBarcode").innerText = code;
-                    document.getElementById("popup").classList.add('visible');
-                    document.getElementById("baseName").focus(); // Fokus auf das erste Feld
+                    // ARTIKEL NICHT GEFUNDEN
+                    const content = `<p>Der Barcode <strong>${code}</strong> wurde noch nicht registriert.</p>`;
+                    showResultCard("Unbekannter Artikel", content, '❓');
+                    document.getElementById("registerButton").style.display = "block"; // Registrieren anzeigen
                 }
             }
-
-            // --- POPUP LOGIK ---
+            
+            
+            /* --- ARTIKEL SPEICHERN LOGIK (FÜR NEUE ARTIKEL) --- */
+            
+            function showPopup() {
+                document.getElementById('popupBarcode').value = currentScannedBarcode;
+                document.getElementById('popupOverlay').classList.add('show');
+            }
+            
             function hidePopup() {
-                document.getElementById("popup").classList.remove('visible');
-                
-                // Felder zurücksetzen
-                document.getElementById("baseName").value = "";
-                document.getElementById("volume").value = "1.0L";
-                document.getElementById("material").value = "PET";
-                document.getElementById("platz").value = "";
-                document.getElementById("block").checked = false;
-
-                // Scanner wieder starten
-                lastCode = "";
-                if (html5QrCode) html5QrCode.resume();
+                document.getElementById('popupOverlay').classList.remove('show');
+                // Formular zurücksetzen
+                document.getElementById('popupBaseName').value = '';
+                document.getElementById('popupMaterial').value = '';
+                document.getElementById('popupPlatz').value = '';
+                document.getElementById('popupBlocklager').value = 'false';
             }
 
-            async function save() {
-                const barcode = document.getElementById("popupBarcode").innerText;
-                const baseName = document.getElementById("baseName").value.trim();
-                const volume = document.getElementById("volume").value;
-                const material = document.getElementById("material").value;
-                const platz = document.getElementById("platz").value.trim();
-                const block = document.getElementById("block").checked;
-                
-                // Generiere den vollständigen Namen für die Datenbank
-                const name = `${baseName} ${volume} (${material})`;
+            async function saveArticle() {
+                const barcode = document.getElementById('popupBarcode').value.trim();
+                const baseName = document.getElementById('popupBaseName').value.trim();
+                const material = document.getElementById('popupMaterial').value.trim();
+                const platz = document.getElementById('popupPlatz').value.trim();
+                const block = document.getElementById('popupBlocklager').value === 'true';
+
+                const name = baseName + (material ? ` (${material})` : '');
 
                 if (!baseName || !platz) {
                     showToast("Bitte Basis-Name und Stellplatz ausfüllen.", "error");
                     return;
                 }
 
-                const result = await window.appSupabaseClient.from("artikel").insert([{
-                    barcode: barcode,
-                    name: name, // Verwende den generierten Namen
-                    stellplatz: platz,
-                    blocklager: block,
-                    scans: 1
-                }]);
+                const { data, error } = await window.appSupabaseClient
+                    .from("artikel")
+                    .insert([{ 
+                        barcode: barcode, 
+                        name: name,
+                        stellplatz: platz, 
+                        blocklager: block, 
+                        scans: 1 
+                    }]);
 
-                if (result.error) {
+                if (error) {
                     showToast(`FEHLER beim Speichern.`, "error");
+                    console.error("Speicherfehler:", error);
                 } else {
                     hidePopup();
                     showToast(`Artikel "${name}" erfolgreich gespeichert.`, "success");
                     showResultCard(
-                        name,
-                        `<p><strong>Stellplatz:</strong> ${platz}</p>
-                        <p><strong>Typ:</strong> ${block ? 'Blocklager' : 'Regal'}</p>
-                        <p><strong>Scans:</strong> 1</p>`
+                        name, 
+                        `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${block ? 'Blocklager' : 'Regal'}</p> <p><strong>Scans:</strong> 1</p>`,
+                        '✅'
                     );
-                    // Artikel-Liste im Hintergrund neu laden, falls aktiv
-                    if (currentTabId === 'listTab') loadArticleList(document.getElementById('articleSearch').value);
+                    
+                    if (currentTabId === 'listTab') loadArticleList();
                 }
             }
 
-            // --- ARTIKELLISTE LOGIK (NEU) ---
+
+            /* --- ADMIN EDIT LOGIK --- */
             
-            /**
-             * Rendert die Artikel-Liste ins DOM.
-             * @param {Array} articles - Array von Artikel-Objekten.
-             */
-            function renderArticleList(articles) {
-                const listContainer = document.getElementById('articleList');
-                listContainer.innerHTML = '';
-                
-                if (articles.length === 0) {
-                    listContainer.innerHTML = '<p style="text-align: center; opacity: 0.5; margin-top: 40px;">Keine Artikel gefunden.</p>';
+            function showAdminEditPopup(article) {
+                if (window.currentUserRole !== 'admin') {
+                    showToast("Keine Berechtigung zum Bearbeiten.", 'error');
                     return;
                 }
                 
-                articles.forEach(article => {
-                    const item = document.createElement('div');
-                    item.className = `article-item ${article.blocklager ? 'block' : ''}`;
-                    
-                    // ACHTUNG: Der Artikel benötigt keine 'id' für die Anzeige
-                    item.innerHTML = `
-                        <div class="article-item-details">
-                            <strong>${article.name}</strong>
-                            <span>Stellplatz: ${article.stellplatz} | Barcode: ${article.barcode}</span>
-                        </div>
-                        <div class="article-item-scans">
-                            <span class="count">${article.scans}</span>
-                            <span class="label">Scans</span>
-                        </div>
-                    `;
-                    listContainer.appendChild(item);
-                });
-            }
-            
-            /**
-             * Lädt die Artikelliste von Supabase.
-             * @param {string} searchTerm - Optionaler Suchbegriff.
-             */
-            async function loadArticleList(searchTerm = '') {
-                if (!window.appSupabaseClient) return;
-
-                let query = window.appSupabaseClient
-                    // ENTFERNT: 'id' aus der SELECT-Liste, da die Spalte im Schema des Benutzers nicht existiert.
-                    .from("artikel")
-                    .select("name, stellplatz, barcode, blocklager, scans"); 
-
-                if (searchTerm.length > 0) {
-                    // Suche in Name, Barcode und Stellplatz (case-insensitive)
-                    const search = `%${searchTerm.toLowerCase()}%`;
-                    query = query.or(`name.ilike.${search},barcode.ilike.${search},stellplatz.ilike.${search}`);
-                }
+                window.articleToEdit = article;
                 
-                // Sortierung nach Name, damit die Liste konsistent ist
-                query = query.order('name', { ascending: true });
+                document.getElementById('adminEditName').value = article.name;
+                document.getElementById('adminEditBarcode').value = article.barcode;
+                document.getElementById('adminEditPlatz').value = article.stellplatz; // Aktuellen Wert setzen
+                
+                document.getElementById('adminEditPopupOverlay').style.display = "flex";
+                // Verzögerung für die CSS-Transition
+                setTimeout(() => document.getElementById('adminEditPopupOverlay').classList.add('show'), 10);
+            }
 
-                const { data, error } = await query;
+            function hideAdminEditPopup() {
+                document.getElementById('adminEditPopupOverlay').classList.remove('show');
+                
+                // Timeout, um sicherzustellen, dass die Transition abgeschlossen ist
+                setTimeout(() => {
+                    document.getElementById('adminEditPopupOverlay').style.display = "none";
+                    window.articleToEdit = null;
+                }, 300);
+            }
+
+            async function saveAdminEdit() {
+                if (!window.articleToEdit) return;
+
+                const newPlatz = document.getElementById('adminEditPlatz').value.trim();
+
+                if (!newPlatz) {
+                    showToast("Der Stellplatz darf nicht leer sein.", "error");
+                    return;
+                }
+
+                const { error } = await window.appSupabaseClient
+                    .from("artikel")
+                    .update({ 
+                        stellplatz: newPlatz 
+                    })
+                    .eq("barcode", window.articleToEdit.barcode);
 
                 if (error) {
-                    console.error("Fehler beim Laden der Artikel:", error);
-                    renderArticleList([]);
-                    showToast("Fehler beim Laden der Artikelliste.", "error");
-                    return;
+                    showToast(`FEHLER beim Speichern des Stellplatzes.`, "error");
+                    console.error("Speicherfehler:", error);
+                } else {
+                    hideAdminEditPopup();
+                    showToast(`Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`, "success");
+                    loadArticleList(); // Liste aktualisieren
                 }
-                
-                renderArticleList(data || []);
+            }
+
+
+            /* --- RESULT CARD LOGIK --- */
+            
+            function showResultCard(title, contentHTML, icon) {
+                document.getElementById('cardTitleText').innerText = title;
+                document.getElementById('cardContent').innerHTML = contentHTML;
+                document.getElementById('cardStatusIcon').innerText = icon;
+                document.getElementById('result-card').classList.add('active');
             }
             
-            /**
-             * Debounced Funktion für die Suche.
-             */
-            function handleSearchInput() {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    const searchTerm = document.getElementById('articleSearch').value.trim();
-                    loadArticleList(searchTerm);
-                }, 300); // 300ms Verzögerung für flüssige Eingabe
-            }
-
-            // --- AUTHENTIFIZIERUNG & NAVIGATION ---
-
-            /**
-             * Wechselt die aktiven Tabs und die Navigationselemente.
-             */
-            function switchTab(targetTabId) {
-                if (targetTabId === currentTabId) return; // Bereits aktiv
+            function hideResultCard() {
+                document.getElementById('result-card').classList.remove('active');
+                lastCode = ""; // Wichtig: Zurücksetzen, um den nächsten Scan zu ermöglichen
                 
-                // Tabs verwalten
-                document.querySelectorAll('.tab-content').forEach(tab => {
-                    tab.classList.remove('active');
+                // Starte den Scanner wieder, wenn wir uns im Scanner-Tab befinden
+                if (html5QrCode && currentTabId === 'scannerTab') {
+                    html5QrCode.resume();
+                }
+            }
+            
+            
+            /* --- ARTIKEL LISTE LOGIK --- */
+            
+            async function loadArticleList() {
+                const articleListContainer = document.getElementById('articleList');
+                articleListContainer.innerHTML = '<li>Lade Artikel...</li>'; // Lade-Status anzeigen
+
+                const { data, error } = await window.appSupabaseClient
+                    .from("artikel")
+                    .select("*")
+                    .order("name", { ascending: true }); // Nach Name sortieren
+                    
+                if (error) {
+                    showToast("Fehler beim Laden der Artikelliste.", 'error');
+                    articleListContainer.innerHTML = '<li>FEHLER: Die Liste konnte nicht von der Datenbank geladen werden.</li>';
+                    console.error("Fehler beim Laden der Artikel:", error);
+                    return;
+                }
+
+                articleListContainer.innerHTML = ''; // Liste leeren
+                
+                if (data.length === 0) {
+                    articleListContainer.innerHTML = '<li style="border-left-color: rgba(255, 255, 255, 0.2);">Noch keine Artikel vorhanden. Scannen Sie einen Barcode, um zu starten.</li>';
+                    return;
+                }
+
+                data.forEach(item => {
+                    const listItem = document.createElement('li');
+                    
+                    // Füge den Klick-Handler nur für Admins hinzu
+                    if (window.currentUserRole === 'admin') {
+                        listItem.onclick = () => showAdminEditPopup(item);
+                        listItem.style.cursor = 'pointer'; 
+                        listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
+                    }
+
+                    const details = `
+                        <div class="item-details">
+                            <strong>${item.name}</strong>
+                            <span>Stellplatz: ${item.stellplatz} | Barcode: ${item.barcode}</span>
+                        </div>
+                        <div class="item-count">${item.scans}</div>
+                    `;
+                    listItem.innerHTML = details;
+                    articleListContainer.appendChild(listItem);
                 });
+            }
+            
+
+            /* --- NAVIGATION LOGIK --- */
+            
+            function changeTab(targetTabId) {
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+
                 document.getElementById(targetTabId).classList.add('active');
 
-                // Navigation verwalten
                 document.querySelectorAll('.nav-item').forEach(item => {
                     item.classList.remove('active');
                     if (item.getAttribute('data-tab') === targetTabId) {
@@ -1177,157 +1254,36 @@
                 });
 
                 currentTabId = targetTabId;
-                
-                // Logik basierend auf dem neuen Tab
+                hideResultCard();
+
                 if (targetTabId === 'scannerTab') {
-                    // Wenn der Scanner-Tab aktiv wird, starte die Kamera
-                    activateCamera(); // Ruft activateCamera auf, um Overlay zu verstecken und startScanner zu rufen
+                    activateCamera();
                 } else {
-                    // Wenn ein anderer Tab aktiv wird, stoppe die Kamera
                     stopScanner();
-                    hideResultCard();
+                    
                     if (targetTabId === 'listTab') {
-                        // Lade die Liste nur, wenn der Tab zum ersten Mal geöffnet wird oder der Suchbegriff leer ist
-                        loadArticleList(document.getElementById('articleSearch').value.trim());
+                        loadArticleList();
                     }
-                }
-            }
-
-
-            /**
-             * Wechselt die Haupt-Ansicht mit sanfter Animation.
-             */
-            function switchView(targetViewId) {
-                const loginView = document.getElementById('loginView');
-                const appView = document.getElementById('appView');
-
-                if (targetViewId === 'appView') {
-                    loginView.classList.remove('active');
-                    appView.classList.add('active');
-                    // Sicherstellen, dass der Scanner-Tab aktiv ist und die Kamera initialisiert
-                    switchTab('scannerTab'); 
-                } else {
-                    appView.classList.remove('active');
-                    loginView.classList.add('active');
                 }
             }
             
-            /**
-             * Meldet den Benutzer ab und lädt die Seite neu.
-             */
             async function logout() {
-                if (!window.appSupabaseClient) {
-                    window.location.reload();
-                    return;
-                }
-
-                // Kamera stoppen
-                await stopScanner();
-
-                await window.appSupabaseClient.auth.signOut();
-                window.location.reload(); // Erzwingt den sauberen Start in der Login-Ansicht
+                stopScanner();
+                
+                // Zur Login-Ansicht zurück
+                switchView('loginView');
+                window.currentPin = "";
+                window.currentUserRole = null; 
+                updatePinIndicators();
+                showToast("Erfolgreich abgemeldet.", 'info');
+                lastCode = "";
+                
+                document.getElementById("userDisplay").innerText = ""; 
             }
 
-            async function loginWithCode(enteredCode) {
-                if (!window.appSupabaseClient) {
-                    document.getElementById("authError").innerText = "Datenbank nicht bereit.";
-                    updatePinIndicators(true);
-                    window.currentPin = "";
-                    return;
-                }
-                
-                // NEU: Setze isAuthReady temporär auf false, um Doppel-Logins während der Überprüfung zu vermeiden
-                isAuthReady = false; 
-                document.getElementById("authContent").style.display = "none";
-                document.getElementById("loadingAuth").style.display = "block";
-
-
-                if (enteredCode === MASTER_ACCESS_CODE) {
-                    try {
-                        // Da der Benutzer bereits eine Session haben könnte (durch das Neuladen),
-                        // ist signInAnonymously() riskant. Wir müssen den Erfolg abwarten und
-                        // das Error-Handling verbessern.
-                        const { data, error } = await window.appSupabaseClient.auth.signInAnonymously();
-
-                        if (error || !data.user) {
-                            document.getElementById("authError").innerText = "Anmeldefehler. Prüfen Sie die Konfiguration.";
-                            updatePinIndicators(true);
-                        } else {
-                            showToast("Login erfolgreich!", "success");
-                            switchView('appView');
-                            currentUserId = data.user.id;
-                            document.getElementById("userDisplay").innerText = "ANONYM (ID: " + currentUserId.substring(0, 4) + ")";
-                            // WICHTIG: PIN wird nur bei Erfolg oder nach Fehlerausgabe zurückgesetzt
-                        }
-                    } catch (e) {
-                        console.error("Kritischer Anmeldefehler:", e);
-                        document.getElementById("authError").innerText = "Kritischer Fehler.";
-                        updatePinIndicators(true);
-                    }
-                } else {
-                    document.getElementById("authError").innerText = "Falscher Code.";
-                    updatePinIndicators(true);
-                }
-                
-                // Cleanup nach dem Login-Versuch (Erfolg oder Misserfolg)
-                setTimeout(() => {
-                    window.currentPin = "";
-                    updatePinIndicators();
-                    // NEU: Zeige AuthContent wieder, falls nicht zur App gewechselt wurde
-                    if (document.getElementById('appView').classList.contains('active')) {
-                        document.getElementById("loadingAuth").style.display = "none";
-                    } else {
-                        document.getElementById("authContent").style.display = "flex";
-                        document.getElementById("loadingAuth").style.display = "none";
-                        isAuthReady = true; // Freigeben für neuen Versuch
-                    }
-                }, 500);
-
-            }
-
-            /**
-             * Überprüft den Anmeldestatus beim Laden und navigiert.
-             */
-            async function checkLogin() {
-                const loadingIndicator = document.getElementById("loadingAuth");
-                const authContent = document.getElementById("authContent");
-
-                if (!window.appSupabaseClient) {
-                    document.getElementById("authError").innerText = "⚠️ Supabase nicht verbunden.";
-                    loadingIndicator.style.display = "none";
-                    authContent.style.display = "flex";
-                    isAuthReady = true;
-                    return;
-                }
-                
-                loadingIndicator.style.display = "block";
-                authContent.style.display = "none";
-
-                // Warten auf die Session-Prüfung von Supabase
-                const { data } = await window.appSupabaseClient.auth.getSession();
-                const currentSession = data.session;
-                
-                // Session-Check beendet
-                isAuthReady = true;
-                loadingIndicator.style.display = "none";
-
-
-                if (currentSession) {
-                    currentUserId = currentSession.user.id;
-                    switchView('appView');
-                    document.getElementById("userDisplay").innerText = "ANONYM (ID: " + currentUserId.substring(0, 4) + ")";
-                    hideResultCard();
-                    loadArticleList();
-                } else {
-                    switchView('loginView');
-                    currentUserId = null;
-                    authContent.style.display = "flex"; // Zeige Keypad, da keine Session gefunden wurde
-                }
-            }
 
             // Start der Anwendung
             window.onload = function() {
-                // Keine onAuthStateChange-Listener mehr, da checkLogin jetzt die Hauptlogik steuert
                 checkLogin();
                 updatePinIndicators(); // Setze Indikatoren auf 0
             };
