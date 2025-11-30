@@ -5,39 +5,266 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Stellplatz App</title>
 
-<!-- Supabase & Scanner laden -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://unpkg.com/html5-qrcode"></script>
+<!-- Firebase/Firestore/Auth Module Imports -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { 
+        getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { 
+        getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, 
+        collection, query, where, getDocs, runTransaction 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-<script>
-// ---------------------------------------------------------
-// KONFIGURATION: Lese Schlüssel aus globalen Variablen und setze Supabase-Werte
-// ---------------------------------------------------------
+    // Setze Firestore Log Level auf Debug (Hilfreich bei der Entwicklung)
+    setLogLevel('Debug');
+    
+    // --- CANVAS GLOBALE VARIABLEN ---
+    // Diese Variablen werden vom Canvas-System zur Verfügung gestellt und sind sicher.
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-// Canvas/Google-spezifische Variablen (für Firestore, hier nur zur Kenntnisnahme)
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-
-// Supabase-Konfiguration (MUSS MANUELL HIER EINGEFÜGT WERDEN)
-// BITTE ERSETZE DIE PLATZHALTER MIT DEINEN ECHTEN WERTEN!
-// ---------------------------------------------------------
-var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
-var MASTER_ACCESS_CODE = "123456"; // <<<<<<<<<<<<<<< WICHTIG: Setzen Sie hier Ihren Code fest
-// ---------------------------------------------------------
-
-// Initialisierung
-(function() {
-    // Wenn der Key der Platzhalter ist, kann keine Verbindung hergestellt werden.
-    if (APP_SUPABASE_KEY === "DEV_ANON_KEY_PLACEHOLDER" || !APP_SUPABASE_URL) {
-        window.appSupabaseClient = null;
-        console.error("Supabase-Client konnte nicht initialisiert werden. Bitte KEY und URL setzen.");
-    } else if (window['supabase']) {
-        window.appSupabaseClient = window['supabase'].createClient(APP_SUPABASE_URL, APP_SUPABASE_KEY);
-    }
+    // --- FIREBASE INITIALISIERUNG ---
+    window.app = initializeApp(firebaseConfig);
+    window.db = getFirestore(window.app);
+    window.auth = getAuth(window.app);
+    
+    // Globaler Verweis für Master Code (Bleibt im Klartext, da es nur ein lokaler Vergleich ist)
+    window.MASTER_ACCESS_CODE = "123456"; 
     window.currentPin = ""; // Speichert den aktuell eingegebenen PIN-Code
-})();
+
+    /**
+     * Berechnet den Pfad zur Artikelsammlung für den aktuellen Benutzer.
+     * Daten werden als privat im Benutzerbereich gespeichert.
+     * Pfad: /artifacts/{appId}/users/{userId}/artikel
+     */
+    function getArtikelCollectionRef(userId) {
+        if (!userId) {
+            console.error("Kann Collection nicht abrufen: Benutzer-ID fehlt.");
+            return null;
+        }
+        return collection(window.db, `artifacts/${appId}/users/${userId}/artikel`);
+    }
+
+    /**
+     * Überprüft den Anmeldestatus und aktualisiert die UI.
+     */
+    async function checkLogin() { 
+        // 1. Authentifizierung durchführen oder Zustand prüfen
+        if (!window.auth.currentUser) {
+            try {
+                if (initialAuthToken) {
+                    // Signiert mit sicherem Custom Token
+                    await signInWithCustomToken(window.auth, initialAuthToken);
+                } else {
+                    // Fallback: Anonym anmelden (weniger sicher, aber funktioniert ohne Token)
+                    await signInAnonymously(window.auth);
+                }
+            } catch (error) {
+                console.error("Initialer Anmeldefehler:", error);
+                document.getElementById("authError").innerText = "Datenbankverbindung fehlgeschlagen.";
+                document.getElementById("loginView").style.display = "flex";
+                document.getElementById("appView").style.display = "none";
+                return;
+            }
+        }
+        
+        const user = window.auth.currentUser;
+
+        if (user) {
+            window.currentUserId = user.uid;
+            document.getElementById("loginView").style.display = "none";
+            document.getElementById("appView").style.display = "flex";
+            document.getElementById("userDisplay").innerText = user.uid.substring(0, 8) + '...'; // Gekürzte ID zeigen
+            window.currentPin = ""; 
+            updatePinIndicators();
+            document.getElementById("popup").style.display = "none"; 
+        } else {
+            window.currentUserId = null;
+            document.getElementById("loginView").style.display = "flex";
+            document.getElementById("appView").style.display = "none";
+            window.currentPin = ""; 
+            updatePinIndicators();
+            showAuthError("", false); 
+        }
+    }
+
+    /**
+     * Verarbeitet die Eingabe von Ziffern über den Ziffernblock.
+     */
+    window.handlePinInput = async function(value) {
+        // ... (PIN-Logik bleibt gleich)
+        showAuthError("", false); 
+
+        if (value === 'backspace') {
+            window.currentPin = window.currentPin.slice(0, -1);
+        } else if (value === 'clear') {
+             window.currentPin = "";
+        } else if (value.match(/[0-9]/) && window.currentPin.length < window.MASTER_ACCESS_CODE.length) {
+            window.currentPin += value;
+        }
+
+        updatePinIndicators();
+
+        if (window.currentPin.length === window.MASTER_ACCESS_CODE.length) {
+            await loginWithCode(window.currentPin);
+        }
+    }
+
+    /**
+     * Führt die Anmeldung mit dem Master Code durch.
+     */
+    async function loginWithCode(enteredCode) {
+        showAuthError("", false); 
+
+        if (enteredCode === window.MASTER_ACCESS_CODE) {
+            // Beim erfolgreichen Code-Check wird der Auth-State als "eingeloggt" betrachtet.
+            // Der User ist bereits anonym angemeldet (siehe checkLogin).
+            // Wir müssen hier nur die UI umschalten, da die Session bereits steht.
+            await checkLogin(); 
+            // Optional: Hier könnte man auf einen permanenten Account upgraden,
+            // aber für diesen Scope reicht die anonyme Session.
+        } else {
+            showAuthError("❌ Falscher Zugangscode.", true);
+            updatePinIndicators(true);
+            
+            setTimeout(() => {
+                window.currentPin = "";
+                updatePinIndicators();
+            }, 500);
+        }
+    }
+    
+    /**
+     * Barcode erfolgreich gescannt.
+     */
+    window.onScanSuccess = async function(code) {
+        if (code === window.lastCode) return; 
+        window.lastCode = code; 
+        
+        if(window.html5QrCode) window.html5QrCode.pause();
+
+        showResult("Lade Daten...", "loading");
+
+        if(!window.auth.currentUser) {
+            showResult("Fehler: Kein aktiver Benutzer angemeldet.", "error");
+            setTimeout(() => { window.lastCode = ""; if(window.html5QrCode) window.html5QrCode.resume(); }, 1000); 
+            return;
+        }
+
+        const artikelRef = getArtikelCollectionRef(window.currentUserId);
+        if (!artikelRef) return;
+        
+        let foundData = null;
+
+        // --- Suche den Artikel per Barcode ---
+        try {
+            const q = query(artikelRef, where("barcode", "==", code));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+                // Ein Artikel gefunden
+                const docSnap = querySnapshot.docs[0];
+                foundData = { id: docSnap.id, ...docSnap.data() };
+            }
+        } catch (e) {
+            console.error("Fehler beim Abrufen des Artikels:", e);
+            showResult(`Fehler beim Abrufen: ${e.message}`, "error");
+            setTimeout(() => { window.lastCode = ""; if(window.html5QrCode) window.html5QrCode.resume(); }, 2000);
+            return;
+        }
+
+
+        if (foundData) {
+            // --- Transaktion zum inkrementieren der Scans ---
+            const docRef = doc(artikelRef, foundData.id);
+            try {
+                await runTransaction(window.db, async (transaction) => {
+                    const freshDoc = await transaction.get(docRef);
+                    if (!freshDoc.exists()) {
+                        throw "Dokument existiert nicht mehr!";
+                    }
+                    const newScans = (freshDoc.data().scans || 0) + 1;
+                    transaction.update(docRef, { scans: newScans });
+                    
+                    showResult(
+                        `<strong>${freshDoc.data().name}</strong><br>
+                         📍 Platz: ${freshDoc.data().stellplatz}<br>
+                         📊 Scans: ${newScans}`, 
+                        "success"
+                    );
+                });
+            } catch (e) {
+                console.error("Transaktionsfehler:", e);
+                showResult(`Fehler beim Zähler-Update: ${e.message}`, "error");
+            }
+            
+            setTimeout(() => {
+                window.lastCode = ""; 
+                if(window.html5QrCode) window.html5QrCode.resume();
+            }, 2000);
+
+        } else {
+            showResult(`Unbekannter Barcode:<br><em>${code}</em>`, "error");
+            // Zeige das Popup an, wenn der Artikel unbekannt ist.
+            document.getElementById("popup").style.display = "flex";
+        }
+    }
+
+    /**
+     * Speichert den neuen Artikel in Firestore.
+     */
+    window.save = async function() {
+        const name = document.getElementById("name").value;
+        const platz = document.getElementById("platz").value;
+        const block = document.getElementById("block").checked;
+
+        if(!name || !platz) {
+            showResult(`FEHLER: Bitte Name und Platz ausfüllen.`, "error"); 
+            return;
+        }
+
+        const artikelRef = getArtikelCollectionRef(window.currentUserId);
+        if (!artikelRef) return;
+
+        try {
+            await addDoc(artikelRef, {
+                barcode: window.lastCode, // lastCode ist der aktuelle, unbekannte Code
+                name: name,
+                stellplatz: platz,
+                blocklager: block,
+                scans: 1,
+                createdAt: new Date().toISOString()
+            });
+
+            hidePopup();
+            showResult(`Gespeichert: <strong>${name}</strong>`, "success");
+        } catch (e) {
+             console.error("Fehler beim Speichern:", e);
+             showResult(`FEHLER beim Speichern: ${e.message}`, "error");
+        }
+    }
+
+    /**
+     * Meldet den Benutzer ab.
+     */
+    window.logout = async function() {
+        if (window.html5QrCode) {
+            window.html5QrCode.stop().catch(err => console.warn("Kamera Stoppen fehlgeschlagen:", err));
+        }
+        await signOut(window.auth);
+        window.currentUserId = null;
+        await checkLogin();
+    }
+    
+    // Initialer Aufruf
+    onAuthStateChanged(window.auth, () => {
+        checkLogin();
+    });
 </script>
+
 
 <style>
 /* --- GLOBALE STYLES & HINTERGRUND --- */
@@ -399,7 +626,8 @@ input:focus {
     <header>
         <h1>Lager Scanner</h1>
         <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="font-size: 0.8em; opacity: 0.7;" id="userDisplay">ANONYM</div>
+            <!-- ID-Anzeige, gekürzt für UI-Zwecke -->
+            <div style="font-size: 0.8em; opacity: 0.7;" id="userDisplay">...</div>
             <button class="header-button" onclick="logout()">Abmelden</button>
         </div>
     </header>
@@ -443,11 +671,12 @@ input:focus {
 </div>
 
 <script>
-    var lastCode = "";
-    var html5QrCode = null;
-    var currentUserId = null; 
+    // --- Variablen außerhalb des Moduls definieren, damit sie global zugänglich sind ---
+    window.lastCode = "";
+    window.html5QrCode = null;
+    window.currentUserId = null; 
     
-    // --- PIN-FELD LOGIK ---
+    // --- PIN-FELD LOGIK (funktioniert jetzt mit den globalen Variablen aus dem Modul) ---
 
     /**
      * Aktualisiert die visuellen PIN-Indikatoren basierend auf der Länge des aktuellen Codes.
@@ -463,29 +692,6 @@ input:focus {
                 indicator.classList.add('active');
             }
         });
-    }
-
-    /**
-     * Verarbeitet die Eingabe von Ziffern über den Ziffernblock.
-     * @param {string} value - Die eingegebene Ziffer ('0'-'9'), 'backspace' oder 'clear'.
-     */
-    async function handlePinInput(value) {
-        showAuthError("", false); // Fehler zurücksetzen
-
-        if (value === 'backspace') {
-            window.currentPin = window.currentPin.slice(0, -1);
-        } else if (value === 'clear') {
-             window.currentPin = "";
-        } else if (value.match(/[0-9]/) && window.currentPin.length < MASTER_ACCESS_CODE.length) {
-            window.currentPin += value;
-        }
-
-        updatePinIndicators();
-
-        // Wenn die maximale Länge erreicht ist, wird versucht, sich anzumelden.
-        if (window.currentPin.length === MASTER_ACCESS_CODE.length) {
-            await loginWithCode(window.currentPin);
-        }
     }
 
     // --- UI FUNKTIONEN ---
@@ -518,7 +724,6 @@ input:focus {
         errorElement.innerText = message;
         errorElement.classList.remove('error-shake');
         if (shake && message) {
-            // Re-apply Class to restart animation
             void errorElement.offsetWidth; 
             errorElement.classList.add('error-shake');
         }
@@ -526,15 +731,14 @@ input:focus {
 
     // --- KAMERA FUNKTIONEN ---
 
-    function activateCamera() {
-        // Blende den Start-Overlay aus
+    window.activateCamera = function() {
         document.getElementById("preScan").style.display = "none"; 
         startScanner();
     }
 
     function startScanner() {
-        if (html5QrCode) {
-            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess)
+        if (window.html5QrCode) {
+            window.html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, window.onScanSuccess)
             .catch(err => {
                 showAuthError("Kamera Fehler: " + err, true);
                 document.getElementById("preScan").style.display = "flex";
@@ -542,15 +746,15 @@ input:focus {
             return;
         }
 
-        html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start(
+        window.html5QrCode = new Html5Qrcode("reader");
+        window.html5QrCode.start(
             { facingMode: "environment" },
             { 
                 fps: 10, 
                 qrbox: { width: 250, height: 250 }, 
                 aspectRatio: 1.0 
             },
-            onScanSuccess
+            window.onScanSuccess
         ).catch(err => {
             console.error(err);
             showAuthError("Zugriff verweigert oder Fehler: " + err, true);
@@ -558,235 +762,16 @@ input:focus {
         });
     }
 
-    async function onScanSuccess(code) {
-        if (code === lastCode) return; 
-        lastCode = code; // Sofort setzen, um Doppelerkennung zu vermeiden
-        
-        if(html5QrCode) html5QrCode.pause();
-
-        showResult("Lade Daten...", "loading");
-
-        if(!window.appSupabaseClient) {
-            showResult("Datenbank nicht verbunden. Bitte KEY und URL prüfen.", "error");
-            // Scanner wieder starten, da keine DB-Operation ausgeführt wurde
-            setTimeout(() => {
-                lastCode = ""; 
-                if(html5QrCode) html5QrCode.resume();
-            }, 1000); 
-            return;
-        }
-
-        // --- Exponential Backoff Retry ---
-        const MAX_RETRIES = 3;
-        let data = null;
-        let error = null;
-
-        for (let i = 0; i < MAX_RETRIES; i++) {
-            const result = await window.appSupabaseClient
-                .from("artikel")
-                .select("*")
-                .eq("barcode", code)
-                .single();
-            
-            data = result.data;
-            error = result.error;
-
-            if (data || !error || error.code !== '500') {
-                // Bei Erfolg oder nicht-serverbedingtem Fehler abbrechen
-                break;
-            }
-
-            // Exponential Backoff Delay
-            const delay = Math.pow(2, i) * 100;
-            await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        // --- Ende Retry Logik ---
-
-
-        if (data) {
-            // Update erfolgt nur, wenn der initiale Select erfolgreich war
-            await window.appSupabaseClient
-                .from("artikel")
-                .update({ scans: data.scans + 1 })
-                .eq("barcode", code);
-
-            showResult(
-                `<strong>${data.name}</strong><br>
-                 📍 Platz: ${data.stellplatz}<br>
-                 📊 Scans: ${data.scans + 1}`, 
-                "success"
-            );
-            
-            setTimeout(() => {
-                lastCode = ""; 
-                if(html5QrCode) html5QrCode.resume();
-            }, 2000); // Längere Anzeigezeit für Erfolg
-
-        } else {
-            showResult(`Unbekannter Barcode:<br><em>${code}</em>`, "error");
-            // Wenn der Artikel unbekannt ist, zeige das Popup an.
-            document.getElementById("popup").style.display = "flex";
-        }
-    }
-
     // --- POPUP LOGIK ---
 
-    function hidePopup() {
+    window.hidePopup = function() {
         document.getElementById("popup").style.display = "none";
-        lastCode = "";
+        window.lastCode = "";
         document.getElementById("name").value = "";
         document.getElementById("platz").value = "";
         document.getElementById("block").checked = false;
-        // Scanner wieder starten, wenn das Popup geschlossen wird
-        if(html5QrCode) html5QrCode.resume(); 
+        if(window.html5QrCode) window.html5QrCode.resume(); 
     }
-
-    async function save() {
-        const name = document.getElementById("name").value;
-        const platz = document.getElementById("platz").value;
-        const block = document.getElementById("block").checked;
-
-        if(!name || !platz) {
-            // Wichtig: Keine alert() verwenden. Besser wäre ein eigenes Modal.
-            // Für diesen Fall zeigen wir einen Fehler im Result-Feld.
-            showResult(`FEHLER: Bitte Name und Platz ausfüllen.`, "error"); 
-            return;
-        }
-
-        if(!window.appSupabaseClient) {
-             showResult("Datenbank nicht verbunden. Speichern nicht möglich.", "error");
-             return;
-        }
-
-        const result = await window.appSupabaseClient.from("artikel").insert([{
-            barcode: lastCode,
-            name: name,
-            stellplatz: platz,
-            blocklager: block,
-            scans: 1
-        }]);
-
-        if (result.error) {
-             showResult(`FEHLER beim Speichern: ${result.error.message}`, "error");
-        } else {
-            hidePopup();
-            showResult(`Gespeichert: <strong>${name}</strong>`, "success");
-        }
-    }
-
-    // --- LOGOUT FUNKTION ---
-    async function logout() {
-        if (!window.appSupabaseClient) return;
-        
-        if (html5QrCode) {
-            html5QrCode.stop().catch(err => console.warn("Kamera Stoppen fehlgeschlagen:", err));
-        }
-
-        await window.appSupabaseClient.auth.signOut();
-        
-        await checkLogin(null, null); 
-    }
-
-
-    // --- AUTHENTIFIZIERUNG (MASTER CODE) ---
-    
-    async function loginWithCode(enteredCode) {
-        showAuthError("", false); 
-
-        // Prüfen, ob der Supabase Key ein Platzhalter ist
-        if (APP_SUPABASE_KEY === "DEV_ANON_KEY_PLACEHOLDER") {
-            showAuthError("⚠️ FEHLER: Supabase Key fehlt (bitte im Code einfügen).", true);
-            updatePinIndicators(true);
-            window.currentPin = "";
-            return;
-        }
-        if (!window.appSupabaseClient) {
-            showAuthError("❌ Datenbank-Verbindung nicht initialisiert.", true);
-            updatePinIndicators(true);
-            window.currentPin = "";
-            return;
-        }
-
-        if (enteredCode === MASTER_ACCESS_CODE) {
-            
-            try {
-                // ANMERKUNG: Supabase Anonyme Anmeldung wird hier verwendet, um eine Session zu erhalten.
-                const { data, error } = await window.appSupabaseClient.auth.signInAnonymously();
-                
-                if (error) {
-                    showAuthError("Fehler bei der Anmeldung: " + error.message, true);
-                    updatePinIndicators(true);
-                    window.currentPin = "";
-                } else if (data.user) {
-                    await checkLogin(null, data.session); 
-                } else {
-                     showAuthError("Anmeldung fehlgeschlagen.", true);
-                     updatePinIndicators(true);
-                     window.currentPin = "";
-                }
-            } catch (e) {
-                console.error("Kritischer Anmeldefehler:", e);
-                showAuthError("Kritischer Fehler während der Anmeldung.", true);
-                updatePinIndicators(true);
-                window.currentPin = "";
-            }
-        } else {
-            showAuthError("❌ Falscher Zugangscode.", true);
-            updatePinIndicators(true);
-            
-            setTimeout(() => {
-                window.currentPin = "";
-                updatePinIndicators();
-            }, 500);
-        }
-    }
-
-
-    /**
-     * Überprüft den Anmeldestatus und aktualisiert die UI (Login vs. App).
-     */
-    async function checkLogin(event, session) { 
-        if(!window.appSupabaseClient) {
-            document.getElementById("loginView").style.display = "flex";
-            document.getElementById("appView").style.display = "none";
-            showAuthError("⚠️ Supabase Konfiguration fehlt. App deaktiviert.", false);
-            return;
-        }
-
-        let currentSession = session;
-
-        if (!currentSession) {
-            const { data } = await window.appSupabaseClient.auth.getSession();
-            currentSession = data.session;
-        }
-
-        if (currentSession) {
-            currentUserId = currentSession.user.id;
-            document.getElementById("loginView").style.display = "none";
-            document.getElementById("appView").style.display = "flex";
-            document.getElementById("userDisplay").innerText = "ANONYM"; 
-            window.currentPin = ""; 
-            updatePinIndicators();
-            // Beim erfolgreichen Login das Popup verstecken, falls es aus Versehen sichtbar ist
-            document.getElementById("popup").style.display = "none"; 
-        } else {
-            currentUserId = null;
-            document.getElementById("loginView").style.display = "flex";
-            document.getElementById("appView").style.display = "none";
-            window.currentPin = ""; 
-            updatePinIndicators();
-            showAuthError("", false); 
-        }
-    }
-
-    // Start
-    if (window.appSupabaseClient) {
-        window.appSupabaseClient.auth.onAuthStateChange((event, session) => checkLogin(event, session));
-        checkLogin();
-    } else {
-        checkLogin(); // Zeigt den Fehler an, falls Supabase nicht initialisiert wurde
-    }
-
 </script>
 
 </body>
