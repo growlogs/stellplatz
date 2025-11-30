@@ -121,10 +121,15 @@
                 display: none;
                 flex-direction: column;
                 overflow-y: auto; /* List- und Log-Tabs brauchen Scrolling */
+                
+                /* KORREKTUR 1: Hintergrund setzen, um Durchscheinen von Inhalten zu verhindern. */
+                background: var(--color-bg-dark); 
+                z-index: 1; 
             }
             
             .tab-content.active {
                 display: flex;
+                z-index: 2; /* Aktiver Tab liegt immer oben */
             }
 
 
@@ -599,7 +604,8 @@
             
             /* --- ARTIKEL LIST VIEW STYLES --- */
             #listTab {
-                padding: 15px 15px 20px 15px;
+                /* KORREKTUR 2: Erhöhung des Padding-Bottom auf 80px (60px Nav Bar + 20px Puffer) */
+                padding: 15px 15px 80px 15px;
             }
             
             #articleList {
