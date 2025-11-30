@@ -700,12 +700,13 @@
         // --- POPUP LOGIK ---
         function hidePopup() {
             document.getElementById("popup").style.display = "none";
-            lastCode = "";
             document.getElementById("name").value = "";
             document.getElementById("platz").value = "";
             document.getElementById("block").checked = false;
 
             // Scanner wieder starten, wenn das Popup geschlossen wird
+            // Setze lastCode zurück, damit der nächste Scan ausgelöst werden kann
+            lastCode = "";
             if (html5QrCode) html5QrCode.resume();
         }
 
@@ -742,16 +743,32 @@
             }
         }
 
-        // --- LOGOUT FUNKTION ---
+        // --- LOGOUT FUNKTION (MIT RELOAD) ---
+        /**
+         * Meldet den Benutzer ab und lädt die Seite neu, um einen sauberen Zustand zu gewährleisten.
+         */
         async function logout() {
-            if (!window.appSupabaseClient) return;
+            if (!window.appSupabaseClient) {
+                // Wenn der Client nicht da ist, trotzdem neu laden
+                window.location.reload();
+                return;
+            }
 
+            // 1. Kamera stoppen
             if (html5QrCode && html5QrCode.isScanning) {
                 html5QrCode.stop().catch(err => console.warn("Kamera Stoppen fehlgeschlagen:", err));
             }
 
-            await window.appSupabaseClient.auth.signOut();
-            await checkLogin(null, null);
+            // 2. Supabase-Sitzung beenden
+            const { error } = await window.appSupabaseClient.auth.signOut();
+            
+            if (error) {
+                console.error("Logout Fehler:", error);
+            }
+            
+            // 3. Seite neu laden (simuliert den Redirect zu index.html)
+            // Dies erzwingt die erneute Ausführung des Initialisierungscodes.
+            window.location.reload();
         }
 
         // --- AUTHENTIFIZIERUNG (MASTER CODE) ---
