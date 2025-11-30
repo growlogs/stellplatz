@@ -180,6 +180,15 @@
                 height: 1.2em;
                 font-weight: 500;
             }
+            
+            /* NEU: Ladezustand für Login */
+            #loadingAuth {
+                text-align: center;
+                font-size: 1.1rem;
+                opacity: 0.7;
+                display: none; /* Wird dynamisch in JS angezeigt/versteckt */
+                margin-top: 40px;
+            }
 
             /* --- PIN INDICATORS --- */
             #pinIndicators {
@@ -648,38 +657,45 @@
                 <div id="authError"></div>
             </div>
 
-            <!-- PIN Indikatoren -->
-            <div id="pinIndicators">
-                <div class="pin-indicator" data-index="0"></div>
-                <div class="pin-indicator" data-index="1"></div>
-                <div class="pin-indicator" data-index="2"></div>
-                <div class="pin-indicator" data-index="3"></div>
-                <div class="pin-indicator" data-index="4"></div>
-                <div class="pin-indicator" data-index="5"></div>
+            <div id="loadingAuth">
+                Authentifiziere Session...
             </div>
 
-            <!-- Keypad -->
-            <div id="keypad" oncontextmenu="return false;">
-                <button class="keypad-button" onclick="handlePinInput('1')">1</button>
-                <button class="keypad-button" onclick="handlePinInput('2')">2</button>
-                <button class="keypad-button" onclick="handlePinInput('3')">3</button>
+            <!-- PIN Indikatoren & Keypad (Wird erst nach Session-Check angezeigt) -->
+            <div id="authContent" style="display: none; align-items: center; flex-direction: column;">
+                <!-- PIN Indikatoren -->
+                <div id="pinIndicators">
+                    <div class="pin-indicator" data-index="0"></div>
+                    <div class="pin-indicator" data-index="1"></div>
+                    <div class="pin-indicator" data-index="2"></div>
+                    <div class="pin-indicator" data-index="3"></div>
+                    <div class="pin-indicator" data-index="4"></div>
+                    <div class="pin-indicator" data-index="5"></div>
+                </div>
 
-                <button class="keypad-button" onclick="handlePinInput('4')">4</button>
-                <button class="keypad-button" onclick="handlePinInput('5')">5</button>
-                <button class="keypad-button" onclick="handlePinInput('6')">6</button>
+                <!-- Keypad -->
+                <div id="keypad" oncontextmenu="return false;">
+                    <button class="keypad-button" onclick="handlePinInput('1')">1</button>
+                    <button class="keypad-button" onclick="handlePinInput('2')">2</button>
+                    <button class="keypad-button" onclick="handlePinInput('3')">3</button>
 
-                <button class="keypad-button" onclick="handlePinInput('7')">7</button>
-                <button class="keypad-button" onclick="handlePinInput('8')">8</button>
-                <button class="keypad-button" onclick="handlePinInput('9')">9</button>
+                    <button class="keypad-button" onclick="handlePinInput('4')">4</button>
+                    <button class="keypad-button" onclick="handlePinInput('5')">5</button>
+                    <button class="keypad-button" onclick="handlePinInput('6')">6</button>
 
-                <!-- Aktionen -->
-                <button class="keypad-button action" onclick="handlePinInput('clear')">LÖSCHEN</button>
-                <button class="keypad-button" onclick="handlePinInput('0')">0</button>
-                <button class="keypad-button action backspace" onclick="handlePinInput('backspace')">
-                    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 5H9L3 12L9 19H21V5Z" stroke-width="2" />
-                    </svg>
-                </button>
+                    <button class="keypad-button" onclick="handlePinInput('7')">7</button>
+                    <button class="keypad-button" onclick="handlePinInput('8')">8</button>
+                    <button class="keypad-button" onclick="handlePinInput('9')">9</button>
+
+                    <!-- Aktionen -->
+                    <button class="keypad-button action" onclick="handlePinInput('clear')">LÖSCHEN</button>
+                    <button class="keypad-button" onclick="handlePinInput('0')">0</button>
+                    <button class="keypad-button action backspace" onclick="handlePinInput('backspace')">
+                        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 5H9L3 12L9 19H21V5Z" stroke-width="2" />
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -790,6 +806,7 @@
             var currentUserId = null;
             var currentTabId = 'scannerTab'; // Start-Tab
             var searchTimeout; // Für Debouncing der Suche
+            var isAuthReady = false; // NEU: Steuert, ob die PIN-Eingabe erlaubt ist
 
             // --- HILFSFUNKTIONEN ---
 
@@ -837,6 +854,12 @@
             }
 
             async function handlePinInput(value) {
+                // NEU: Sperre die Eingabe, bis der initiale Auth-Check abgeschlossen ist
+                if (!isAuthReady) {
+                    showToast("Bitte warten Sie, bis die Session geprüft wurde.", 'info', 1500);
+                    return;
+                }
+
                 document.getElementById("authError").innerText = ""; // Fehler zurücksetzen
 
                 if (value === 'backspace') {
@@ -1212,70 +1235,99 @@
                     window.currentPin = "";
                     return;
                 }
+                
+                // NEU: Setze isAuthReady temporär auf false, um Doppel-Logins während der Überprüfung zu vermeiden
+                isAuthReady = false; 
+                document.getElementById("authContent").style.display = "none";
+                document.getElementById("loadingAuth").style.display = "block";
+
 
                 if (enteredCode === MASTER_ACCESS_CODE) {
                     try {
+                        // Da der Benutzer bereits eine Session haben könnte (durch das Neuladen),
+                        // ist signInAnonymously() riskant. Wir müssen den Erfolg abwarten und
+                        // das Error-Handling verbessern.
                         const { data, error } = await window.appSupabaseClient.auth.signInAnonymously();
 
                         if (error || !data.user) {
                             document.getElementById("authError").innerText = "Anmeldefehler. Prüfen Sie die Konfiguration.";
                             updatePinIndicators(true);
-                            window.currentPin = "";
                         } else {
                             showToast("Login erfolgreich!", "success");
                             switchView('appView');
                             currentUserId = data.user.id;
                             document.getElementById("userDisplay").innerText = "ANONYM (ID: " + currentUserId.substring(0, 4) + ")";
-                            window.currentPin = "";
-                            updatePinIndicators();
+                            // WICHTIG: PIN wird nur bei Erfolg oder nach Fehlerausgabe zurückgesetzt
                         }
                     } catch (e) {
                         console.error("Kritischer Anmeldefehler:", e);
                         document.getElementById("authError").innerText = "Kritischer Fehler.";
                         updatePinIndicators(true);
-                        window.currentPin = "";
                     }
                 } else {
                     document.getElementById("authError").innerText = "Falscher Code.";
                     updatePinIndicators(true);
-                    setTimeout(() => {
-                        window.currentPin = "";
-                        updatePinIndicators();
-                    }, 500);
                 }
+                
+                // Cleanup nach dem Login-Versuch (Erfolg oder Misserfolg)
+                setTimeout(() => {
+                    window.currentPin = "";
+                    updatePinIndicators();
+                    // NEU: Zeige AuthContent wieder, falls nicht zur App gewechselt wurde
+                    if (document.getElementById('appView').classList.contains('active')) {
+                        document.getElementById("loadingAuth").style.display = "none";
+                    } else {
+                        document.getElementById("authContent").style.display = "flex";
+                        document.getElementById("loadingAuth").style.display = "none";
+                        isAuthReady = true; // Freigeben für neuen Versuch
+                    }
+                }, 500);
+
             }
 
             /**
              * Überprüft den Anmeldestatus beim Laden und navigiert.
              */
             async function checkLogin() {
+                const loadingIndicator = document.getElementById("loadingAuth");
+                const authContent = document.getElementById("authContent");
+
                 if (!window.appSupabaseClient) {
                     document.getElementById("authError").innerText = "⚠️ Supabase nicht verbunden.";
+                    loadingIndicator.style.display = "none";
+                    authContent.style.display = "flex";
+                    isAuthReady = true;
                     return;
                 }
+                
+                loadingIndicator.style.display = "block";
+                authContent.style.display = "none";
 
+                // Warten auf die Session-Prüfung von Supabase
                 const { data } = await window.appSupabaseClient.auth.getSession();
                 const currentSession = data.session;
+                
+                // Session-Check beendet
+                isAuthReady = true;
+                loadingIndicator.style.display = "none";
+
 
                 if (currentSession) {
                     currentUserId = currentSession.user.id;
                     switchView('appView');
                     document.getElementById("userDisplay").innerText = "ANONYM (ID: " + currentUserId.substring(0, 4) + ")";
                     hideResultCard();
-                    // Lade die Artikelliste direkt beim Start, damit sie bereit ist
                     loadArticleList();
                 } else {
                     switchView('loginView');
                     currentUserId = null;
+                    authContent.style.display = "flex"; // Zeige Keypad, da keine Session gefunden wurde
                 }
             }
 
             // Start der Anwendung
             window.onload = function() {
-                if (window.appSupabaseClient) {
-                    // Session-Listener, falls sich der Zustand im Hintergrund ändert
-                    window.appSupabaseClient.auth.onAuthStateChange(() => checkLogin());
-                }
+                // Keine onAuthStateChange-Listener mehr, da checkLogin jetzt die Hauptlogik steuert
                 checkLogin();
                 updatePinIndicators(); // Setze Indikatoren auf 0
             };
