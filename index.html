@@ -10,17 +10,17 @@
 
         <script>
             // ---------------------------------------------------------
-            // KONFIGURATION: Supabase und Master-Code
+            // KONFIGURATION: Supabase und Zugangs-Codes
             // ---------------------------------------------------------
             var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
             var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
             
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             // !!! KRITISCHE SICHERHEITSWARNUNG: DIESER CODE IST UNSICHER             !!!
-            // !!! Jeder, der den Quellcode betrachtet, kennt diesen Code.            !!!
             // !!! BITTE DIESE LOGIK DURCH EINE SUPABASE AUTHENTIFIZIERUNG ERSETZEN!  !!!
             // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            var MASTER_ACCESS_CODE = "123456"; 
+            var USER_ACCESS_CODE = "1234"; 
+            var ADMIN_ACCESS_CODE = "567890"; // 6-stellig für Admin-Zugriff
             // ---------------------------------------------------------
 
             // Initialisierung
@@ -34,13 +34,14 @@
                 window.currentPin = ""; // Speichert den aktuell eingegebenen PIN-Code
                 window.lastCode = ""; // Für Debouncing des Scanners
                 window.currentTabId = "scannerTab"; // Aktueller Tab
+                window.currentUserRole = null; // NEU: Speichert die Rolle ('user', 'admin' oder null)
             })();
         </script>
 
         <style>
             /* --- GLOBALE STYLES & FONT --- */
             :root {
-                --color-bg-dark: #0a0b10; /* Noch dunklerer Hintergrund */
+                --color-bg-dark: #0a0b10;
                 --color-bg-card: #1d222e;
                 --color-accent-blue: #007aff;
                 --color-accent-green: #34c759;
@@ -187,7 +188,7 @@
                 font-weight: 500;
             }
             
-            /* NEU: Ladezustand für Login */
+            /* Ladezustand für Login */
             #loadingAuth {
                 text-align: center;
                 font-size: 1.1rem;
@@ -214,7 +215,6 @@
             }
 
             .pin-indicator.active {
-                /* KORREKTUR: CSS Variable vervollständigt */
                 background: var(--color-accent-blue);
                 border-color: var(--color-accent-blue);
                 box-shadow: 0 0 10px rgba(0, 122, 255, 0.6);
@@ -244,7 +244,6 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                /* Zentrierung im Grid-Bereich */
                 margin: 0 auto;
             }
 
@@ -426,8 +425,8 @@
                 background: rgba(255, 255, 255, 0.2);
             }
 
-            /* --- POPUP / REGISTRIEREN --- */
-            #popupOverlay {
+            /* --- POPUP / REGISTRIEREN & ADMIN EDIT (REUSABLE STYLES) --- */
+            #popupOverlay, #adminEditPopupOverlay {
                 position: fixed;
                 top: 0;
                 left: 0;
@@ -443,8 +442,9 @@
                 transition: opacity 0.2s ease-in-out;
             }
 
-            #popupOverlay.show {
+            #popupOverlay.show, #adminEditPopupOverlay.show {
                 opacity: 1;
+                display: flex; /* Wichtig, um nach der Transition sichtbar zu sein */
             }
 
             .popup-card {
@@ -457,7 +457,7 @@
                 transition: transform 0.3s ease-in-out;
             }
 
-            #popupOverlay.show .popup-card {
+            #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card {
                 transform: translateY(0);
             }
 
@@ -604,6 +604,13 @@
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                /* NEU: Visuelle Anzeige für Admin-Klickbarkeit */
+                transition: background 0.2s; 
+            }
+            
+            /* NEU: Admin-Elemente haben einen Hover-Effekt */
+            #articleList li[data-role="admin-editable"]:active {
+                background: #2a303e; 
             }
             
             .item-details strong {
@@ -667,6 +674,32 @@
                 </div>
             </form>
         </div>
+        
+        <div id="adminEditPopupOverlay">
+            <form class="popup-card" onsubmit="event.preventDefault(); saveAdminEdit();">
+                <h3>Artikel Bearbeiten (Admin)</h3>
+                <div class="input-group">
+                    <label for="adminEditName">Artikel Name</label>
+                    <input type="text" id="adminEditName" readonly>
+                </div>
+
+                <div class="input-group">
+                    <label for="adminEditBarcode">Barcode</label>
+                    <input type="text" id="adminEditBarcode" readonly>
+                </div>
+                
+                <div class="input-group">
+                    <label for="adminEditPlatz">Neuer Stellplatz</label>
+                    <input type="text" id="adminEditPlatz" required>
+                </div>
+                
+                <div class="action-button-group">
+                    <button type="button" class="action-button cancel" onclick="hideAdminEditPopup()">Abbrechen</button>
+                    <button type="submit" class="action-button register">Speichern</button>
+                </div>
+                <p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin-top: 15px;">Sie sind als Administrator angemeldet und können den Stellplatz ändern.</p>
+            </form>
+        </div>
 
 
         <div id="loginView" class="app-view-container active">
@@ -678,7 +711,8 @@
             </div>
 
             <div id="authContent" style="display: none; align-items: center; flex-direction: column;">
-                <p style="opacity: 0.7;">Geben Sie Ihren 6-stelligen PIN ein.</p>
+                <p style="opacity: 0.7;" id="pinInstruction">Geben Sie Ihren PIN ein (User: 4-stellig | Admin: 6-stellig).</p> 
+                
                 <div id="pinIndicators">
                     <div class="pin-indicator"></div>
                     <div class="pin-indicator"></div>
@@ -774,16 +808,15 @@
             let currentScannedBarcode = "";
             let currentTabId = "scannerTab";
             let currentUserId = null;
+            let currentUserRole = null; // NEU: Initialisierung
             let isAuthReady = false;
+            let articleToEdit = null; // NEU: Speichert den Artikel, der gerade im Admin-Popup bearbeitet wird
 
 
             /* --- HILFSFUNKTIONEN --- */
 
             /**
              * Zeigt eine temporäre, nicht-blockierende Nachricht an.
-             * @param {string} message - Die anzuzeigende Nachricht.
-             * @param {string} type - 'success', 'error', oder 'info'.
-             * @param {number} duration - Anzeigedauer in ms.
              */
             function showToast(message, type = 'info', duration = 3000) {
                 const container = document.getElementById('toastContainer');
@@ -840,13 +873,14 @@
 
                 if (key === 'backspace') {
                     window.currentPin = window.currentPin.slice(0, -1);
-                } else if (typeof key === 'number' && window.currentPin.length < 6) {
+                } else if (typeof key === 'number' && window.currentPin.length < 6) { // Maximal 6 Ziffern
                     window.currentPin += key.toString();
                 }
 
                 updatePinIndicators();
                 
-                if (window.currentPin.length === 6) {
+                // Prüfe, ob die PIN-Länge mit einer bekannten PIN übereinstimmt
+                if (window.currentPin.length === USER_ACCESS_CODE.length || window.currentPin.length === ADMIN_ACCESS_CODE.length) {
                     handlePinEntry(window.currentPin);
                     // PIN zurücksetzen, um weitere Versuche zu ermöglichen
                     window.currentPin = "";
@@ -855,13 +889,27 @@
             }
 
             function handlePinEntry(pin) {
-                // KRITISCHE SICHERHEITSLÜCKE HIER: Code-Prüfung erfolgt im Client-Code!
-                if (pin === MASTER_ACCESS_CODE) {
+                let role = null;
+                let success = false;
+                
+                if (pin === USER_ACCESS_CODE) {
+                    role = 'user';
+                    success = true;
+                } else if (pin === ADMIN_ACCESS_CODE) {
+                    role = 'admin';
+                    success = true;
+                }
+                
+                if (success) {
                     document.getElementById("authError").innerText = "";
+                    window.currentUserRole = role; // Rolle setzen
+                    
+                    // Anpassung der Anzeige
+                    const roleDisplay = (role === 'admin' ? "ADMIN" : "USER");
+                    document.getElementById("userDisplay").innerText = `${roleDisplay}`;
+                    
                     switchView('appView');
-                    changeTab('scannerTab'); // Stelle sicher, dass der Scanner aktiv ist beim Login
-                    // In einer echten App: Hier müsste man sich mit Supabase Auth anmelden
-                    // und die Session in checkLogin() prüfen.
+                    changeTab('scannerTab');
                 } else {
                     document.getElementById("authError").innerText = "Falscher Code. Bitte versuchen Sie es erneut.";
                     showToast("Falscher Code.", 'error');
@@ -883,7 +931,6 @@
                 authContent.style.display = "none";
 
                 // Warten auf die Session-Prüfung von Supabase (Wenn Auth verwendet würde)
-                // Da wir keine tatsächliche Supabase Auth verwenden, ist dies meistens leer.
                 const { data } = await window.appSupabaseClient.auth.getSession();
                 const currentSession = data.session;
                 
@@ -893,16 +940,15 @@
 
 
                 if (currentSession) {
-                    currentUserId = currentSession.user.id;
-                    switchView('appView');
-                    document.getElementById("userDisplay").innerText = "ANONYM (ID: " + currentUserId.substring(0, 4) + ")";
-                    hideResultCard();
-                    loadArticleList();
-                    changeTab('scannerTab'); // Starte in Scanner-Ansicht
+                    // Wenn eine Session existiert, setzen Sie die Rolle basierend auf Ihren eigenen Auth-Regeln
+                    // Da wir hier keine echte Supabase Auth verwenden, gehen wir davon aus, dass wir in der App sind.
+                    // Für diese Demo behalten wir die LoginView, bis ein PIN eingegeben wird.
+                    // Beim Login (via PIN) wird die Rolle gesetzt.
+                    switchView('loginView');
+                    authContent.style.display = "flex";
                 } else {
                     switchView('loginView');
-                    currentUserId = null;
-                    authContent.style.display = "flex"; // Zeige Keypad, da keine Session gefunden wurde
+                    authContent.style.display = "flex";
                 }
             }
 
@@ -930,7 +976,6 @@
                     facingMode: "environment"
                 };
                 
-                // Wir übergeben "environment" anstelle einer ID
                 html5QrCode.start({ facingMode: { exact: "environment"} }, config, onScanSuccess, onScanError)
                 .catch(err => {
                     // Overlay wieder, falls der Start fehlschlägt
@@ -956,7 +1001,6 @@
             
             function onScanError(errorMessage) {
                 // Nur loggen, um die Konsole nicht zu überfluten.
-                // console.log(`Scanner Error: ${errorMessage}`);
             }
 
             async function onScanSuccess(code) {
@@ -998,19 +1042,24 @@
                     showResultCard(data.name, content, '✅');
                     document.getElementById("registerButton").style.display = "none"; // Registrieren verstecken
                     
-                    // Scanner erst wieder starten, wenn Karte geschlossen wird
+                    // Scans inkrementieren (ohne auf das Resultat zu warten)
+                    const { error: updateError } = await window.appSupabaseClient
+                        .from("artikel")
+                        .update({ scans: data.scans + 1 })
+                        .eq("barcode", code);
+                        
+                    if(updateError) console.error("Update Fehler:", updateError);
+                    
                 } else {
                     // ARTIKEL NICHT GEFUNDEN
                     const content = `<p>Der Barcode <strong>${code}</strong> wurde noch nicht registriert.</p>`;
                     showResultCard("Unbekannter Artikel", content, '❓');
                     document.getElementById("registerButton").style.display = "block"; // Registrieren anzeigen
                 }
-                
-                // Result Card anzeigen (resume/stop-Logik liegt jetzt in hideResultCard)
             }
             
             
-            /* --- ARTIKEL SPEICHERN LOGIK --- */
+            /* --- ARTIKEL SPEICHERN LOGIK (FÜR NEUE ARTIKEL) --- */
             
             function showPopup() {
                 document.getElementById('popupBarcode').value = currentScannedBarcode;
@@ -1027,6 +1076,7 @@
             }
 
             async function saveArticle() {
+                // ... (Logik bleibt unverändert) ...
                 const barcode = document.getElementById('popupBarcode').value.trim();
                 const baseName = document.getElementById('popupBaseName').value.trim();
                 const material = document.getElementById('popupMaterial').value.trim();
@@ -1044,7 +1094,7 @@
                     .from("artikel")
                     .insert([{ 
                         barcode: barcode, 
-                        name: name, // Verwende den generierten Namen
+                        name: name,
                         stellplatz: platz, 
                         blocklager: block, 
                         scans: 1 
@@ -1062,8 +1112,64 @@
                         '✅'
                     );
                     
-                    // Artikel-Liste im Hintergrund neu laden, falls aktiv
-                    if (currentTabId === 'listTab') loadArticleList(document.getElementById('articleList'));
+                    if (currentTabId === 'listTab') loadArticleList();
+                }
+            }
+
+
+            /* --- ADMIN EDIT LOGIK (NEU) --- */
+            
+            function showAdminEditPopup(article) {
+                if (window.currentUserRole !== 'admin') {
+                    showToast("Keine Berechtigung zum Bearbeiten.", 'error');
+                    return;
+                }
+                
+                window.articleToEdit = article;
+                
+                document.getElementById('adminEditName').value = article.name;
+                document.getElementById('adminEditBarcode').value = article.barcode;
+                document.getElementById('adminEditPlatz').value = article.stellplatz; // Aktuellen Wert setzen
+                
+                document.getElementById('adminEditPopupOverlay').style.display = "flex";
+                // Verzögerung für die CSS-Transition
+                setTimeout(() => document.getElementById('adminEditPopupOverlay').classList.add('show'), 10);
+            }
+
+            function hideAdminEditPopup() {
+                document.getElementById('adminEditPopupOverlay').classList.remove('show');
+                
+                // Timeout, um sicherzustellen, dass die Transition abgeschlossen ist
+                setTimeout(() => {
+                    document.getElementById('adminEditPopupOverlay').style.display = "none";
+                    window.articleToEdit = null;
+                }, 300);
+            }
+
+            async function saveAdminEdit() {
+                if (!window.articleToEdit) return;
+
+                const newPlatz = document.getElementById('adminEditPlatz').value.trim();
+
+                if (!newPlatz) {
+                    showToast("Der Stellplatz darf nicht leer sein.", "error");
+                    return;
+                }
+
+                const { error } = await window.appSupabaseClient
+                    .from("artikel")
+                    .update({ 
+                        stellplatz: newPlatz 
+                    })
+                    .eq("barcode", window.articleToEdit.barcode);
+
+                if (error) {
+                    showToast(`FEHLER beim Speichern des Stellplatzes.`, "error");
+                    console.error("Speicherfehler:", error);
+                } else {
+                    hideAdminEditPopup();
+                    showToast(`Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`, "success");
+                    loadArticleList(); // Liste aktualisieren
                 }
             }
 
@@ -1099,7 +1205,6 @@
                     .select("*")
                     .order("name", { ascending: true }); // Nach Name sortieren
                     
-                // KORREKTUR: Fehlerbehandlung hinzugefügt
                 if (error) {
                     showToast("Fehler beim Laden der Artikelliste.", 'error');
                     articleListContainer.innerHTML = '<li>FEHLER: Die Liste konnte nicht von der Datenbank geladen werden.</li>';
@@ -1116,6 +1221,14 @@
 
                 data.forEach(item => {
                     const listItem = document.createElement('li');
+                    
+                    // NEU: Füge den Klick-Handler nur für Admins hinzu
+                    if (window.currentUserRole === 'admin') {
+                        listItem.onclick = () => showAdminEditPopup(item);
+                        listItem.style.cursor = 'pointer'; 
+                        listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
+                    }
+
                     const details = `
                         <div class="item-details">
                             <strong>${item.name}</strong>
@@ -1132,15 +1245,13 @@
             /* --- NAVIGATION LOGIK --- */
             
             function changeTab(targetTabId) {
-                // Alle Tab-Inhalte ausblenden
+                // ... (Logik bleibt unverändert) ...
                 document.querySelectorAll('.tab-content').forEach(content => {
                     content.classList.remove('active');
                 });
 
-                // Ziel-Tab anzeigen
                 document.getElementById(targetTabId).classList.add('active');
 
-                // Navigation verwalten
                 document.querySelectorAll('.nav-item').forEach(item => {
                     item.classList.remove('active');
                     if (item.getAttribute('data-tab') === targetTabId) {
@@ -1148,38 +1259,38 @@
                     }
                 });
 
-                currentTabId = targetTabId; // Globalen Tab-Status setzen
-                hideResultCard(); // Ergebnis-Karte verstecken
+                currentTabId = targetTabId;
+                hideResultCard();
 
-                // Logik basierend auf dem neuen Tab
                 if (targetTabId === 'scannerTab') {
-                    activateCamera(); // Ruft activateCamera auf, um Overlay zu verstecken und startScanner zu rufen
+                    activateCamera();
                 } else {
-                    stopScanner(); // Kamera stoppen, wenn ein anderer Tab aktiv wird
+                    stopScanner();
                     
                     if (targetTabId === 'listTab') {
-                        loadArticleList(); // Liste laden/aktualisieren
+                        loadArticleList();
                     }
                 }
             }
             
             async function logout() {
-                stopScanner(); // KORREKTUR: Scanner beim Logout stoppen
-                // Hier müsste die Supabase-Session zerstört werden:
-                // await window.appSupabaseClient.auth.signOut(); 
+                stopScanner();
                 
                 // Für diese App-Logik: Einfach zur Login-Ansicht zurück
                 switchView('loginView');
                 window.currentPin = "";
+                window.currentUserRole = null; // WICHTIG: Rolle zurücksetzen
                 updatePinIndicators();
                 showToast("Erfolgreich abgemeldet.", 'info');
                 lastCode = "";
+                
+                // Setze die Anzeige im Header zurück (falls nicht automatisch aktualisiert)
+                document.getElementById("userDisplay").innerText = ""; 
             }
 
 
             // Start der Anwendung
             window.onload = function() {
-                // Keine onAuthStateChange-Listener mehr, da checkLogin jetzt die Hauptlogik steuert
                 checkLogin();
                 updatePinIndicators(); // Setze Indikatoren auf 0
             };
