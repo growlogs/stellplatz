@@ -11,11 +11,23 @@
 
 <script>
 // ---------------------------------------------------------
-// KONFIGURATION: HIER IHREN KEY UND DEN MASTER-CODE EINFÜGEN
+// KONFIGURATION: Lese Schlüssel aus globalen Umgebungsvariablen
 // ---------------------------------------------------------
-var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4"; 
-var MASTER_ACCESS_CODE = "123456"; // <<<<<<<<<<<<<<< WICHTIG: Setzen Sie hier Ihren Code fest
+// WICHTIG: Diese Variablen werden von Vercel/Canvas in der Build-Zeit injiziert!
+// Im Entwicklungsmodus (lokal) oder ohne Vercel-Setup kann der Wert "undefined" sein.
+var APP_SUPABASE_URL = "%%VITE_SUPABASE_URL%%"; 
+var APP_SUPABASE_KEY = "%%VITE_SUPABASE_ANON_KEY%%"; 
+var MASTER_ACCESS_CODE = "%%VITE_MASTER_CODE%%"; 
+
+// Fallback für den lokalen Test (wenn Vercel/Canvas keine Variablen setzt)
+if (APP_SUPABASE_URL.startsWith('%%')) {
+    APP_SUPABASE_URL = "https://vjhgzkzvzbxqpxmqxdwc.supabase.co"; 
+    // Der "echte" Key darf hier nicht stehen, aber wir nutzen einen Platzhalter für die Funktion
+    APP_SUPABASE_KEY = "DEV_ANON_KEY_PLACEHOLDER"; 
+}
+if (MASTER_ACCESS_CODE.startsWith('%%')) {
+    MASTER_ACCESS_CODE = "123456"; // Lokaler Test-Code
+}
 // ---------------------------------------------------------
 
 // Initialisierung
@@ -671,8 +683,8 @@ input:focus {
     async function loginWithCode(enteredCode) {
         showAuthError("", false); 
 
-        if (APP_SUPABASE_KEY.includes("IHR_ANON_PUBLIC_KEY_HIER_EINFUEGEN")) {
-            showAuthError("⚠️ FEHLER: Supabase Key fehlt.", true);
+        if (APP_SUPABASE_KEY.includes("PLACEHOLDER")) {
+            showAuthError("⚠️ FEHLER: Supabase Key fehlt (bitte in Vercel setzen).", true);
             updatePinIndicators(true);
             window.currentPin = "";
             return;
