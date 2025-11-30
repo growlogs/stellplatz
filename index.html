@@ -628,19 +628,16 @@
                 opacity: 0.7;
             }
             
-            /* NEU: Bestand-Anzeige */
+            /* NEU: Icon-Anzeige für Lagertyp */
             .item-count {
-                font-size: 1.5rem;
+                font-size: 2.5rem; /* Größer für das Icon */
                 font-weight: 700;
-                color: var(--color-accent-green);
+                color: white; /* Icon ist weiß/emoji farbig */
                 text-align: right;
+                width: 50px; /* Feste Breite für Layout */
             }
             .item-count small {
-                display: block;
-                font-size: 0.5em;
-                font-weight: 400;
-                color: rgba(255, 255, 255, 0.5);
-                margin-top: -5px;
+                display: none; /* Nicht mehr nötig */
             }
 
         </style>
@@ -1037,20 +1034,20 @@
 
                 if (data) {
                     // ARTIKEL GEFUNDEN
+                    const lagertyp = data.blocklager ? 'Blocklager 🏢' : 'Regal/Fach 📦';
+                    
                     const content = `
                         <p><strong>Stellplatz:</strong> ${data.stellplatz}</p>
-                        <p><strong>Typ:</strong> ${data.blocklager ? 'Blocklager' : 'Regal'}</p>
-                        <p><strong>Bestand:</strong> ${data.bestand || 'N/A'}</p>
+                        <p><strong>Typ:</strong> ${lagertyp}</p>
                         <p><strong>Erster Scan:</strong> ${new Date(data.created_at).toLocaleDateString()}</p>
                         <p><strong>Barcode:</strong> ${data.barcode}</p>
                     `;
                     showResultCard(data.name, content, '✅');
                     document.getElementById("registerButton").style.display = "none"; // Registrieren verstecken
                     
-                    // Scans inkrementieren (ohne auf das Resultat zu warten)
+                    // Scans inkrementieren (im Hintergrund)
                     const { error: updateError } = await window.appSupabaseClient
                         .from("artikel")
-                        // Scans bleiben für historische Zwecke erhalten, werden aber in der UI nicht mehr gezeigt
                         .update({ scans: (data.scans || 0) + 1 }) 
                         .eq("barcode", code);
                         
@@ -1089,13 +1086,13 @@
                 const block = document.getElementById('popupBlocklager').value === 'true';
 
                 const name = baseName + (material ? ` (${material})` : '');
+                const lagertyp = block ? 'Blocklager 🏢' : 'Regal/Fach 📦';
+
 
                 if (!baseName || !platz) {
                     showToast("Bitte Basis-Name und Stellplatz ausfüllen.", "error");
                     return;
                 }
-
-                const INITIAL_BESTAND = 100; // Simulierter Anfangsbestand
 
                 const { data, error } = await window.appSupabaseClient
                     .from("artikel")
@@ -1104,8 +1101,7 @@
                         name: name,
                         stellplatz: platz, 
                         blocklager: block, 
-                        scans: 1,
-                        bestand: INITIAL_BESTAND // NEU: Bestandswert speichern
+                        scans: 1 
                     }]);
 
                 if (error) {
@@ -1116,7 +1112,8 @@
                     showToast(`Artikel "${name}" erfolgreich gespeichert.`, "success");
                     showResultCard(
                         name, 
-                        `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${block ? 'Blocklager' : 'Regal'}</p> <p><strong>Bestand:</strong> ${INITIAL_BESTAND}</p>`,
+                        // Nur Stellplatz und den Lagertyp anzeigen
+                        `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${lagertyp}</p>`,
                         '✅'
                     );
                     
@@ -1237,18 +1234,15 @@
                         listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
                     }
                     
-                    // NEU: Anzeige des Bestands (oder N/A, falls die Spalte fehlt)
-                    const bestandAnzeige = item.bestand !== undefined ? item.bestand : 'N/A';
-                    const bestandLabel = item.bestand !== undefined ? '<small>Bestand</small>' : '<small>Fehlt</small>';
-
+                    // Korrigierte Logik: Zeigt nur das Lagertyp-Icon
+                    const lagertypIcon = item.blocklager ? '🏢' : '📦';
 
                     const details = `
                         <div class="item-details">
                             <strong>${item.name}</strong>
                             <span>Stellplatz: ${item.stellplatz} | Barcode: ${item.barcode}</span>
                         </div>
-                        <div class="item-count">${bestandAnzeige}${bestandLabel}</div>
-                    `;
+                        <div class="item-count">${lagertypIcon}</div> `;
                     listItem.innerHTML = details;
                     articleListContainer.appendChild(listItem);
                 });
