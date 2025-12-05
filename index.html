@@ -1018,6 +1018,7 @@
             let userToEdit = null; 
             
             // NEU: Globale Variablen für Inventar & Umbuchung
+            let isRegisterMode = false;
             let activeTransactionType = null; // 'deposit', 'withdraw' (Feature 1)
             let isRelocationMode = false; // (Feature 3)
             let relocationArticleId = null; // (Feature 3)
@@ -1138,7 +1139,7 @@
 
             /** Schaltet zwischen Anmelde- und Registrierungsmodus um. */
             function toggleAuthMode() {
-                var isRegisterMode = !isRegisterMode;
+                isRegisterMode = !isRegisterMode;
                 const title = document.getElementById('authTitle');
                 const submitButton = document.getElementById('authSubmitButton');
                 const toggleLink = document.getElementById('registerToggle');
