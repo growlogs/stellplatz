@@ -878,8 +878,27 @@
                         <span class="slider"></span>
                     </label>
                 </div>
+                
+                <h4 style="margin-top: 30px; margin-bottom: 15px; font-weight: 600;">Datenmanagement (Admin)</h4>
+                <p style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 15px;">Import/Export ist nur für Administratoren verfügbar.</p>
 
-                <div class="action-button-group">
+                <div class="setting-row" style="border-bottom: none; flex-direction: column; align-items: stretch; padding-bottom: 0;">
+                    <label style="margin-bottom: 10px; font-weight: 600;">Daten exportieren (Artikel)</label>
+                    <div class="action-button-group" style="margin-top: 0;">
+                        <button type="button" class="action-button register" style="flex: 1; background: #2e8b57;" onclick="exportData('json')">Export JSON</button>
+                        <button type="button" class="action-button register" style="flex: 1; background: #2e8b57;" onclick="exportData('csv')">Export CSV</button>
+                    </div>
+                </div>
+
+                <div class="setting-row" style="border-bottom: none; flex-direction: column; align-items: stretch; padding-bottom: 0; margin-top: 20px;">
+                    <label for="importFile" style="margin-bottom: 10px; font-weight: 600;">Daten importieren (CSV/JSON)</label>
+                    <input type="file" id="importFile" accept=".csv, application/json" style="padding: 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-dark); margin-bottom: 10px;" onchange="document.getElementById('importButton').disabled = !this.files.length;">
+                    <button id="importButton" type="button" class="primary-button" style="background: var(--color-warning-yellow); color: var(--color-bg-card);" disabled onclick="prepareImport()">Daten importieren (Upsert)</button>
+                    <p style="font-size: 0.75rem; opacity: 0.6; margin-top: 5px;">Importiert Artikel. Vorhandene Barcodes werden aktualisiert.</p>
+                </div>
+
+
+                <div class="action-button-group" style="margin-top: 25px; border-top: 1px solid var(--color-border); padding-top: 20px;">
                     <button class="action-button cancel" onclick="hideSettingsPopup()">Schließen</button>
                     <button class="action-button register" onclick="testFeedback()">Testen</button>
                 </div>
@@ -1881,6 +1900,231 @@
                 document.getElementById("authEmail").value = "";
                 document.getElementById("authPassword").value = "";
                 document.getElementById("authError").innerText = "";
+            }
+
+            /* --- DATEN IMPORT/EXPORT LOGIK (Admin) --- */
+
+            // Hilfsfunktion zum Konvertieren von JSON in CSV
+            function convertToCSV(data) {
+                if (data.length === 0) return '';
+                // Wir verwenden eine statische Liste der Spalten, um die Reihenfolge beizubehalten
+                const keys = ['barcode', 'name', 'stellplatz', 'blocklager', 'scans', 'created_at']; 
+                const header = keys.join(';');
+                const rows = data.map(row => keys.map(k => {
+                    let value = row[k] === null || row[k] === undefined ? '' : String(row[k]);
+                    // Anführungszeichen escapen und umrahmen, falls Semikolons oder Zeilenumbrüche enthalten sind
+                    if (value.includes(';') || value.includes('\n') || value.includes('"')) {
+                        value = `"${value.replace(/"/g, '""')}"`;
+                    }
+                    return value;
+                }).join(';'));
+                return [header, ...rows].join('\n');
+            }
+
+            function downloadFile(filename, content, mimeType) {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            async function exportData(format) {
+                if (window.currentUserRole !== 'admin') {
+                    showToast("Nur Administratoren dürfen Daten exportieren.", 'error');
+                    return;
+                }
+
+                showToast("Export wird vorbereitet...", 'info');
+                
+                const { data: articles, error } = await window.appSupabaseClient
+                    .from('artikel')
+                    .select('*');
+
+                if (error) {
+                    showToast("Fehler beim Export: Konnte Artikel nicht laden.", 'error');
+                    console.error("Export Fehler:", error);
+                    return;
+                }
+
+                if (articles.length === 0) {
+                     showToast("Keine Artikel zum Exportieren gefunden.", 'info');
+                     return;
+                }
+
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                let content, filename, mimeType;
+
+                if (format === 'json') {
+                    // Filtern: created_at entfernen, um Konflikte beim Import zu vermeiden, aber für Export behalten wir es.
+                    content = JSON.stringify(articles, null, 2);
+                    filename = `inventar_artikel_export_${timestamp}.json`;
+                    mimeType = 'application/json';
+                } else if (format === 'csv') {
+                    content = convertToCSV(articles);
+                    filename = `inventar_artikel_export_${timestamp}.csv`;
+                    mimeType = 'text/csv;charset=utf-8';
+                }
+
+                downloadFile(filename, content, mimeType);
+                logAdminAction('DATA_EXPORTED', `Datenbank-Artikel im Format ${format.toUpperCase()} exportiert (${articles.length} Einträge).`);
+                showToast(`Export von ${articles.length} Artikeln als ${format.toUpperCase()} erfolgreich.`, 'success', 5000);
+            }
+
+
+            async function prepareImport() {
+                if (window.currentUserRole !== 'admin') {
+                    showToast("Nur Administratoren dürfen Daten importieren.", 'error');
+                    return;
+                }
+
+                const fileInput = document.getElementById('importFile');
+                const file = fileInput.files[0];
+                if (!file) {
+                    showToast("Bitte wählen Sie eine Datei aus.", 'error');
+                    return;
+                }
+                
+                // Disable button during process
+                document.getElementById('importButton').disabled = true;
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        let parsedData;
+                        const fileContent = e.target.result;
+                        const filename = file.name.toLowerCase();
+
+                        if (filename.endsWith('.json')) {
+                            parsedData = JSON.parse(fileContent);
+                        } else if (filename.endsWith('.csv')) {
+                            parsedData = parseCSV(fileContent);
+                        } else {
+                            showToast("Nicht unterstütztes Dateiformat.", 'error');
+                            document.getElementById('importButton').disabled = false;
+                            return;
+                        }
+
+                        if (!Array.isArray(parsedData) || parsedData.length === 0) {
+                            showToast("Die Datei enthält keine gültigen Artikeldaten.", 'error');
+                            document.getElementById('importButton').disabled = false;
+                            return;
+                        }
+                        
+                        await importArticles(parsedData, file.name);
+
+                    } catch (error) {
+                        showToast("Fehler beim Verarbeiten der Datei. (Falsches Format?)", 'error', 7000);
+                        console.error("Dateiverarbeitungsfehler:", error);
+                    } finally {
+                        document.getElementById('importButton').disabled = false;
+                    }
+                };
+                reader.onerror = () => {
+                    showToast("Fehler beim Lesen der Datei.", 'error');
+                    document.getElementById('importButton').disabled = false;
+                };
+                reader.readAsText(file);
+            }
+
+            // Hilfsfunktion zum Parsen von CSV (einfaches Semikolon-Trennzeichen erwartet)
+            function parseCSV(csvText) {
+                const lines = csvText.trim().split('\n');
+                if (lines.length < 2) return [];
+
+                // Header mit Semikolon als Trennzeichen
+                const headers = lines[0].split(';').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                const requiredKeys = ['barcode', 'name', 'stellplatz']; 
+                
+                // Prüfen, ob die kritischen Spalten vorhanden sind
+                if (!requiredKeys.every(key => headers.includes(key))) {
+                    throw new Error("CSV-Spalten fehlen: barcode, name, stellplatz.");
+                }
+
+                const data = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(';');
+                    if (values.length < requiredKeys.length) continue; // Zeile überspringen, wenn zu wenig Spalten
+
+                    const item = {};
+                    let isValidRow = true;
+
+                    for (let j = 0; j < headers.length; j++) {
+                        if (!values[j]) continue; // Leere Spalte überspringen
+
+                        let val = values[j].trim().replace(/^"|"$/g, '').replace(/""/g, '"');
+                        
+                        if (headers[j] === 'blocklager') {
+                             item[headers[j]] = (val.toLowerCase() === 'true' || val === '1');
+                        } else if (headers[j] === 'scans') {
+                             item[headers[j]] = parseInt(val) || 0;
+                        } else if (headers[j] === 'barcode' || headers[j] === 'name' || headers[j] === 'stellplatz') {
+                             // Prüfen, ob die Pflichtfelder gefüllt sind
+                             if (!val) { isValidRow = false; break; } 
+                             item[headers[j]] = val;
+                        } else {
+                             item[headers[j]] = val;
+                        }
+                    }
+                    if (isValidRow && item.barcode && item.name && item.stellplatz) {
+                        data.push(item);
+                    }
+                }
+                return data;
+            }
+
+            async function importArticles(articles, filename) {
+                if (articles.length === 0) {
+                    showToast("Keine gültigen Artikel zum Importieren gefunden.", 'info');
+                    return;
+                }
+                
+                // Daten für Supabase vorbereiten (nur notwendige Felder)
+                const allowedFields = ['barcode', 'name', 'stellplatz', 'blocklager', 'scans'];
+                const upsertData = articles.map(article => {
+                    const item = {};
+                    allowedFields.forEach(field => {
+                        // Wir erlauben nur definierte Felder. created_at/id/user_id etc. muss entfernt werden.
+                        if (article.hasOwnProperty(field)) {
+                            item[field] = article[field];
+                        }
+                    });
+                    // Sicherstellen, dass Pflichtfelder vorhanden und Typen korrekt sind
+                    if (typeof item.blocklager !== 'boolean') item.blocklager = item.blocklager === true || item.blocklager === 'true'; // JSON kann boolsche Werte haben
+                    if (typeof item.scans !== 'number') item.scans = parseInt(item.scans) || 0;
+                    
+                    return item;
+                }).filter(item => item.barcode && item.name && item.stellplatz); // Nur Artikel mit allen Pflichtfeldern importieren
+
+                if (upsertData.length === 0) {
+                    showToast("Keine Artikel mit gültigem Barcode, Name und Stellplatz zum Importieren gefunden.", 'error', 7000);
+                    return;
+                }
+
+                showToast(`Starte Import von ${upsertData.length} gültigen Artikeln...`, 'info', 10000);
+                
+                // Supabase upsert (batch insert/update)
+                // Wichtig: 'onConflict: 'barcode'' für UPSERT
+                const { error } = await window.appSupabaseClient
+                    .from('artikel')
+                    .upsert(upsertData, { onConflict: 'barcode' }); 
+
+                if (error) {
+                    showToast("FEHLER beim Import. Überprüfen Sie die Daten und RLS-Policies.", 'error', 10000);
+                    console.error("Import Fehler:", error);
+                } else {
+                    logAdminAction('DATA_IMPORTED', `${upsertData.length} Artikel erfolgreich aus Datei ${filename} importiert/aktualisiert.`);
+                    showToast(`Import von ${upsertData.length} Artikeln erfolgreich!`, 'success', 5000);
+                    
+                    // Liste neu laden, falls wir uns im List-Tab befinden
+                    if (currentTabId === 'listTab') {
+                        loadArticleList(document.getElementById('articleSearchInput').value); 
+                    }
+                }
             }
 
 
