@@ -26,10 +26,13 @@
                 window.lastCode = ""; 
                 window.currentTabId = "scannerTab"; 
                 window.currentUserRole = null; 
+                window.offlineDB = null; // NEU: IndexedDB-Instanz
+                window.isSyncing = false; // NEU: Synchronisations-Status
             })();
         </script>
 
         <style>
+/* ... (Der Style-Block bleibt unverändert) ... */
             /* --- GLOBALE STYLES & FONT --- */
             :root {
                 --color-bg-dark: #0a0b10;
@@ -1248,6 +1251,9 @@
                 switchView('appView');
                 changeTab('scannerTab');
                 showToast(`Willkommen als ${roleDisplay}!`, 'success');
+                
+                // NEU: Sofortige Datensynchronisation nach erfolgreichem Login
+                await syncData(true); 
             }
 
             async function checkLogin() {
@@ -1337,13 +1343,40 @@
             }
 
             async function searchArticle(code) {
-                const { data, error } = await window.appSupabaseClient
-                    .from('artikel')
-                    .select('*')
-                    .eq('barcode', code)
-                    .single();
+                let data = null;
+                let error = null;
+                let isOffline = false;
 
-                if (error && error.code !== 'PGRST116') { 
+                try {
+                    // 1. Online-Versuch
+                    const response = await window.appSupabaseClient
+                        .from('artikel')
+                        .select('*')
+                        .eq('barcode', code)
+                        .single();
+                    data = response.data;
+                    error = response.error;
+                    
+                    if (data) {
+                        // Bei Erfolg: Lokale Kopie aktualisieren (upsert)
+                        await window.offlineDB.upsertData('artikel', data);
+                    }
+
+                } catch (e) {
+                    // 2. Offline-Fallback
+                    isOffline = true;
+                    showToast("Netzwerkfehler. Suche in lokalen Daten...", 'info');
+                    try {
+                        data = await window.offlineDB.getArticleByBarcode(code);
+                        error = null;
+                        if (!data) error = { code: 'PGRST116', message: "Artikel nicht lokal gefunden." };
+                    } catch (e) {
+                        console.error("IndexedDB Abruffehler:", e);
+                        error = { message: "Lokaler Datenbankfehler." };
+                    }
+                }
+
+                if (error && error.code !== 'PGRST116' && !isOffline) { 
                     console.error("Datenbank Fehler beim Suchen:", error);
                     showResultCard("Fehler", "Fehler beim Suchen.", '❌');
                     html5QrCode.resume();
@@ -1356,18 +1389,32 @@
                     const content = `
                         <p><strong>Stellplatz:</strong> ${data.stellplatz}</p>
                         <p><strong>Typ:</strong> ${lagertyp}</p>
-                        <p><strong>Erster Scan:</strong> ${new Date(data.created_at).toLocaleDateString()}</p>
+                        <p><strong>Erster Scan:</strong> ${data.created_at ? new Date(data.created_at).toLocaleDateString() : 'Unbekannt'}</p>
                         <p><strong>Barcode:</strong> ${data.barcode}</p>
+                        ${isOffline ? '<p style="color:var(--color-warning-yellow);">**OFFLINE DATEN**</p>' : ''}
                     `;
                     showResultCard(data.name, content, '✅');
                     document.getElementById("registerButton").style.display = "none";
 
-                    const { error: updateError } = await window.appSupabaseClient
-                        .from("artikel")
-                        .update({ scans: (data.scans || 0) + 1 })
-                        .eq("barcode", code);
-                        
-                    if(updateError) console.error("Update Fehler:", updateError);
+                    // Zähler nur aktualisieren, wenn wir online sind oder wenn der Artikel nur lokal existiert (späterer Sync)
+                    if (!isOffline) {
+                        const { error: updateError } = await window.appSupabaseClient
+                            .from("artikel")
+                            .update({ scans: (data.scans || 0) + 1 })
+                            .eq("barcode", code);
+                            
+                        if(updateError) console.error("Update Fehler:", updateError);
+                    } else {
+                        // Wenn offline, erstellen wir eine OUTBOX-Aktion für den Scan-Zähler
+                        await window.offlineDB.addToOutbox({
+                            type: 'SCAN_INCREMENT',
+                            table: 'artikel',
+                            key: code,
+                            payload: { barcode: code, scans: (data.scans || 0) + 1 }, 
+                            timestamp: new Date().toISOString()
+                        });
+                        showToast("Scan gespeichert. Wird synchronisiert, sobald online.", 'info');
+                    }
 
                 } else {
                     const content = `<p>Der Barcode <strong>${code}</strong> wurde noch nicht registriert.</p>`;
@@ -1377,6 +1424,9 @@
                         document.getElementById("registerButton").style.display = "block";
                     } else {
                         document.getElementById("registerButton").style.display = "none";
+                    }
+                    if (isOffline) {
+                         showToast("Artikel nicht einmal lokal gefunden.", 'error');
                     }
                 }
             }
@@ -1420,20 +1470,62 @@
                     return;
                 }
 
-                const { data, error } = await window.appSupabaseClient
-                    .from("artikel")
-                    .insert([{ barcode: barcode, name: name, stellplatz: platz, blocklager: block, scans: 1 }]);
+                const newArticle = { 
+                    barcode: barcode, 
+                    name: name, 
+                    stellplatz: platz, 
+                    blocklager: block, 
+                    scans: 1,
+                    created_at: new Date().toISOString()
+                };
 
-                if (error) {
-                    showToast(`FEHLER beim Speichern.`, "error");
-                    console.error("Speicherfehler:", error);
-                } else {
-                    logAdminAction('ARTICLE_ADDED', `Neuer Artikel "${name}" registriert (Barcode: ${barcode}). Stellplatz: ${platz}.`);
+                let success = false;
+                let isOffline = !navigator.onLine;
+
+                try {
+                    const { error } = await window.appSupabaseClient
+                        .from("artikel")
+                        .insert([newArticle]);
+
+                    if (error) {
+                         if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
+                            throw new Error("Offline"); 
+                        }
+                        showToast(`FEHLER beim Speichern.`, "error");
+                        console.error("Speicherfehler:", error);
+                    } else {
+                        success = true;
+                    }
+                } catch (e) {
+                    if (e.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                        // Speichern in IndexedDB und Outbox
+                        await window.offlineDB.upsertData('artikel', newArticle);
+                        await window.offlineDB.addToOutbox({
+                            type: 'INSERT',
+                            table: 'artikel',
+                            key: barcode,
+                            payload: newArticle,
+                            timestamp: new Date().toISOString()
+                        });
+                        success = true; // Lokal erfolgreich
+                    } else {
+                        console.error("Speicherfehler:", e);
+                    }
+                }
+
+                if (success) {
                     hidePopup();
-                    showToast(`Artikel "${name}" erfolgreich gespeichert.`, "success");
+                    const statusMessage = isOffline ? 
+                        `Artikel lokal gespeichert. Wird bei Verbindung synchronisiert.` : 
+                        `Artikel "${name}" erfolgreich gespeichert.`;
+                    
+                    showToast(statusMessage, isOffline ? "info" : "success");
+                    logAdminAction('ARTICLE_ADDED', `Neuer Artikel "${name}" registriert (Barcode: ${barcode}). Stellplatz: ${platz}.`);
+                    
                     showResultCard(
                         name,
-                        `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${lagertyp}</p>`,
+                        `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${lagertyp}</p> ${isOffline ? '<p style="color:var(--color-warning-yellow);">**OFFLINE DATEN**</p>' : ''}`,
                         '✅'
                     );
                 }
@@ -1467,6 +1559,7 @@
 
                 const oldPlatz = window.articleToEdit.stellplatz;
                 const newPlatz = document.getElementById('adminEditPlatz').value.trim();
+                const barcode = window.articleToEdit.barcode;
 
                 if (!newPlatz) {
                     showToast("Der Stellplatz darf nicht leer sein.", "error");
@@ -1479,19 +1572,51 @@
                     return;
                 }
 
-                const { error } = await window.appSupabaseClient
-                    .from("artikel")
-                    .update({ stellplatz: newPlatz })
-                    .eq("barcode", window.articleToEdit.barcode);
+                const updatePayload = { stellplatz: newPlatz };
+                let success = false;
+                let isOffline = !navigator.onLine;
 
-                if (error) {
-                    showToast(`FEHLER beim Speichern des Stellplatzes.`, "error");
-                    console.error("Speicherfehler:", error);
-                } else {
-                    logAdminAction('STELLPLATZ_UPDATED', `Stellplatz von Artikel "${window.articleToEdit.name}" (Barcode: ${window.articleToEdit.barcode}) von ${oldPlatz} auf ${newPlatz} geändert.`);
+                try {
+                    const { error } = await window.appSupabaseClient
+                        .from("artikel")
+                        .update(updatePayload)
+                        .eq("barcode", barcode);
+
+                    if (error) {
+                        if (error.message.includes('Failed to fetch')) { 
+                            throw new Error("Offline"); 
+                        }
+                        showToast(`FEHLER beim Speichern des Stellplatzes.`, "error");
+                        console.error("Speicherfehler:", error);
+                    } else {
+                        success = true;
+                    }
+                } catch (e) {
+                    if (e.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                         // Lokale Daten aktualisieren und Outbox-Eintrag erstellen
+                        await window.offlineDB.updateArticleStellplatz(barcode, newPlatz);
+                        await window.offlineDB.addToOutbox({
+                            type: 'UPDATE',
+                            table: 'artikel',
+                            key: barcode,
+                            payload: updatePayload,
+                            timestamp: new Date().toISOString()
+                        });
+                        success = true;
+                    } else {
+                        console.error("Speicherfehler:", e);
+                    }
+                }
+                
+                if (success) {
+                    logAdminAction('STELLPLATZ_UPDATED', `Stellplatz von Artikel "${window.articleToEdit.name}" (Barcode: ${barcode}) von ${oldPlatz} auf ${newPlatz} geändert.`);
                     hideAdminEditPopup();
-                    showToast(`Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`, "success");
-                    loadArticleList(document.getElementById('articleSearchInput').value); // Mit Suchbegriff neu laden
+                    const statusMessage = isOffline ? 
+                        `Stellplatz lokal aktualisiert. Wird bei Verbindung synchronisiert.` : 
+                        `Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`;
+                    showToast(statusMessage, isOffline ? "info" : "success");
+                    loadArticleList(document.getElementById('articleSearchInput').value); 
                 }
             }
 
@@ -1531,21 +1656,52 @@
                 const articleName = window.articleToDelete.name;
                 const barcode = window.articleToDelete.barcode;
 
-                const { error } = await window.appSupabaseClient
-                    .from("artikel")
-                    .delete()
-                    .eq("barcode", barcode);
+                let success = false;
+                let isOffline = !navigator.onLine;
 
-                if (error) {
-                    showToast(`FEHLER beim Löschen des Artikels.`, "error");
-                    console.error("Löschfehler:", error);
-                    hideDeleteConfirmPopup();
-                } else {
-                    showToast(`Artikel "${articleName}" wurde erfolgreich gelöscht.`, "success");
+                try {
+                    const { error } = await window.appSupabaseClient
+                        .from("artikel")
+                        .delete()
+                        .eq("barcode", barcode);
+                        
+                    if (error) {
+                        if (error.message.includes('Failed to fetch')) { 
+                            throw new Error("Offline"); 
+                        }
+                        showToast(`FEHLER beim Löschen des Artikels.`, "error");
+                        console.error("Löschfehler:", error);
+                    } else {
+                        success = true;
+                    }
+                } catch (e) {
+                    if (e.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                        // Lokale Daten löschen und Outbox-Eintrag erstellen
+                        await window.offlineDB.deleteArticle(barcode);
+                        await window.offlineDB.addToOutbox({
+                            type: 'DELETE',
+                            table: 'artikel',
+                            key: barcode,
+                            payload: { barcode: barcode }, 
+                            timestamp: new Date().toISOString()
+                        });
+                        success = true;
+                    } else {
+                        console.error("Löschfehler:", e);
+                    }
+                }
+                
+                if (success) {
+                    const statusMessage = isOffline ? 
+                        `Artikel lokal gelöscht. Löschvorgang wird bei Verbindung synchronisiert.` : 
+                        `Artikel "${articleName}" wurde erfolgreich gelöscht.`;
+                    showToast(statusMessage, isOffline ? "info" : "success");
                     logAdminAction('ARTICLE_DELETED', `Artikel "${articleName}" (Barcode: ${barcode}) unwiderruflich gelöscht.`);
+                    
                     window.articleToEdit = null;
                     hideDeleteConfirmPopup();
-                    loadArticleList(document.getElementById('articleSearchInput').value); // Mit Suchbegriff neu laden
+                    loadArticleList(document.getElementById('articleSearchInput').value); 
                 }
             }
 
@@ -1572,31 +1728,63 @@
                 const articleListContainer = document.getElementById('articleList');
                 articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Artikelliste...</li>';
 
-                let query = window.appSupabaseClient
-                    .from('artikel')
-                    .select('*');
+                let data = [];
+                let isOffline = false;
 
-                if (searchTerm) {
-                    const search = `%${searchTerm.toLowerCase()}%`;
-                    query = query.or(`name.ilike.${search},barcode.ilike.${search},stellplatz.ilike.${search}`);
+                try {
+                    // 1. Online-Versuch
+                    let query = window.appSupabaseClient
+                        .from('artikel')
+                        .select('*');
+
+                    if (searchTerm) {
+                        const search = `%${searchTerm.toLowerCase()}%`;
+                        query = query.or(`name.ilike.${search},barcode.ilike.${search},stellplatz.ilike.${search}`);
+                    }
+
+                    const { data: articles, error } = await query
+                        .order('name', { ascending: true });
+
+                    if (error) {
+                         if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
+                            throw new Error("Offline"); 
+                        }
+                        throw error;
+                    }
+                    
+                    data = articles;
+                    // Bei Erfolg: Lokale Datenbank initialisieren/vollständig aktualisieren
+                    if (data.length > 0) {
+                        await window.offlineDB.clearData('artikel');
+                        await window.offlineDB.bulkInsertData('artikel', data);
+                    }
+
+                } catch (error) {
+                    isOffline = true;
+                    showToast("Netzwerkfehler. Zeige lokale Daten...", 'info');
+                    console.warn("Offline Fallback aktiviert.", error);
+                    // 2. Offline-Fallback (IndexedDB)
+                    try {
+                        const localData = await window.offlineDB.getAllArticles();
+                        data = localData.filter(item => {
+                            if (!searchTerm) return true;
+                            const term = searchTerm.toLowerCase();
+                            return item.name.toLowerCase().includes(term) || 
+                                   item.barcode.toLowerCase().includes(term) || 
+                                   item.stellplatz.toLowerCase().includes(term);
+                        }).sort((a, b) => a.name.localeCompare(b.name));
+                    } catch (e) {
+                        showToast("Fehler beim Laden der lokalen Artikelliste.", 'error');
+                        console.error("IndexedDB Fehler:", e);
+                    }
                 }
 
-                const { data, error } = await query
-                    .order('name', { ascending: true });
-
-                if (error) {
-                    showToast("Fehler beim Laden der Artikelliste.", 'error');
-                    console.error("Fehler beim Laden der Artikel (RLS-Policies!):", error);
-                    articleListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Die Liste konnte nicht von der Datenbank geladen werden. BITTE RLS-POLICIES PRÜFEN!</li>';
+                if (data.length === 0) {
+                    articleListContainer.innerHTML = `<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">${searchTerm ? 'Keine Artikel gefunden, die der Suche entsprechen.' : 'Noch keine Artikel vorhanden.'}</li>`;
                     return;
                 }
 
                 articleListContainer.innerHTML = '';
-                if (data.length === 0) {
-                    articleListContainer.innerHTML = `<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">${searchTerm ? 'Keine Artikel gefunden, die der Suche entsprechen.' : 'Noch keine Artikel vorhanden. Scannen Sie einen Barcode, um zu starten.'}</li>`;
-                    return;
-                }
-
                 data.forEach(item => {
                     const listItem = document.createElement('li');
                     if (window.currentUserRole === 'admin') {
@@ -1623,6 +1811,10 @@
                     listItem.innerHTML = details;
                     articleListContainer.appendChild(listItem);
                 });
+                
+                if (isOffline) {
+                    articleListContainer.innerHTML += '<li style="margin-top: 15px; text-align: center; color: var(--color-warning-yellow); border: none; background: transparent; padding: 5px;">Offline-Modus aktiv.</li>';
+                }
             }
 
 
@@ -1633,13 +1825,43 @@
                     return;
                 }
 
-                const { error } = await window.appSupabaseClient
-                    .from('audit_log')
-                    .insert({ action_type: actionType, description: description, user_role: window.currentUserRole });
+                const logEntry = { action_type: actionType, description: description, user_role: window.currentUserRole, created_at: new Date().toISOString() };
+                let isOffline = !navigator.onLine;
 
-                if (error) {
-                    console.error("FEHLER beim Protokollieren der Admin-Aktion:", error);
-                    showToast("FEHLER: Konnte Aktion nicht im Log speichern.", 'error');
+                try {
+                    const { error } = await window.appSupabaseClient
+                        .from('audit_log')
+                        .insert([logEntry]);
+
+                    if (error) {
+                        if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
+                            throw new Error("Offline"); 
+                        }
+                        throw error;
+                    }
+                    // Online: Lokalen Cache aktualisieren
+                    await window.offlineDB.upsertData('audit_log', logEntry);
+
+                } catch (e) {
+                     if (e.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                        // Offline: Lokal speichern und Outbox hinzufügen
+                        await window.offlineDB.upsertData('audit_log', logEntry, 'created_at'); // created_at als Key
+                        await window.offlineDB.addToOutbox({
+                            type: 'INSERT',
+                            table: 'audit_log',
+                            key: logEntry.created_at, // Verwende created_at als temporären Key für die Outbox
+                            payload: logEntry,
+                            timestamp: new Date().toISOString()
+                        });
+                    } else {
+                        console.error("FEHLER beim Protokollieren der Admin-Aktion:", e);
+                        showToast("FEHLER: Konnte Aktion nicht im Log speichern.", 'error');
+                    }
+                }
+                
+                if (isOffline) {
+                    showToast("Log-Eintrag lokal gespeichert. Wird bei Verbindung synchronisiert.", 'info');
                 }
             }
 
@@ -1654,27 +1876,57 @@
                     return;
                 }
 
-                logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Logbuch-Einträge... (RLS-Policy für audit_log notwendig)</li>';
+                logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Logbuch-Einträge...</li>';
                 
-                let query = window.appSupabaseClient
-                    .from('audit_log')
-                    .select('*');
+                let logData = [];
+                let isOffline = false;
+                
+                try {
+                    // 1. Online-Versuch
+                    let query = window.appSupabaseClient
+                        .from('audit_log')
+                        .select('*');
 
-                // NEU: Filter für die Suche (in action_type oder description)
-                if (searchTerm) {
-                    const search = `%${searchTerm.toLowerCase()}%`;
-                    query = query.or(`action_type.ilike.${search},description.ilike.${search}`);
+                    if (searchTerm) {
+                        const search = `%${searchTerm.toLowerCase()}%`;
+                        query = query.or(`action_type.ilike.${search},description.ilike.${search}`);
+                    }
+
+                    const { data: logs, error } = await query
+                        .order('created_at', { ascending: false });
+
+                    if (error) {
+                        if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
+                            throw new Error("Offline"); 
+                        }
+                        throw error;
+                    }
+                    
+                    logData = logs;
+                    // Bei Erfolg: Lokalen Cache aktualisieren
+                    if (logData.length > 0) {
+                        await window.offlineDB.clearData('audit_log');
+                        await window.offlineDB.bulkInsertData('audit_log', logData);
+                    }
+                    
+                } catch (error) {
+                    isOffline = true;
+                    showToast("Netzwerkfehler. Zeige lokale Log-Einträge...", 'info');
+                    // 2. Offline-Fallback (IndexedDB)
+                    try {
+                        const localData = await window.offlineDB.getAllLogs();
+                         logData = localData.filter(item => {
+                            if (!searchTerm) return true;
+                            const term = searchTerm.toLowerCase();
+                            return item.action_type.toLowerCase().includes(term) || 
+                                   item.description.toLowerCase().includes(term);
+                        }).sort((a, b) => b.created_at.localeCompare(a.created_at));
+                    } catch (e) {
+                        showToast("Fehler beim Laden der lokalen Log-Einträge.", 'error');
+                        console.error("IndexedDB Fehler:", e);
+                    }
                 }
 
-                const { data: logData, error } = await query
-                    .order('created_at', { ascending: false });
-
-                if (error) {
-                    showToast("Fehler beim Laden des Admin Logs.", 'error');
-                    console.error("Fehler beim Laden des Logs:", error);
-                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Log konnte nicht von der Datenbank geladen werden.</li>';
-                    return;
-                }
                 
                 logListContainer.innerHTML = '';
                 if (logData.length === 0) {
@@ -1687,8 +1939,9 @@
                     const timestamp = new Date(dateSource).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
                     
                     let color = 'var(--color-accent-blue)';
-                    if (item.action_type.includes('ADDED')) color = 'var(--color-accent-green)';
+                    if (item.action_type.includes('ADDED') || item.action_type.includes('INSERT')) color = 'var(--color-accent-green)';
                     if (item.action_type.includes('DELETED')) color = 'var(--color-error-red)';
+                    if (item.action_type.includes('DATA_')) color = 'var(--color-warning-yellow)';
 
                     const listItem = document.createElement('li');
                     listItem.style.borderLeft = `5px solid ${color}`;
@@ -1704,6 +1957,10 @@
                     listItem.innerHTML = details;
                     logListContainer.appendChild(listItem);
                 });
+                
+                 if (isOffline) {
+                    logListContainer.innerHTML += '<li style="margin-top: 15px; text-align: center; color: var(--color-warning-yellow); border: none; background: transparent; padding: 5px;">Offline-Modus aktiv. (Lokale Einträge)</li>';
+                }
             }
 
 
@@ -1718,28 +1975,58 @@
                     return;
                 }
 
-                userListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Benutzerliste... (RLS-Policy für auth.users/user_roles notwendig)</li>';
+                userListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Benutzerliste...</li>';
+                
+                let users = [];
+                let isOffline = false;
 
-                let query = window.appSupabaseClient
-                    .from('user_roles')
-                    .select('*'); 
-                
-                // NEU: Filter für die Suche (in Email, Role oder Notes)
-                if (searchTerm) {
-                    const search = `%${searchTerm.toLowerCase()}%`;
-                    query = query.or(`email.ilike.${search},role.ilike.${search},notes.ilike.${search}`);
-                }
-                
-                const { data: users, error } = await query
-                    .order('email', { ascending: true });
+                try {
+                    // 1. Online-Versuch
+                    let query = window.appSupabaseClient
+                        .from('user_roles')
+                        .select('*'); 
+                    
+                    if (searchTerm) {
+                        const search = `%${searchTerm.toLowerCase()}%`;
+                        query = query.or(`email.ilike.${search},role.ilike.${search},notes.ilike.${search}`);
+                    }
+                    
+                    const { data: userData, error } = await query
+                        .order('email', { ascending: true });
 
-                if (error) {
-                    showToast("Fehler beim Laden der Benutzerliste.", 'error');
-                    console.error("Fehler beim Laden der Benutzer (RLS-Policy prüfen):", error);
-                    userListContainer.innerHTML = `<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Die Benutzerliste konnte nicht geladen werden. BITTE RLS-POLICIES PRÜFEN!</li>`;
-                    return;
+                    if (error) {
+                        if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
+                            throw new Error("Offline"); 
+                        }
+                        throw error;
+                    }
+                    
+                    users = userData;
+                    // Bei Erfolg: Lokalen Cache aktualisieren
+                     if (users.length > 0) {
+                        await window.offlineDB.clearData('user_roles');
+                        await window.offlineDB.bulkInsertData('user_roles', users);
+                    }
+
+                } catch (error) {
+                    isOffline = true;
+                    showToast("Netzwerkfehler. Zeige lokale Benutzerdaten...", 'info');
+                    // 2. Offline-Fallback (IndexedDB)
+                    try {
+                        const localData = await window.offlineDB.getAllUsers();
+                         users = localData.filter(item => {
+                            if (!searchTerm) return true;
+                            const term = searchTerm.toLowerCase();
+                            return item.email.toLowerCase().includes(term) || 
+                                   (item.notes || '').toLowerCase().includes(term) || 
+                                   (item.role || '').toLowerCase().includes(term);
+                        }).sort((a, b) => a.email.localeCompare(b.email));
+                    } catch (e) {
+                        showToast("Fehler beim Laden der lokalen Benutzerliste.", 'error');
+                        console.error("IndexedDB Fehler:", e);
+                    }
                 }
-                
+
                 userListContainer.innerHTML = '';
 
                 if (users.length === 0) {
@@ -1777,6 +2064,10 @@
                     listItem.innerHTML = details;
                     userListContainer.appendChild(listItem);
                 });
+                
+                if (isOffline) {
+                    userListContainer.innerHTML += '<li style="margin-top: 15px; text-align: center; color: var(--color-warning-yellow); border: none; background: transparent; padding: 5px;">Offline-Modus aktiv. (Lokale Einträge)</li>';
+                }
             }
 
             function showUserEditPopup(user) {
@@ -1810,6 +2101,7 @@
                 const newRole = document.getElementById('userEditRole').value;
                 const newBlockedStatus = document.getElementById('userEditBlocked').value === 'true';
                 const newNotes = document.getElementById('userEditNotes').value.trim();
+                const userId = window.userToEdit.id;
 
                 const oldRole = window.userToEdit.role || 'user';
                 const oldBlockedStatus = window.userToEdit.is_blocked;
@@ -1827,23 +2119,55 @@
                     notes: newNotes,
                 };
                 
-                const { error } = await window.appSupabaseClient
-                    .from("user_roles")
-                    .update(updatePayload)
-                    .eq("id", window.userToEdit.id);
+                let success = false;
+                let isOffline = !navigator.onLine;
 
-                if (error) {
-                    showToast(`FEHLER beim Speichern der Benutzerdaten.`, "error");
-                    console.error("Speicherfehler Benutzer:", error);
-                } else {
+                try {
+                    const { error } = await window.appSupabaseClient
+                        .from("user_roles")
+                        .update(updatePayload)
+                        .eq("id", userId);
+
+                    if (error) {
+                         if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
+                            throw new Error("Offline"); 
+                        }
+                        showToast(`FEHLER beim Speichern der Benutzerdaten.`, "error");
+                        console.error("Speicherfehler Benutzer:", error);
+                    } else {
+                        success = true;
+                    }
+
+                } catch (e) {
+                     if (e.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                        // Lokale Daten aktualisieren und Outbox-Eintrag erstellen
+                        await window.offlineDB.upsertData('user_roles', {...window.userToEdit, ...updatePayload});
+                        await window.offlineDB.addToOutbox({
+                            type: 'UPDATE',
+                            table: 'user_roles',
+                            key: userId,
+                            payload: updatePayload,
+                            timestamp: new Date().toISOString()
+                        });
+                        success = true;
+                     } else {
+                        console.error("Speicherfehler Benutzer:", e);
+                     }
+                }
+                
+                if (success) {
                     let logMessage = `Benutzer ${email} aktualisiert.`;
                     if (newRole !== oldRole) logMessage += ` Rolle: ${oldRole} -> ${newRole}.`;
                     if (newBlockedStatus !== oldBlockedStatus) logMessage += ` Status: ${oldBlockedStatus ? 'Gesperrt' : 'Aktiv'} -> ${newBlockedStatus ? 'Gesperrt' : 'Aktiv'}.`;
                     logAdminAction('USER_UPDATED', logMessage);
 
                     hideUserEditPopup();
-                    showToast(`Benutzer ${email} erfolgreich aktualisiert.`, "success");
-                    loadUserList(document.getElementById('userSearchInput').value); // Liste neu laden
+                    const statusMessage = isOffline ? 
+                        `Benutzer ${email} lokal aktualisiert. Wird bei Verbindung synchronisiert.` : 
+                        `Benutzer ${email} erfolgreich aktualisiert.`;
+                    showToast(statusMessage, isOffline ? "info" : "success");
+                    loadUserList(document.getElementById('userSearchInput').value); 
                 }
             }
 
@@ -1938,6 +2262,11 @@
                     showToast("Nur Administratoren dürfen Daten exportieren.", 'error');
                     return;
                 }
+                
+                if (!navigator.onLine) {
+                    showToast("Export im Offline-Modus nicht möglich. Bitte stellen Sie eine Verbindung her.", 'error');
+                    return;
+                }
 
                 showToast("Export wird vorbereitet...", 'info');
                 
@@ -1979,6 +2308,11 @@
             async function prepareImport() {
                 if (window.currentUserRole !== 'admin') {
                     showToast("Nur Administratoren dürfen Daten importieren.", 'error');
+                    return;
+                }
+                
+                if (!navigator.onLine) {
+                    showToast("Import im Offline-Modus nicht möglich. Bitte stellen Sie eine Verbindung her.", 'error');
                     return;
                 }
 
@@ -2120,6 +2454,10 @@
                     logAdminAction('DATA_IMPORTED', `${upsertData.length} Artikel erfolgreich aus Datei ${filename} importiert/aktualisiert.`);
                     showToast(`Import von ${upsertData.length} Artikeln erfolgreich!`, 'success', 5000);
                     
+                    // Lokale Datenbank vollständig neu laden/aktualisieren (Offline-Cache)
+                    await window.offlineDB.clearData('artikel');
+                    await window.offlineDB.bulkInsertData('artikel', upsertData);
+                    
                     // Liste neu laden, falls wir uns im List-Tab befinden
                     if (currentTabId === 'listTab') {
                         loadArticleList(document.getElementById('articleSearchInput').value); 
@@ -2128,8 +2466,295 @@
             }
 
 
+            /* --- OFFLINE/SYNCHRONISATIONS LOGIK --- */
+            
+            // IndexedDB Wrapper Klasse
+            class OfflineDB {
+                constructor(dbName = 'InventoryAppDB', version = 1) {
+                    this.dbName = dbName;
+                    this.version = version;
+                    this.db = null;
+                }
+
+                open() {
+                    return new Promise((resolve, reject) => {
+                        if (this.db) {
+                            resolve(this.db);
+                            return;
+                        }
+
+                        const request = indexedDB.open(this.dbName, this.version);
+
+                        request.onupgradeneeded = (event) => {
+                            this.db = event.target.result;
+                            // Primärschlüssel werden festgelegt
+                            if (!this.db.objectStoreNames.contains('artikel')) {
+                                this.db.createObjectStore('artikel', { keyPath: 'barcode' });
+                            }
+                            if (!this.db.objectStoreNames.contains('audit_log')) {
+                                // audit_log hat keinen eindeutigen Key, wir verwenden created_at (oder autoincrement)
+                                this.db.createObjectStore('audit_log', { keyPath: 'created_at' });
+                            }
+                            if (!this.db.objectStoreNames.contains('user_roles')) {
+                                this.db.createObjectStore('user_roles', { keyPath: 'id' });
+                            }
+                            // Outbox für ausstehende Schreiboperationen
+                            if (!this.db.objectStoreNames.contains('outbox')) {
+                                this.db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true });
+                            }
+                        };
+
+                        request.onsuccess = (event) => {
+                            this.db = event.target.result;
+                            resolve(this.db);
+                        };
+
+                        request.onerror = (event) => {
+                            console.error("IndexedDB Fehler:", event.target.error);
+                            reject(event.target.error);
+                        };
+                    });
+                }
+                
+                // CRUD Helfer
+                async putData(storeName, data, keyPath = null) {
+                    await this.open();
+                    return new Promise((resolve, reject) => {
+                        const transaction = this.db.transaction(storeName, 'readwrite');
+                        const store = transaction.objectStore(storeName);
+                        
+                        let request;
+                        if (keyPath) {
+                            // Wenn ein custom keyPath übergeben wurde, z.B. created_at für Log
+                            request = store.put(data, data[keyPath]);
+                        } else {
+                            request = store.put(data);
+                        }
+
+                        request.onsuccess = () => resolve();
+                        request.onerror = (event) => reject(event.target.error);
+                    });
+                }
+                
+                async getData(storeName, key) {
+                    await this.open();
+                    return new Promise((resolve, reject) => {
+                        const transaction = this.db.transaction(storeName, 'readonly');
+                        const store = transaction.objectStore(storeName);
+                        const request = store.get(key);
+                        
+                        request.onsuccess = () => resolve(request.result);
+                        request.onerror = (event) => reject(event.target.error);
+                    });
+                }
+                
+                async getAllData(storeName) {
+                    await this.open();
+                    return new Promise((resolve, reject) => {
+                        const transaction = this.db.transaction(storeName, 'readonly');
+                        const store = transaction.objectStore(storeName);
+                        const request = store.getAll();
+
+                        request.onsuccess = () => resolve(request.result);
+                        request.onerror = (event) => reject(event.target.error);
+                    });
+                }
+                
+                async deleteData(storeName, key) {
+                    await this.open();
+                    return new Promise((resolve, reject) => {
+                        const transaction = this.db.transaction(storeName, 'readwrite');
+                        const store = transaction.objectStore(storeName);
+                        const request = store.delete(key);
+
+                        request.onsuccess = () => resolve();
+                        request.onerror = (event) => reject(event.target.error);
+                    });
+                }
+                
+                async clearData(storeName) {
+                    await this.open();
+                    return new Promise((resolve, reject) => {
+                        const transaction = this.db.transaction(storeName, 'readwrite');
+                        const store = transaction.objectStore(storeName);
+                        const request = store.clear();
+
+                        request.onsuccess = () => resolve();
+                        request.onerror = (event) => reject(event.target.error);
+                    });
+                }
+                
+                // --- Spezifische Datenbank-Funktionen ---
+
+                async upsertData(storeName, data, keyPath = null) {
+                    return this.putData(storeName, data, keyPath);
+                }
+
+                async bulkInsertData(storeName, dataArray) {
+                    await this.open();
+                    return new Promise((resolve, reject) => {
+                        const transaction = this.db.transaction(storeName, 'readwrite');
+                        const store = transaction.objectStore(storeName);
+                        
+                        dataArray.forEach(item => store.put(item));
+
+                        transaction.oncomplete = () => resolve();
+                        transaction.onerror = (event) => reject(event.target.error);
+                    });
+                }
+                
+                // Artikel-Spezifisch
+                async getArticleByBarcode(barcode) {
+                    return this.getData('artikel', barcode);
+                }
+                
+                async getAllArticles() {
+                    return this.getAllData('artikel');
+                }
+                
+                async deleteArticle(barcode) {
+                    return this.deleteData('artikel', barcode);
+                }
+                
+                async updateArticleStellplatz(barcode, newStellplatz) {
+                    const article = await this.getArticleByBarcode(barcode);
+                    if (article) {
+                        article.stellplatz = newStellplatz;
+                        await this.upsertData('artikel', article);
+                    }
+                }
+                
+                // Log-Spezifisch
+                async getAllLogs() {
+                    return this.getAllData('audit_log');
+                }
+                
+                // User-Spezifisch
+                 async getAllUsers() {
+                    return this.getAllData('user_roles');
+                }
+
+                // Outbox-Spezifisch
+                async addToOutbox(operation) {
+                    return this.putData('outbox', operation);
+                }
+
+                async getOutboxOperations() {
+                    return this.getAllData('outbox');
+                }
+            }
+
+
+            function initOfflineSync() {
+                if (!window.indexedDB) {
+                    showToast("Ihr Browser unterstützt IndexedDB (Offline-Speicher) nicht.", 'error');
+                    return;
+                }
+                window.offlineDB = new OfflineDB();
+                window.offlineDB.open()
+                    .then(() => {
+                        console.log("IndexedDB erfolgreich geöffnet.");
+                        // Listener für Netzwerkverbindung hinzufügen
+                        window.addEventListener('online', () => syncData(false));
+                    })
+                    .catch(e => console.error("IndexedDB konnte nicht geöffnet werden.", e));
+            }
+            
+            // Funktion, die regelmäßig oder bei Wiederverbindung aufgerufen wird
+            async function syncData(initialLoad = false) {
+                 if (!navigator.onLine || window.isSyncing || !window.offlineDB) return;
+                 
+                 window.isSyncing = true;
+                 console.log("Starte Offline-Synchronisation...");
+                 
+                 try {
+                     const outboxOps = await window.offlineDB.getOutboxOperations();
+                     const pendingCount = outboxOps.length;
+                     
+                     if (pendingCount > 0) {
+                         showToast(`Synchronisiere ${pendingCount} ausstehende Aktionen...`, 'info', 10000);
+                         await processOutbox(outboxOps);
+                     } else if (!initialLoad) {
+                         showToast("Online. Keine ausstehenden Aktionen.", 'success', 3000);
+                     }
+                     
+                     // Jetzt vollständige Datenbank-Listen synchronisieren (Pull)
+                     await loadArticleList(document.getElementById('articleSearchInput').value); 
+                     
+                     if (window.currentUserRole === 'admin') {
+                         await loadAdminLog(document.getElementById('logSearchInput').value);
+                         await loadUserList(document.getElementById('userSearchInput').value);
+                     }
+                     
+                     console.log("Offline-Synchronisation abgeschlossen.");
+
+                 } catch (e) {
+                     console.error("Fehler während der Synchronisation:", e);
+                     showToast("Synchronisationsfehler. Versuche es später erneut.", 'error', 5000);
+                 } finally {
+                     window.isSyncing = false;
+                 }
+            }
+            
+            async function processOutbox(operations) {
+                for (const op of operations) {
+                    try {
+                        let error = null;
+                        
+                        // 1. Operation an Supabase senden (Push)
+                        if (op.type === 'INSERT') {
+                            const response = await window.appSupabaseClient
+                                .from(op.table)
+                                .insert([op.payload]);
+                            error = response.error;
+                            
+                        } else if (op.type === 'UPDATE' || op.type === 'SCAN_INCREMENT') {
+                             // Scan-Increment wird als einfaches Update behandelt, da die Logik in searchArticle den Zähler erhöht
+                             // Wir verwenden den key (z.B. barcode) für die Filterung
+                            const response = await window.appSupabaseClient
+                                .from(op.table)
+                                .update(op.payload)
+                                .eq(op.table === 'artikel' ? 'barcode' : 'id', op.key); 
+                            error = response.error;
+                            
+                        } else if (op.type === 'DELETE') {
+                            const response = await window.appSupabaseClient
+                                .from(op.table)
+                                .delete()
+                                .eq(op.table === 'artikel' ? 'barcode' : 'id', op.key);
+                            error = response.error;
+                        }
+                        
+                        if (error) {
+                            // Wenn der Fehler kein Netzwerkfehler ist (z.B. RLS-Verletzung), dann überspringen wir die Aktion
+                            if (error.code && error.code !== 'PGRST116') {
+                                console.error(`Outbox Fehler (${op.type} auf ${op.table} für Key ${op.key}):`, error);
+                                showToast(`Fehler beim Synchronisieren von ${op.type} (${op.table}). Aktion übersprungen.`, 'error', 7000);
+                            } else {
+                                // Netzwerkfehler oder Timeout: Abbrechen und warten auf nächste Sync
+                                throw new Error("Netzwerkfehler beim Push.");
+                            }
+                        }
+                        
+                        // 2. Erfolg: Operation aus der Outbox löschen
+                        await window.offlineDB.deleteData('outbox', op.id); 
+                        console.log(`Outbox-Aktion erfolgreich synchronisiert und gelöscht: ${op.type} ${op.table}`);
+
+                    } catch (e) {
+                        if (e.message.includes("Netzwerkfehler")) {
+                            // Breche ab, um beim nächsten Sync erneut zu versuchen
+                            return;
+                        }
+                        // Bei anderen Fehlern wird mit der nächsten Operation fortgefahren, 
+                        // aber die fehlerhafte Operation nicht gelöscht (sollte im try-Block behandelt werden).
+                    }
+                }
+            }
+
+
             window.onload = function() {
                 initSettings(); // Einstellungen laden
+                initOfflineSync(); // Offline-Logik initialisieren
                 checkLogin();
             };
         </script>
