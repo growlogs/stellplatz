@@ -1138,7 +1138,7 @@
 
             /** Schaltet zwischen Anmelde- und Registrierungsmodus um. */
             function toggleAuthMode() {
-                isRegisterMode = !isRegisterMode;
+                var isRegisterMode = !isRegisterMode;
                 const title = document.getElementById('authTitle');
                 const submitButton = document.getElementById('authSubmitButton');
                 const toggleLink = document.getElementById('registerToggle');
