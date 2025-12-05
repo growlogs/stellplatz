@@ -1032,17 +1032,17 @@
             
             /**
              * Behandelt den erfolgreichen Login und bestimmt die Rolle.
-             * * ACHTUNG: Die Logik zur Rollenbestimmung muss in Ihrer Datenbank 
-             * (z.B. in einer 'profiles'-Tabelle mit einer 'role'-Spalte) existieren.
-             * Hier wird die Rolle vereinfacht aus der Datenbank gelesen.
+             * KRITISCHE KORREKTUR: Sucht nun in 'user_roles' statt 'profiles'.
              */
             async function handleLoginSuccess(userId, email) {
                 currentUserId = userId;
                 let userRole = 'user'; // Standardrolle
                 
-                // Rollenbestimmung (ANNAHME: Sie haben eine 'profiles'-Tabelle mit 'user_id' und 'role')
+                // Rollenbestimmung
+                // ACHTUNG: Hier wurde die Tabelle von 'profiles' auf 'user_roles' geändert.
+                // BITTE sicherstellen, dass die Tabelle 'user_roles' in Supabase existiert und die Spalten 'user_id' und 'role' hat!
                 const { data, error } = await window.appSupabaseClient
-                    .from('profiles')
+                    .from('user_roles') // <-- KORREKTUR
                     .select('role')
                     .eq('user_id', userId)
                     .single();
@@ -1051,8 +1051,9 @@
                     userRole = data.role; // Z.B. 'admin' oder 'user'
                 }
                 
+                // PGRST116 = kein Eintrag gefunden (Was bei neuen Nutzern passieren kann, die nur die Default-Rolle 'user' haben)
                 if (error && error.code !== 'PGRST116') {
-                    console.error("Fehler beim Laden der Benutzerrolle:", error);
+                    console.error("Fehler beim Laden der Benutzerrolle (RLS-Policy prüfen):", error);
                     showToast("Login erfolgreich, aber Rollenprüfung fehlgeschlagen. Nur als USER angemeldet.", 'info');
                 }
                 
@@ -1118,11 +1119,16 @@
                 const config = { 
                     fps: 10, 
                     qrbox: { width: 250, height: 250 },
-                    // Bevorzuge die rückwärtige Kamera auf mobilen Geräten
-                    facingMode: "environment"
+                    // KRITISCHE KORREKTUR: Entferne 'exact' um OverconstrainedError zu vermeiden
+                    facingMode: "environment" 
                 };
                 
-                html5QrCode.start({ facingMode: { exact: "environment"} }, config, onScanSuccess, onScanError)
+                // NUR die Facing Mode Präferenz übergeben, nicht die strikte 'exact'-Anforderung
+                const startConfig = {
+                     facingMode: { ideal: "environment" } 
+                };
+                
+                html5QrCode.start(startConfig, config, onScanSuccess, onScanError)
                 .catch(err => {
                     // Overlay wieder, falls der Start fehlschlägt
                     document.getElementById("preScan").style.display = "flex";
@@ -1568,7 +1574,7 @@ async function loadAdminLog() {
     const { data, error } = await window.appSupabaseClient
         .from("audit_log") // <-- Prüfen Sie, ob Ihre Tabelle WIRKLICH "audit_log" heißt!
         .select("*")
-        .order("timestamp", { ascending: false }) // <-- Prüfen Sie, ob Ihre Spalte WIRKLICH "timestamp" heißt!
+        .order("created_at", { ascending: false }) // Verwenden created_at als Standard-Timestamp
         .limit(50); 
         
     if (error) {
@@ -1586,10 +1592,8 @@ async function loadAdminLog() {
     }
 
     data.forEach(item => {
-        // NEUE KORREKTUR: Verwenden Sie 'timestamp' oder 'created_at', je nachdem, wie Ihre Spalte heißt!
-        // Wir gehen davon aus, dass die Log-Tabelle die Supabase-Standardspalte 'created_at' verwendet,
-        // oder die von mir im Log-Code genannte Spalte 'timestamp'.
-        const dateSource = item.timestamp || item.created_at; 
+        // Verwenden Sie created_at von Supabase
+        const dateSource = item.created_at; 
         const timestamp = new Date(dateSource).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
         
         let color = 'var(--color-accent-blue)';
