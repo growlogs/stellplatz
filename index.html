@@ -1124,7 +1124,8 @@
                 // KORREKTUR: Verwende "environment" als Kamera-ID/Constraint-Shortcut,
                 // da die Library die komplexe MediaTrackConstraints-Struktur
                 // als ersten Parameter ablehnt, wenn sie nicht "exact" enthält.
-                const cameraIdOrConstraints = "environment"; 
+                // FIX FÜR OVERCONSTRAINEDERROR: Verwendung des Constraint-Objekts statt des String-Shortcuts
+                const cameraIdOrConstraints = { facingMode: "environment" }; 
                 
                 html5QrCode.start(cameraIdOrConstraints, config, onScanSuccess, onScanError)
                 .catch(err => {
@@ -1677,3 +1678,4 @@ async function loadAdminLog() {
 
     </body>
     </html>
+}
