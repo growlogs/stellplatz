@@ -5,23 +5,19 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Inventar Scanner Pro</title>
 
+        <!-- Supabase Client für professionelle Authentifizierung und Datenbankzugriff -->
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <!-- Scanner Bibliothek -->
         <script src="https://unpkg.com/html5-qrcode"></script>
 
         <script>
             // ---------------------------------------------------------
-            // KONFIGURATION: Supabase und Zugangs-Codes
+            // KONFIGURATION: Supabase
             // ---------------------------------------------------------
+            // BITTE DIE ECHTE URL UND DEN ANON KEY HIER EINTRAGEN
             var APP_SUPABASE_URL = "https://sjhyvctidpnttqhenqoy.supabase.co";
-            // BESTÄTIGT KORREKT: Dies ist der öffentliche 'anon' Schlüssel.
             var APP_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaHl2Y3RpZHBudHRxaGVucW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzU3NTksImV4cCI6MjA4MDAxMTc1OX0.oXUA012J99W8fNNJi8Zxqn-2BUjf1QJOrXGYlPotaS4";
             
-            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            // !!! KRITISCHE SICHERHEITSWARNUNG: DIESER CODE IST UNSICHER             !!!
-            // !!! BITTE DIESE LOGIK DURCH EINE SUPABASE AUTHENTIFIZIERUNG ERSETZEN!  !!!
-            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            var USER_ACCESS_CODE = "1234"; // 4-stellig
-            var ADMIN_ACCESS_CODE = "4321"; // 4-stellig
             // ---------------------------------------------------------
 
             // Initialisierung
@@ -32,10 +28,10 @@
                     window.appSupabaseClient = null;
                     console.error("Supabase-Client konnte nicht initialisiert werden.");
                 }
-                window.currentPin = ""; // Speichert den aktuell eingegebenen PIN-Code
                 window.lastCode = ""; // Für Debouncing des Scanners
                 window.currentTabId = "scannerTab"; // Aktueller Tab
                 window.currentUserRole = null; // Speichert die Rolle ('user', 'admin' oder null)
+                window.currentUserId = null; // Speichert die Supabase-User-ID
             })();
         </script>
 
@@ -88,7 +84,7 @@
                 pointer-events: all;
             }
 
-            /* Initial Zustand für Login, um den "Slide-In"-Effekt zu simulieren */
+            /* Simuliert den Slide-In/Out Effekt */
             #loginView {
                 transform: translateY(0);
             }
@@ -109,10 +105,10 @@
             #tabContentContainer {
                 flex-grow: 1;
                 position: relative;
-                overflow: hidden; /* Wichtig, um die Tabs im Container zu halten */
+                overflow: hidden; 
             }
             
-            /* KORREKTUR: Vereinfachung der Sichtbarkeitsregeln - Wichtig für Log Überlappung */
+            /* Tabs benötigen position: absolute, um sich korrekt zu überlappen */
             .tab-content {
                 position: absolute;
                 top: 0;
@@ -122,9 +118,8 @@
                 /* WICHTIG: display: none mit !important, um Überlappung zu verhindern */
                 display: none !important; 
                 flex-direction: column;
-                overflow-y: auto; /* List- und Log-Tabs brauchen Scrolling */
+                overflow-y: auto; 
                 
-                /* Expliziter Hintergrund, falls doch etwas durchscheint */
                 background: var(--color-bg-dark); 
             }
             
@@ -144,7 +139,7 @@
                 padding: 0 15px;
                 border-bottom: 1px solid var(--color-border);
                 z-index: 10;
-                flex-shrink: 0; /* Verhindert, dass der Header schrumpft */
+                flex-shrink: 0; 
             }
 
             header h1 {
@@ -163,17 +158,20 @@
                 cursor: pointer;
                 transition: background 0.2s;
             }
+            .header-button:active {
+                background: rgba(255, 255, 255, 0.2);
+            }
 
-            /* --- LOGIN VIEW --- */
+            /* --- LOGIN VIEW (NEU: Email/Password) --- */
             #loginView {
-                justify-content: space-around;
+                justify-content: center; 
                 align-items: center;
                 padding: 40px 20px;
             }
 
             .login-header {
                 text-align: center;
-                padding-top: 50px;
+                margin-bottom: 40px; 
             }
 
             .app-icon {
@@ -200,86 +198,60 @@
                 text-align: center;
                 font-size: 1.1rem;
                 opacity: 0.7;
-                display: none; /* Wird dynamisch in JS angezeigt/versteckt */
+                display: none; 
                 margin-top: 40px;
             }
-
-            /* --- PIN INDICATORS --- */
-            #pinIndicators {
-                display: flex;
-                gap: 15px;
-                margin-bottom: 30px;
-                height: 12px;
-                /* Beschränkt auf 4 Ziffern */
-                width: 130px; 
-                justify-content: center;
-            }
-
-            .pin-indicator {
-                width: 12px;
-                height: 12px;
-                border-radius: 50%;
-                border: 2px solid rgba(255, 255, 255, 0.2);
-                background: transparent;
-                transition: background-color 0.2s, border-color 0.2s;
-            }
-
-            .pin-indicator.active {
-                background: var(--color-accent-blue);
-                border-color: var(--color-accent-blue);
-                box-shadow: 0 0 10px rgba(0, 122, 255, 0.6);
-            }
-
-            /* --- KEYPAD --- */
-            #keypad {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 20px;
+            
+            #authForm {
                 width: 100%;
                 max-width: 320px;
-                padding: 10px 0;
             }
 
-            .keypad-button {
-                width: 80px;
-                height: 80px;
-                border-radius: 50%;
+            /* STYLES FÜR INPUTS */
+            .login-input-group {
+                margin-bottom: 15px;
+            }
+
+            .login-input-group label {
+                display: none;
+            }
+
+            .login-input-group input[type="email"],
+            .login-input-group input[type="password"] {
+                width: 100%;
+                padding: 15px;
+                border-radius: 8px;
+                border: 1px solid var(--color-border);
                 background: var(--color-bg-card);
                 color: white;
-                font-size: 1.8rem;
-                font-weight: 500;
-                border: none;
-                cursor: pointer;
-                transition: background 0.1s, box-shadow 0.1s;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin: 0 auto;
-            }
-
-            .keypad-button:active {
-                background: rgba(255, 255, 255, 0.15);
-                box-shadow: 0 0 15px 5px rgba(0, 122, 255, 0.3); /* Leichter Akzent-Glüheffekt */
-            }
-
-            .keypad-button.action {
-                /* Tasten für Aktionen (Löschen/Backspace) sind weniger prominent */
-                background: transparent;
-                box-shadow: none;
-                opacity: 0.7;
                 font-size: 1rem;
-                font-weight: 400;
+                -webkit-appearance: none; 
             }
 
-            .keypad-button.action:active {
-                background: rgba(255, 255, 255, 0.1);
+            .login-input-group input:focus {
+                outline: none;
+                border-color: var(--color-accent-blue);
+                box-shadow: 0 0 5px rgba(0, 122, 255, 0.5);
+            }
+            
+            .login-action-button {
+                width: 100%;
+                padding: 15px;
+                font-size: 1rem;
+                font-weight: 600;
+                background: var(--color-accent-blue);
+                color: white;
+                border: none;
+                border-radius: 10px;
+                cursor: pointer;
+                transition: background 0.2s;
+                margin-top: 10px;
             }
 
-            .keypad-button.backspace svg {
-                width: 28px;
-                height: 28px;
-                stroke: white;
+            .login-action-button:active {
+                background: #0066cc;
             }
+
 
             /* --- APP VIEW / SCANNER --- */
             #scannerTab {
@@ -300,7 +272,6 @@
                 width: 100%;
                 height: 100%;
                 background: black;
-                /* Stellt sicher, dass das Video den Container ausfüllt */
                 object-fit: cover;
             }
             
@@ -463,7 +434,7 @@
 
             #popupOverlay.show, #adminEditPopupOverlay.show, #deleteConfirmPopupOverlay.show {
                 opacity: 1;
-                display: flex; /* Wichtig, um nach der Transition sichtbar zu sein */
+                display: flex; 
             }
 
             .popup-card {
@@ -524,7 +495,7 @@
                 width: 90%;
                 max-width: 350px;
                 z-index: 200;
-                pointer-events: none; /* Macht Toasts nicht klickbar */
+                pointer-events: none; 
             }
 
             .toast {
@@ -586,7 +557,7 @@
                 font-size: 0.8rem;
                 cursor: pointer;
                 transition: color 0.2s;
-                user-select: none; /* Verhindert Auswahl beim Tippen */
+                user-select: none; 
             }
 
             .nav-item.active {
@@ -623,7 +594,6 @@
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                /* Visuelle Anzeige für Admin-Klickbarkeit */
                 transition: background 0.2s; 
             }
             
@@ -683,7 +653,6 @@
             }
             
             #logList li {
-                /* Grund-Styles für die Konsistenz mit Artikelliste */
                 background: var(--color-bg-card);
                 padding: 15px;
                 border-radius: 10px;
@@ -694,8 +663,10 @@
     </head>
     <body>
 
+        <!-- Toast-Container für temporäre Meldungen (Erfolg/Fehler) -->
         <div id="toastContainer"></div>
         
+        <!-- Popup für neue Artikelregistrierung -->
         <div id="popupOverlay">
             <form class="popup-card" onsubmit="event.preventDefault(); saveArticle();">
                 <h3>Artikel Registrieren</h3>
@@ -742,6 +713,7 @@
             </form>
         </div>
         
+        <!-- Popup für Admin-Bearbeitung (Stellplatz ändern) -->
         <div id="adminEditPopupOverlay">
             <form class="popup-card" onsubmit="event.preventDefault(); saveAdminEdit();">
                 <h3>Artikel Bearbeiten (Admin)</h3>
@@ -773,6 +745,7 @@
             </form>
         </div>
 
+        <!-- Popup für Löschbestätigung -->
         <div id="deleteConfirmPopupOverlay">
             <div class="popup-card">
                 <h3 id="deleteConfirmTitle">Artikel unwiderruflich löschen</h3>
@@ -786,43 +759,38 @@
         </div>
 
 
+        <!-- Login View (NEU: E-Mail/Passwort) -->
         <div id="loginView" class="app-view-container active">
 
             <div class="login-header">
-                <div class="app-icon">🔐</div>
+                <div class="app-icon">📦</div>
                 <h2>Inventar Scanner Pro</h2>
                 <div id="authError"></div>
             </div>
 
-            <div id="authContent" style="display: none; align-items: center; flex-direction: column;">
-                <p style="opacity: 0.7;" id="pinInstruction">Geben Sie Ihren 4-stelligen PIN ein.</p> 
+            <form id="authForm" onsubmit="event.preventDefault(); handleLogin();" style="display: none; align-items: center; flex-direction: column;">
+                <p style="opacity: 0.7; text-align: center; margin-bottom: 20px;" id="loginInstruction">Bitte melden Sie sich mit E-Mail und Passwort an.</p>
                 
-                <div id="pinIndicators">
-                    <div class="pin-indicator"></div>
-                    <div class="pin-indicator"></div>
-                    <div class="pin-indicator"></div>
-                    <div class="pin-indicator"></div>
+                <div class="login-input-group">
+                    <label for="loginEmail">E-Mail</label>
+                    <input type="email" id="loginEmail" placeholder="E-Mail-Adresse" required>
                 </div>
 
-                <div id="keypad">
-                    <button class="keypad-button" data-key="1" onclick="handlePinInput(1)">1</button>
-                    <button class="keypad-button" data-key="2" onclick="handlePinInput(2)">2</button>
-                    <button class="keypad-button" data-key="3" onclick="handlePinInput(3)">3</button>
-                    <button class="keypad-button" data-key="4" onclick="handlePinInput(4)">4</button>
-                    <button class="keypad-button" data-key="5" onclick="handlePinInput(5)">5</button>
-                    <button class="keypad-button" data-key="6" onclick="handlePinInput(6)">6</button>
-                    <button class="keypad-button" data-key="7" onclick="handlePinInput(7)">7</button>
-                    <button class="keypad-button" data-key="8" onclick="handlePinInput(8)">8</button>
-                    <button class="keypad-button" data-key="9" onclick="handlePinInput(9)">9</button>
-                    <div class="keypad-button action"></div>
-                    <button class="keypad-button" data-key="0" onclick="handlePinInput(0)">0</button>
-                    <button class="keypad-button action backspace" onclick="handlePinInput('backspace')">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M7 16L3 12M3 12L7 8M3 12H16.8C18.4565 12 20.0456 11.3151 21.2132 10.1475C22.3809 8.97994 23.0658 7.39082 23.0658 5.73449C23.0658 4.07817 22.3809 2.48905 21.2132 1.32148C20.0456 0.15392 18.4565 0 16.8 0H4" transform="translate(0 6)"/>
-                        </svg>
-                    </button>
+                <div class="login-input-group">
+                    <label for="loginPassword">Passwort</label>
+                    <input type="password" id="loginPassword" placeholder="Passwort" required>
                 </div>
-            </div>
+
+                <button type="submit" id="loginButton" class="login-action-button">Anmelden</button>
+                
+                <p style="margin-top: 25px; font-size: 0.9rem; opacity: 0.8; cursor: pointer; text-align: center;" onclick="toggleSignupMode()">
+                    Noch kein Konto? **Registrieren**
+                </p>
+                
+                <p style="margin-top: 10px; font-size: 0.8rem; opacity: 0.5; text-align: center;" id="signupNote">
+                    Neue Nutzer erhalten automatisch die Rolle 'USER'.
+                </p>
+            </form>
             
             <div id="loadingAuth">
                 Initialisiere App...
@@ -831,6 +799,7 @@
         </div>
 
 
+        <!-- Haupt-App-Ansicht -->
         <div id="appView" class="app-view-container">
 
             <header>
@@ -840,6 +809,7 @@
 
             <div id="tabContentContainer">
 
+                <!-- 1. Scanner Tab -->
                 <div id="scannerTab" class="tab-content active">
                     <div id="reader-container">
                         <div id="reader"></div>
@@ -853,6 +823,7 @@
                         </div>
                     </div>
 
+                    <!-- Scan-Ergebnis Karte -->
                     <div id="result-card" class="result-card">
                         <div class="card-handle"></div>
                         <div id="cardTitle"><span id="cardStatusIcon"></span> <span id="cardTitleText"></span></div>
@@ -864,12 +835,14 @@
                     </div>
                 </div>
 
+                <!-- 2. Liste Tab -->
                 <div id="listTab" class="tab-content">
                     <ul id="articleList">
                         <li>Lade Artikel...</li>
                     </ul>
                 </div>
                 
+                <!-- 3. Admin Log Tab -->
                 <div id="logTab" class="tab-content">
                     <ul id="logList">
                         <li>Lade Log-Protokoll...</li>
@@ -877,6 +850,7 @@
                 </div>
             </div>
 
+            <!-- Footer Navigation -->
             <footer>
                 <div class="nav-item active" data-tab="scannerTab" onclick="changeTab('scannerTab')">
                     <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h.01M7 7h.01M11 11h.01M15 15h.01M21 3h-6l-3 3H3v18h18V3z"/></svg>
@@ -901,10 +875,10 @@
             let currentTabId = "scannerTab";
             let currentUserId = null;
             let currentUserRole = null; 
-            let isAuthReady = false;
             let articleToEdit = null; 
             let articleToDelete = null; 
-            
+            let isSignupMode = false; // Steuert den Registrierungsmodus
+
             // SVG-Strings für die Lagertypen
             const SHELF_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4V4zm4 0v16m8-16v16M4 10h16M4 16h16"/></svg>';
             const WAREHOUSE_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l10 5l-10 5l-10-5zM2 12v6l10 5l10-5v-6M12 2v10"/></svg>';
@@ -913,7 +887,7 @@
             /* --- HILFSFUNKTIONEN --- */
 
             /**
-             * Zeigt eine temporäre, nicht-blockierende Nachricht an.
+             * Zeigt eine temporäre, nicht-blockierende Nachricht an (Toast).
              */
             function showToast(message, type = 'info', duration = 3000) {
                 const container = document.getElementById('toastContainer');
@@ -926,13 +900,10 @@
 
                 container.appendChild(toast);
 
-                // Trigger CSS transition
                 setTimeout(() => toast.classList.add('show'), 10);
 
-                // Hide and remove after duration
                 setTimeout(() => {
                     toast.classList.remove('show');
-                    // Remove from DOM after transition
                     setTimeout(() => {
                         if (toast.parentNode === container) {
                             container.removeChild(toast);
@@ -952,103 +923,213 @@
                 });
             }
 
-            /* --- LOGIN LOGIK --- */
-
-            function updatePinIndicators() {
-                // HINWEIS: Wählt nur die 4 vorhandenen Indikatoren
-                const indicators = document.querySelectorAll('#pinIndicators .pin-indicator'); 
-                indicators.forEach((indicator, index) => {
-                    if (index < window.currentPin.length) {
-                        indicator.classList.add('active');
-                    } else {
-                        indicator.classList.remove('active');
-                    }
-                });
+            /* --- NEU: LOGIN LOGIK (E-MAIL/PASSWORT) --- */
+            
+            /**
+             * Lädt die Benutzerrolle aus der Datenbank.
+             */
+            async function loadUserRole(userId) {
+                if (!userId) return 'user';
+                
+                const { data, error } = await window.appSupabaseClient
+                    .from('user_roles')
+                    .select('role')
+                    .eq('id', userId)
+                    .single();
+                
+                if (error && error.code !== 'PGRST116') { // PGRST116 = kein Eintrag gefunden
+                    console.error("Fehler beim Laden der Rolle:", error);
+                    return 'user'; // Sicherer Fallback
+                }
+                
+                return data ? data.role : 'user';
             }
 
-            // Automatischer 4-stelliger Login
-            function handlePinInput(key) {
-                document.getElementById("authError").innerText = ""; 
-                const MAX_PIN_LENGTH = 4; // Max 4 Ziffern
-
-                if (key === 'backspace') {
-                    window.currentPin = window.currentPin.slice(0, -1);
-                } else if (typeof key === 'number' && window.currentPin.length < MAX_PIN_LENGTH) { 
-                    window.currentPin += key.toString();
-                }
-
-                updatePinIndicators();
+            /**
+             * Weist einem neuen Benutzer die Standardrolle 'user' zu.
+             */
+            async function createDefaultUserRole(userId) {
+                 const { error } = await window.appSupabaseClient
+                    .from('user_roles')
+                    .insert({
+                        id: userId,
+                        role: 'user'
+                    });
                 
-                // Automatischer Login-Versuch, sobald 4 Ziffern eingegeben wurden
-                if (window.currentPin.length === MAX_PIN_LENGTH) {
-                    handlePinEntry(window.currentPin);
-                    // PIN zurücksetzen, um den nächsten Versuch zu ermöglichen
-                    window.currentPin = "";
-                    setTimeout(updatePinIndicators, 300); 
+                if (error) {
+                    console.error("FEHLER beim Setzen der Standardrolle:", error);
                 }
             }
 
 
-            function handlePinEntry(pin) {
-                let role = null;
-                let success = false;
-                
-                if (pin === USER_ACCESS_CODE) {
-                    role = 'user';
-                    success = true;
-                } else if (pin === ADMIN_ACCESS_CODE) {
-                    role = 'admin';
-                    success = true;
-                }
-                
-                if (success) {
-                    document.getElementById("authError").innerText = "";
-                    window.currentUserRole = role; // Rolle setzen
-                    
-                    // Anpassung der Anzeige
-                    const roleDisplay = (role === 'admin' ? "ADMIN" : "USER");
-                    document.getElementById("userDisplay").innerText = `${roleDisplay}`;
-                    
-                    switchView('appView');
-                    changeTab('scannerTab');
+            /**
+             * Schaltet den Anmelde-/Registrierungsmodus um
+             */
+            function toggleSignupMode() {
+                isSignupMode = !isSignupMode;
+                const button = document.getElementById('loginButton');
+                const instruction = document.getElementById('loginInstruction');
+                const toggleLink = document.querySelector('#authForm p:nth-child(4)'); // Linktext
+                const signupNote = document.getElementById('signupNote');
+
+                if (isSignupMode) {
+                    instruction.innerText = "Bitte geben Sie Ihre E-Mail und ein Passwort ein, um sich zu registrieren.";
+                    button.innerText = "Registrieren & Einloggen";
+                    toggleLink.innerHTML = "Bereits registriert? **Anmelden**";
+                    signupNote.style.opacity = 0.8;
+                    document.getElementById('authError').innerText = "";
                 } else {
-                    document.getElementById("authError").innerText = "Falscher Code. Bitte versuchen Sie es erneut.";
-                    showToast("Falscher Code.", 'error');
+                    instruction.innerText = "Bitte melden Sie sich mit E-Mail und Passwort an.";
+                    button.innerText = "Anmelden";
+                    toggleLink.innerHTML = "Noch kein Konto? **Registrieren**";
+                    signupNote.style.opacity = 0.5;
+                    document.getElementById('authError').innerText = "";
                 }
             }
-
-            // Beim Start die Login- oder App-Ansicht festlegen
-            async function checkLogin() {
-                const authContent = document.getElementById("authContent");
-                const loadingIndicator = document.getElementById("loadingAuth");
+            
+            /**
+             * Hauptfunktion für Login und Registrierung, abhängig von isSignupMode
+             */
+            async function handleLogin() {
+                if (isSignupMode) {
+                    await handleSignup();
+                } else {
+                    await attemptLogin();
+                }
+            }
+            
+            /**
+             * Führt den Login-Versuch aus.
+             */
+            async function attemptLogin() {
+                const email = document.getElementById('loginEmail').value.trim();
+                const password = document.getElementById('loginPassword').value.trim();
+                const errorDisplay = document.getElementById("authError");
+                errorDisplay.innerText = "";
                 
-                if (isAuthReady) {
-                    authContent.style.display = "flex";
-                    loadingIndicator.style.display = "none";
+                if (!email || !password) {
+                    errorDisplay.innerText = "Bitte E-Mail und Passwort eingeben.";
                     return;
                 }
                 
-                loadingIndicator.style.display = "block";
-                authContent.style.display = "none";
+                const loginButton = document.getElementById('loginButton');
+                loginButton.disabled = true;
+                loginButton.innerText = "Melde an...";
 
-                // Warten auf die Session-Prüfung von Supabase (Simuliert)
-                const { data } = await window.appSupabaseClient.auth.getSession();
-                const currentSession = data.session;
+                const { data, error } = await window.appSupabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password,
+                });
+
+                loginButton.disabled = false;
+                loginButton.innerText = "Anmelden";
+
+                if (error) {
+                    errorDisplay.innerText = error.message;
+                    showToast(`Login Fehler: ${error.message}`, 'error');
+                } else if (data.user) {
+                    // Login erfolgreich, Session vorhanden
+                    await setupUserSession(data.user);
+                }
+            }
+            
+            /**
+             * Führt die Registrierung eines neuen Benutzers aus.
+             */
+            async function handleSignup() {
+                const email = document.getElementById('loginEmail').value.trim();
+                const password = document.getElementById('loginPassword').value.trim();
+                const errorDisplay = document.getElementById("authError");
+                errorDisplay.innerText = "";
                 
-                // Session-Check beendet
-                isAuthReady = true;
-                loadingIndicator.style.display = "none";
+                if (!email || password.length < 6) {
+                    errorDisplay.innerText = "E-Mail und ein Passwort (min. 6 Zeichen) sind erforderlich.";
+                    return;
+                }
+                
+                const loginButton = document.getElementById('loginButton');
+                loginButton.disabled = true;
+                loginButton.innerText = "Registriere...";
 
-                // Zeige immer die Login-Ansicht anfangs
-                switchView('loginView');
-                authContent.style.display = "flex";
+                // Supabase registriert und loggt direkt ein
+                const { data, error } = await window.appSupabaseClient.auth.signUp({
+                    email: email,
+                    password: password,
+                });
+                
+                loginButton.disabled = false;
+                loginButton.innerText = "Registrieren & Einloggen";
+
+
+                if (error) {
+                    errorDisplay.innerText = error.message;
+                    showToast(`Registrierung Fehler: ${error.message}`, 'error');
+                } else if (data.user) {
+                    // Registrierung und Login erfolgreich
+                    await createDefaultUserRole(data.user.id);
+                    await setupUserSession(data.user);
+                    showToast(`Registrierung erfolgreich. Willkommen!`, 'success');
+                }
+            }
+            
+            /**
+             * Setzt die Benutzer-Session (Rolle laden und App-Start)
+             */
+            async function setupUserSession(user) {
+                window.currentUserId = user.id;
+                
+                // Rolle aus der Datenbank laden
+                window.currentUserRole = await loadUserRole(user.id);
+                
+                const roleDisplay = (window.currentUserRole).toUpperCase();
+                document.getElementById("userDisplay").innerText = `${roleDisplay} (${user.email})`;
+                
+                // UI anpassen (z.B. Log-Tab nur für Admin anzeigen)
+                if (window.currentUserRole === 'admin') {
+                    document.querySelector('.nav-item[data-tab="logTab"]').style.display = 'flex';
+                } else {
+                    document.querySelector('.nav-item[data-tab="logTab"]').style.display = 'none';
+                }
+
+                switchView('appView');
+                changeTab('scannerTab');
+                showToast(`Willkommen, ${roleDisplay}!`, 'success');
             }
 
+
+            // Beim Start die Login- oder App-Ansicht festlegen
+            async function checkLogin() {
+                const authForm = document.getElementById("authForm");
+                const loadingIndicator = document.getElementById("loadingAuth");
+                
+                loadingIndicator.style.display = "block";
+                authForm.style.display = "none";
+
+                // Prüft die aktuelle Supabase Session
+                const { data, error } = await window.appSupabaseClient.auth.getSession();
+
+                loadingIndicator.style.display = "none";
+                authForm.style.display = "flex"; // Formular anzeigen
+
+                if (error) {
+                    console.error("Session Fehler:", error);
+                    document.getElementById("authError").innerText = "Sitzung konnte nicht geprüft werden. Bitte erneut anmelden.";
+                    switchView('loginView');
+                    return;
+                }
+                
+                if (data.session) {
+                    // Session wiederhergestellt
+                    await setupUserSession(data.session.user);
+                } else {
+                    switchView('loginView');
+                }
+            }
+            
             /* --- SCANNEN LOGIK --- */
             
             async function activateCamera() {
                 if (html5QrCode) {
-                    // Falls bereits initialisiert, einfach starten (oder neustarten)
                     await startScanner();
                     return;
                 }
@@ -1064,13 +1145,11 @@
                 const config = { 
                     fps: 10, 
                     qrbox: { width: 250, height: 250 },
-                    // Bevorzuge die rückwärtige Kamera auf mobilen Geräten
                     facingMode: "environment"
                 };
                 
                 html5QrCode.start({ facingMode: { exact: "environment"} }, config, onScanSuccess, onScanError)
                 .catch(err => {
-                    // Overlay wieder, falls der Start fehlschlägt
                     document.getElementById("preScan").style.display = "flex";
                     document.getElementById("scanFrame").style.display = "none";
                     showToast("Kamera Fehler: Zugriff verweigert oder Gerät nicht gefunden.", 'error', 4000);
@@ -1082,7 +1161,6 @@
                 if (html5QrCode && html5QrCode.isScanning) {
                     try {
                         await html5QrCode.stop();
-                        // Wichtig: Visuals zurücksetzen, falls die Kamera gestoppt wird
                         document.getElementById("preScan").style.display = "flex";
                         document.getElementById("scanFrame").style.display = "none";
                     } catch (err) {
@@ -1092,14 +1170,13 @@
             }
             
             function onScanError(errorMessage) {
-                // Nur loggen, um die Konsole nicht zu überfluten.
+                // Nur loggen
             }
 
             async function onScanSuccess(code) {
                 if (code === lastCode) return;
                 lastCode = code;
 
-                // Scanner temporär stoppen, um den Code zu verarbeiten
                 if (html5QrCode) html5QrCode.pause(true); 
 
                 currentScannedBarcode = code;
@@ -1116,15 +1193,14 @@
                     showToast("Fehler bei der Datenbankabfrage.", 'error');
                     console.error(error);
                     showResultCard("Fehler", "Datenbankfehler beim Suchen.", '❌');
-                    // Scanner nach Fehler wieder starten
                     html5QrCode.resume();
-                    lastCode = ""; // Code-Debouncing zurücksetzen
+                    lastCode = ""; 
                     return;
                 }
 
                 if (data) {
                     // ARTIKEL GEFUNDEN
-                    const lagertyp = data.blocklager ? 'Blocklager' : 'Regal/Fach'; // Text für die Karte
+                    const lagertyp = data.blocklager ? 'Blocklager' : 'Regal/Fach'; 
                     
                     const content = `
                         <p><strong>Stellplatz:</strong> ${data.stellplatz}</p>
@@ -1133,9 +1209,10 @@
                         <p><strong>Barcode:</strong> ${data.barcode}</p>
                     `;
                     showResultCard(data.name, content, '✅');
-                    document.getElementById("registerButton").style.display = "none"; // Registrieren verstecken
+                    document.getElementById("registerButton").style.display = "none"; 
                     
                     // Scans inkrementieren (im Hintergrund)
+                    // HINWEIS: Dies erfordert eine RLS-Policy, die das Schreiben für alle authentifizierten Benutzer erlaubt.
                     const { error: updateError } = await window.appSupabaseClient
                         .from("artikel")
                         .update({ scans: (data.scans || 0) + 1 }) 
@@ -1147,7 +1224,8 @@
                     // ARTIKEL NICHT GEFUNDEN
                     const content = `<p>Der Barcode <strong>${code}</strong> wurde noch nicht registriert.</p>`;
                     showResultCard("Unbekannter Artikel", content, '❓');
-                    // NEU: Registrieren nur für Admin anzeigen
+                    
+                    // Registrieren nur für Admin anzeigen
                     if (window.currentUserRole === 'admin') {
                         document.getElementById("registerButton").style.display = "block";
                     } else {
@@ -1157,10 +1235,9 @@
             }
             
             
-            /* --- ARTIKEL SPEICHERN LOGIK (FÜR NEUE ARTIKEL) --- */
+            /* --- ARTIKEL SPEICHERN LOGIK --- */
             
             function showPopup() {
-                // NEU: Nur Admins dürfen registrieren
                 if (window.currentUserRole !== 'admin') {
                     showToast("Nur Administratoren dürfen neue Artikel registrieren.", 'error');
                     return;
@@ -1174,7 +1251,7 @@
                 document.getElementById('popupOverlay').classList.remove('show');
                 // Formular zurücksetzen
                 document.getElementById('popupBaseName').value = '';
-                document.getElementById('popupSize').value = ''; // NEU: Größe zurücksetzen
+                document.getElementById('popupSize').value = ''; 
                 document.getElementById('popupPlatz').value = '';
                 document.getElementById('popupBlocklager').value = 'false';
             }
@@ -1182,19 +1259,18 @@
             async function saveArticle() {
                 const barcode = document.getElementById('popupBarcode').value.trim();
                 const baseName = document.getElementById('popupBaseName').value.trim();
-                const sizeValue = document.getElementById('popupSize').value.trim(); // NEU: Größe lesen
+                const sizeValue = document.getElementById('popupSize').value.trim(); 
                 const platz = document.getElementById('popupPlatz').value.trim();
                 const block = document.getElementById('popupBlocklager').value === 'true';
 
-                // NEU: Name Konstruktion mit optionaler Größe
+                // Name Konstruktion mit optionaler Größe
                 let name = baseName;
                 if (sizeValue) {
-                    // Ersetze . durch , für die Anzeige im Namen
                     const sizeDisplay = sizeValue.replace('.', ','); 
                     name += ` (${sizeDisplay} L)`; 
                 }
 
-                const lagertyp = block ? 'Blocklager' : 'Regal/Fach'; // Text für die Karte
+                const lagertyp = block ? 'Blocklager' : 'Regal/Fach'; 
 
 
                 if (!baseName || !platz) {
@@ -1202,11 +1278,14 @@
                     return;
                 }
 
+                // HINWEIS: Hier ist keine user_id im insert, d.h. RLS muss das Insert erlauben,
+                // wenn der Benutzer 'admin' ist, oder die RLS Policy muss die user_id des Admins
+                // in das Feld 'admin_id' oder 'created_by' (falls vorhanden) setzen.
                 const { data, error } = await window.appSupabaseClient
                     .from("artikel")
                     .insert([{ 
                         barcode: barcode, 
-                        name: name, // Verwende den neuen Namen
+                        name: name, 
                         stellplatz: platz, 
                         blocklager: block, 
                         scans: 1 
@@ -1216,14 +1295,12 @@
                     showToast(`FEHLER beim Speichern.`, "error");
                     console.error("Speicherfehler:", error);
                 } else {
-                    // NEU: Loggen der Hinzufügung
                     logAdminAction('ARTICLE_ADDED', `Neuer Artikel "${name}" registriert (Barcode: ${barcode}). Stellplatz: ${platz}.`);
                     
                     hidePopup();
                     showToast(`Artikel "${name}" erfolgreich gespeichert.`, "success");
                     showResultCard(
                         name, 
-                        // Nur Stellplatz und den Lagertyp anzeigen
                         `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${lagertyp}</p>`,
                         '✅'
                     );
@@ -1245,22 +1322,17 @@
                 
                 document.getElementById('adminEditName').value = article.name;
                 document.getElementById('adminEditBarcode').value = article.barcode;
-                document.getElementById('adminEditPlatz').value = article.stellplatz; // Aktuellen Wert setzen
+                document.getElementById('adminEditPlatz').value = article.stellplatz; 
                 
                 document.getElementById('adminEditPopupOverlay').style.display = "flex";
-                // Verzögerung für die CSS-Transition
                 setTimeout(() => document.getElementById('adminEditPopupOverlay').classList.add('show'), 10);
             }
 
             function hideAdminEditPopup() {
                 document.getElementById('adminEditPopupOverlay').classList.remove('show');
                 
-                // Timeout, um sicherzustellen, dass die Transition abgeschlossen ist
                 setTimeout(() => {
                     document.getElementById('adminEditPopupOverlay').style.display = "none";
-                    // articleToEdit nur löschen, wenn es nicht gerade für den Löschvorgang gebraucht wird
-                    // Wichtig: articleToEdit muss bestehen bleiben, wenn wir das Delete-Popup aufrufen, 
-                    // aber den Bearbeitungs-Dialog schließen.
                     if (!window.articleToDelete) { 
                         window.articleToEdit = null;
                     }
@@ -1296,12 +1368,11 @@
                     showToast(`FEHLER beim Speichern des Stellplatzes.`, "error");
                     console.error("Speicherfehler:", error);
                 } else {
-                    // NEU: Loggen der Bearbeitung
                     logAdminAction('STELLPLATZ_UPDATED', `Stellplatz von Artikel "${window.articleToEdit.name}" (Barcode: ${window.articleToEdit.barcode}) von ${oldPlatz} auf ${newPlatz} geändert.`);
                     
                     hideAdminEditPopup();
                     showToast(`Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`, "success");
-                    loadArticleList(); // Liste aktualisieren
+                    loadArticleList(); 
                 }
             }
             
@@ -1309,12 +1380,11 @@
              * Öffnet das Lösch-Bestätigungs-Popup.
              */
             function deleteArticle() {
-                if (window.currentUserRole !== 'admin' || !window.articleToEdit) {
-                    showToast("Keine Berechtigung oder Artikel nicht ausgewählt.", 'error');
+                if (window.currentUserRole !== 'admin') {
+                    showToast("Keine Berechtigung zum Bearbeiten.", 'error');
                     return;
                 }
                 
-                // Wir lassen den Admin-Edit-Dialog geöffnet und zeigen das Bestätigungs-Popup darüber
                 showDeleteConfirmPopup(window.articleToEdit);
             }
 
@@ -1322,7 +1392,7 @@
              * Öffnet das benutzerdefinierte Bestätigungs-Popup.
              */
             function showDeleteConfirmPopup(article) {
-                window.articleToDelete = article; // Artikel global für die Löschung speichern
+                window.articleToDelete = article; 
                 
                 document.getElementById('deleteConfirmMessage').innerHTML = `Sind Sie **SICHER**, dass Sie den Artikel<br><strong>"${article.name}"</strong><br>(Barcode: ${article.barcode}) unwiderruflich löschen möchten?`;
                 
@@ -1332,7 +1402,6 @@
 
             /**
              * Schließt das Lösch-Popup und setzt die Referenz zurück.
-             * Wenn der Benutzer Abbricht, wird das Admin-Edit-Popup wiederhergestellt.
              */
             function hideDeleteConfirmPopup() {
                 document.getElementById('deleteConfirmPopupOverlay').classList.remove('show');
@@ -1340,14 +1409,13 @@
                 setTimeout(() => {
                     document.getElementById('deleteConfirmPopupOverlay').style.display = "none";
                     
-                    // NEUE LOGIK: Wenn articleToEdit noch existiert (d.h. ABBRUCH),
-                    // mache das Admin-Edit-Popup wieder vollständig sichtbar.
+                    // Bei Abbruch den Bearbeitungs-Dialog wieder sichtbar machen
                     if (window.articleToEdit) {
                         document.getElementById('adminEditPopupOverlay').style.display = "flex";
                         document.getElementById('adminEditPopupOverlay').classList.add('show');
                     }
                     
-                    window.articleToDelete = null; // Lösche nur die delete-Referenz
+                    window.articleToDelete = null; 
                     
                 }, 300);
             }
@@ -1373,16 +1441,13 @@
                 if (error) {
                     showToast(`FEHLER beim Löschen des Artikels.`, "error");
                     console.error("Löschfehler:", error);
-                    // Auch bei Fehler muss der Löschdialog weg und der Bearbeitungsdialog wiederhergestellt werden
                     hideDeleteConfirmPopup(); 
                 } else {
                     showToast(`Artikel "${articleName}" wurde erfolgreich gelöscht.`, "success");
                     
-                    // NEU: Loggen der Löschung
                     logAdminAction('ARTICLE_DELETED', `Artikel "${articleName}" (Barcode: ${barcode}) unwiderruflich gelöscht.`);
                     
-                    // WICHTIG: Setze articleToEdit auf null, damit hideDeleteConfirmPopup 
-                    // den Admin-Edit-Dialog NICHT wiederherstellt.
+                    // Deaktiviert die Wiederherstellung des Bearbeitungsdialogs
                     window.articleToEdit = null;
                     
                     hideDeleteConfirmPopup(); 
@@ -1402,9 +1467,8 @@
             
             function hideResultCard() {
                 document.getElementById('result-card').classList.remove('active');
-                lastCode = ""; // Wichtig: Zurücksetzen, um den nächsten Scan zu ermöglichen
+                lastCode = ""; 
                 
-                // Starte den Scanner wieder, wenn wir uns im Scanner-Tab befinden
                 if (html5QrCode && currentTabId === 'scannerTab') {
                     html5QrCode.resume();
                 }
@@ -1415,27 +1479,24 @@
             
             async function loadArticleList() {
                 const articleListContainer = document.getElementById('articleList');
-                // Konsistentes Styling für Lade-Status
                 articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Artikel...</li>'; 
 
                 // DATENBANK-ABFRAGE
                 const { data, error } = await window.appSupabaseClient
                     .from("artikel")
                     .select("*")
-                    .order("name", { ascending: true }); // Nach Name sortieren
+                    .order("name", { ascending: true }); 
                     
                 if (error) {
                     showToast("Fehler beim Laden der Artikelliste.", 'error');
-                    // KRITISCHER HINWEIS, DA DER FEHLER HIER HÄUFIG LIEGT:
                     console.error("Fehler beim Laden der Artikel (Prüfen Sie RLS-Policies!):", error);
                     articleListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Die Liste konnte nicht von der Datenbank geladen werden. BITTE RLS-POLICIES PRÜFEN!</li>';
                     return;
                 }
 
-                articleListContainer.innerHTML = ''; // Liste leeren
+                articleListContainer.innerHTML = ''; 
                 
                 if (data.length === 0) {
-                    // KORRIGIERT: Fügt konsistentes Styling hinzu
                     articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Noch keine Artikel vorhanden. Scannen Sie einen Barcode, um zu starten.</li>';
                     return;
                 }
@@ -1447,13 +1508,12 @@
                     if (window.currentUserRole === 'admin') {
                         listItem.onclick = () => showAdminEditPopup(item);
                         listItem.style.cursor = 'pointer'; 
-                        listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
+                        listItem.setAttribute('data-role', 'admin-editable'); 
                     }
                     
-                    // Lagertyp-Icon als SVG einfügen
                     const isBlocklager = item.blocklager;
                     const lagertypIconSvg = isBlocklager ? WAREHOUSE_ICON_SVG : SHELF_ICON_SVG;
-                    const lagertypLabel = isBlocklager ? 'BLOCK' : 'REGAL'; // Text Label
+                    const lagertypLabel = isBlocklager ? 'BLOCK' : 'REGAL'; 
 
                     const details = `
                         <div class="item-details">
@@ -1470,11 +1530,10 @@
                 });
             }
             
-            /* --- NEU: ADMIN LOGGING FUNKTION --- */
+            /* --- ADMIN LOGGING FUNKTION --- */
 
             /**
              * Protokolliert eine Admin-Aktion in der audit_log Tabelle.
-             * WICHTIG: Die Tabelle 'audit_log' muss in Supabase existieren!
              */
             async function logAdminAction(actionType, description) {
                 if (window.currentUserRole !== 'admin') {
@@ -1482,12 +1541,14 @@
                     return;
                 }
                 
+                // Wir fügen die user_id des Admins zum Log hinzu
                 const { error } = await window.appSupabaseClient
                     .from('audit_log')
                     .insert({
                         action_type: actionType,
                         description: description,
-                        user_role: window.currentUserRole
+                        user_id: window.currentUserId, // NEU: user_id hinzufügen
+                        user_role: window.currentUserRole 
                     });
 
                 if (error) {
@@ -1496,66 +1557,65 @@
                 }
             }
 
-/* --- NEU: ADMIN LOG LISTE LOGIK --- */
+            /* --- ADMIN LOG LISTE LOGIK --- */
 
-async function loadAdminLog() {
-    const logListContainer = document.getElementById('logList');
-    
-    // NUR Admins dürfen Log sehen
-    if (window.currentUserRole !== 'admin') {
-        logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
-        return;
-    }
-    
-    logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>'; 
+            async function loadAdminLog() {
+                const logListContainer = document.getElementById('logList');
+                
+                // NUR Admins dürfen Log sehen
+                if (window.currentUserRole !== 'admin') {
+                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
+                    return;
+                }
+                
+                logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>'; 
 
-    // DATENBANK-ABFRAGE
-    // WICHTIG: Prüft den Tabellennamen "audit_log" und die Spalte "timestamp"
-    const { data, error } = await window.appSupabaseClient
-        .from("audit_log") // <-- Prüfen Sie, ob Ihre Tabelle WIRKLICH "audit_log" heißt!
-        .select("*")
-        .order("timestamp", { ascending: false }) // <-- Prüfen Sie, ob Ihre Spalte WIRKLICH "timestamp" heißt!
-        .limit(50); 
-        
-    if (error) {
-        showToast("Fehler beim Laden des Admin-Protokolls.", 'error');
-        console.error("Fehler beim Laden des Logs:", error);
-        logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle und Spaltennamen prüfen.</li>';
-        return;
-    }
+                // DATENBANK-ABFRAGE
+                // HINWEIS: user_id muss in SELECT enthalten sein, wenn sie später angezeigt werden soll.
+                const { data, error } = await window.appSupabaseClient
+                    .from("audit_log") 
+                    .select("*")
+                    .order("created_at", { ascending: false }) // Sortiere nach Supabase Standard-Timestamp
+                    .limit(50); 
+                    
+                if (error) {
+                    showToast("Fehler beim Laden des Admin-Protokolls.", 'error');
+                    console.error("Fehler beim Laden des Logs:", error);
+                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle und RLS prüfen.</li>';
+                    return;
+                }
 
-    logListContainer.innerHTML = ''; // Liste leeren
-    
-    if (data.length === 0) {
-        logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Protokolleinträge vorhanden.</li>';
-        return;
-    }
+                logListContainer.innerHTML = ''; 
+                
+                if (data.length === 0) {
+                    logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Protokolleinträge vorhanden.</li>';
+                    return;
+                }
 
-    data.forEach(item => {
-        // NEUE KORREKTUR: Verwenden Sie 'timestamp' oder 'created_at', je nachdem, wie Ihre Spalte heißt!
-        // Wir gehen davon aus, dass die Log-Tabelle die Supabase-Standardspalte 'created_at' verwendet,
-        // oder die von mir im Log-Code genannte Spalte 'timestamp'.
-        const dateSource = item.timestamp || item.created_at; 
-        const timestamp = new Date(dateSource).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
-        
-        let color = 'var(--color-accent-blue)';
-        if (item.action_type.includes('ADDED')) color = 'var(--color-accent-green)';
-        if (item.action_type.includes('DELETED')) color = 'var(--color-error-red)';
-        
-        const listItem = document.createElement('li');
-        listItem.style.borderLeft = `5px solid ${color}`;
-        
-        const details = `
-            <div class="item-details">
-                <strong style="font-size: 0.95rem; font-weight: 600;">${item.action_type.replace(/_/g, ' ')}</strong>
-                <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 5px; line-height: 1.3;">${item.description}</span>
-                <span style="display: block; font-size: 0.75rem; opacity: 0.6; margin-top: 5px;">${timestamp} (Rolle: ${item.user_role || 'N/A'})</span>
-            </div>
-        `;
-        listItem.innerHTML = details;
-        logListContainer.appendChild(listItem);
-    });
-}
+                data.forEach(item => {
+                    const dateSource = item.created_at; 
+                    const timestamp = new Date(dateSource).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
+                    
+                    let color = 'var(--color-accent-blue)';
+                    if (item.action_type.includes('ADDED')) color = 'var(--color-accent-green)';
+                    if (item.action_type.includes('DELETED')) color = 'var(--color-error-red)';
+                    
+                    const listItem = document.createElement('li');
+                    listItem.style.borderLeft = `5px solid ${color}`;
+                    
+                    const userShortId = item.user_id ? `${item.user_id.substring(0, 4)}...` : 'N/A';
+
+                    const details = `
+                        <div class="item-details">
+                            <strong style="font-size: 0.95rem; font-weight: 600;">${item.action_type.replace(/_/g, ' ')}</strong>
+                            <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 5px; line-height: 1.3;">${item.description}</span>
+                            <span style="display: block; font-size: 0.75rem; opacity: 0.6; margin-top: 5px;">${timestamp} (User ID: ${userShortId})</span>
+                        </div>
+                    `;
+                    listItem.innerHTML = details;
+                    logListContainer.appendChild(listItem);
+                });
+            }
 
             /* --- NAVIGATION LOGIK --- */
             
@@ -1583,31 +1643,48 @@ async function loadAdminLog() {
                     
                     if (targetTabId === 'listTab') {
                         loadArticleList();
-                    } else if (targetTabId === 'logTab') { // NEU: Log Tab
+                    } else if (targetTabId === 'logTab') { 
                         loadAdminLog();
                     }
                 }
             }
             
+            /**
+             * Logout mit Supabase Auth
+             */
             async function logout() {
                 stopScanner();
                 
+                const { error } = await window.appSupabaseClient.auth.signOut();
+                
+                if (error) {
+                    showToast(`Logout Fehler: ${error.message}`, 'error');
+                }
+                
                 // Zur Login-Ansicht zurück
                 switchView('loginView');
-                window.currentPin = "";
                 window.currentUserRole = null; 
-                updatePinIndicators();
+                window.currentUserId = null;
                 showToast("Erfolgreich abgemeldet.", 'info');
                 lastCode = "";
                 
                 document.getElementById("userDisplay").innerText = ""; 
+                document.getElementById("loginEmail").value = "";
+                document.getElementById("loginPassword").value = "";
+                
+                // Sicherstellen, dass der Login-Modus aktiv ist
+                if (isSignupMode) {
+                    toggleSignupMode();
+                }
             }
 
 
-            // Start der Anwendung
+            // Start der Anwendung: Prüft die Supabase-Session
             window.onload = function() {
                 checkLogin();
-                updatePinIndicators(); // Setze Indikatoren auf 0
+                
+                // Standardmäßig Login-Modus, Registrier-Link anzeigen
+                if (isSignupMode) toggleSignupMode();
             };
         </script>
 
