@@ -53,6 +53,7 @@
                 --color-error-red: #ff3b30;
                 --color-border: rgba(255, 255, 255, 0.08);
                 --transition-duration: 0.3s;
+                --color-warning-yellow: #ffcc00; /* NEU für gesperrt */
             }
 
             * {
@@ -438,7 +439,8 @@
 
 
             /* --- POPUP / REGISTRIEREN & ADMIN EDIT (REUSABLE STYLES) --- */
-            #popupOverlay, #adminEditPopupOverlay, #deleteConfirmPopupOverlay {
+            /* User Edit Popup hinzugefügt */
+            #popupOverlay, #adminEditPopupOverlay, #deleteConfirmPopupOverlay, #userEditPopupOverlay {
                 position: fixed;
                 top: 0;
                 left: 0;
@@ -454,7 +456,7 @@
                 transition: opacity 0.2s ease-in-out;
             }
 
-            #popupOverlay.show, #adminEditPopupOverlay.show, #deleteConfirmPopupOverlay.show {
+            #popupOverlay.show, #adminEditPopupOverlay.show, #deleteConfirmPopupOverlay.show, #userEditPopupOverlay.show {
                 opacity: 1;
                 display: flex; /* Wichtig, um nach der Transition sichtbar zu sein */
             }
@@ -469,7 +471,7 @@
                 transition: transform 0.3s ease-in-out;
             }
 
-            #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card, #deleteConfirmPopupOverlay.show .popup-card {
+            #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card, #deleteConfirmPopupOverlay.show .popup-card, #userEditPopupOverlay.show .popup-card {
                 transform: translateY(0);
             }
 
@@ -484,6 +486,12 @@
             .input-group {
                 margin-bottom: 15px;
             }
+            
+            .input-group textarea {
+                resize: vertical;
+                min-height: 80px;
+            }
+
 
             .input-group label {
                 display: block;
@@ -495,7 +503,8 @@
             .input-group input[type="text"],
             .input-group input[type="email"], /* NEU: Email-Feld-Style */
             .input-group input[type="password"], /* NEU: Passwort-Feld-Style */
-            .input-group select {
+            .input-group select,
+            .input-group textarea {
                 width: 100%;
                 padding: 10px;
                 border-radius: 8px;
@@ -507,7 +516,8 @@
             .input-group input[type="text"]:focus,
             .input-group input[type="email"]:focus, /* NEU: Fokus-Style */
             .input-group input[type="password"]:focus, /* NEU: Fokus-Style */
-            .input-group select:focus {
+            .input-group select:focus,
+            .input-group textarea:focus {
                 outline: none;
                 border-color: var(--color-accent-blue);
             }
@@ -599,24 +609,25 @@
                 margin-bottom: 2px;
             }
             
-            /* --- ARTIKEL LIST VIEW STYLES --- */
-            #listTab {
+            /* --- ARTIKEL LIST VIEW STYLES / REUSABLE LIST STYLES --- */
+            #listTab, #logTab, #usersTab { /* UsersTab hinzugefügt */
                 /* Padding muss hier gesetzt werden, da es der Scroll-Container ist */
                 padding: 15px 15px 80px 15px;
             }
             
-            #articleList {
+            #articleList, #logList, #userList { /* UserList hinzugefügt */
                 list-style: none;
                 padding: 0;
                 margin: 0;
             }
             
-            #articleList li {
+            #articleList li, #logList li, #userList li { /* UserList hinzugefügt */
                 background: var(--color-bg-card);
                 padding: 15px;
                 border-radius: 10px;
                 margin-bottom: 10px;
-                border-left: 5px solid var(--color-accent-blue);
+                /* Standard-Border für Artikel-Liste */
+                border-left: 5px solid var(--color-accent-blue); 
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
@@ -625,10 +636,14 @@
             }
             
             /* Admin-Elemente haben einen Hover-Effekt */
-            #articleList li[data-role="admin-editable"]:active {
+            #articleList li[data-role="admin-editable"]:active, #userList li[data-role="admin-editable"]:active {
                 background: #2a303e; 
             }
             
+            /* User-Liste spezifische Farben */
+            .user-role-admin { border-left-color: var(--color-warning-yellow) !important; }
+            .user-is-blocked { border-left-color: var(--color-error-red) !important; }
+
             .item-details strong {
                 display: block;
                 font-size: 1.rem;
@@ -641,10 +656,10 @@
                 opacity: 0.7;
             }
             
-            /* Icon-Anzeige für Lagertyp */
+            /* Icon-Anzeige für Lagertyp / User-Status */
             .item-count {
                 text-align: center; 
-                width: 40px; 
+                width: 50px; /* Leicht vergrößert für den Status */
                 height: 50px; 
                 flex-shrink: 0;
                 margin-left: 10px;
@@ -652,6 +667,7 @@
                 flex-direction: column;
                 justify-content: center;
                 align-items: center;
+                font-size: 0.8rem;
             }
             
             .item-count svg {
@@ -668,23 +684,21 @@
             
             /* Admin Log Liste Styles */
             #logTab {
-                padding: 15px 15px 80px 15px; 
+                /* padding wird über den oberen Block gesetzt */
                 display: flex; 
                 flex-direction: column;
             }
-
-            #logList {
-                list-style: none;
-                padding: 0;
-                margin: 0;
-            }
             
-            #logList li {
-                /* Grund-Styles für die Konsistenz mit Artikelliste */
-                background: var(--color-bg-card);
-                padding: 15px;
-                border-radius: 10px;
-                margin-bottom: 10px;
+            /* Styling für den Edit-Button in der User-Liste */
+            .user-edit-button {
+                background: var(--color-accent-blue);
+                color: white;
+                padding: 8px 15px;
+                border-radius: 8px;
+                font-size: 0.8rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: background 0.2s;
             }
 
         </style>
@@ -781,6 +795,40 @@
                 </div>
             </div>
         </div>
+        
+        <!-- NEU: Benutzer-Verwaltungs-Popup -->
+        <div id="userEditPopupOverlay">
+            <form class="popup-card" onsubmit="event.preventDefault(); saveUserEdit();">
+                <h3>Benutzer bearbeiten (Admin)</h3>
+                <div class="input-group">
+                    <label for="userEditEmail">E-Mail</label>
+                    <input type="text" id="userEditEmail" readonly>
+                </div>
+                <div class="input-group">
+                    <label for="userEditRole">Rolle</label>
+                    <select id="userEditRole" required>
+                        <option value="user">Benutzer (Standard)</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="userEditBlocked">Sperrstatus</label>
+                    <select id="userEditBlocked" required>
+                        <option value="false">Nicht gesperrt</option>
+                        <option value="true">Gesperrt</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="userEditNotes">Anmerkungen (nur für Admins sichtbar)</label>
+                    <textarea id="userEditNotes" placeholder="Interne Anmerkungen..."></textarea>
+                </div>
+                
+                <div class="action-button-group">
+                    <button type="button" class="action-button cancel" onclick="hideUserEditPopup()">Abbrechen</button>
+                    <button type="submit" class="action-button register">Änderungen speichern</button>
+                </div>
+            </form>
+        </div>
 
 
         <div id="loginView" class="app-view-container active">
@@ -868,6 +916,14 @@
                         <li>Lade Log-Protokoll...</li>
                     </ul>
                 </div>
+
+                <!-- NEU: Personal Tab -->
+                <div id="usersTab" class="tab-content">
+                    <ul id="userList">
+                        <li>Lade Benutzer...</li>
+                    </ul>
+                </div>
+
             </div>
 
             <footer>
@@ -883,6 +939,10 @@
                     <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 11H5M19 11v6m0-6V5m-4 16H9M12 4v16M21 11H3"/></svg>
                     <span>Log</span>
                 </div>
+                <div class="nav-item" data-tab="usersTab" onclick="changeTab('usersTab')">
+                    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87m-4-1.63a4 4 0 0 1 0-7.74"/></svg>
+                    <span>Personal</span>
+                </div>
             </footer>
         </div>
 
@@ -897,11 +957,17 @@
             let isAuthReady = false;
             let articleToEdit = null; 
             let articleToDelete = null; 
-            let isRegisterMode = false; // NEU: Steuert Anmelde-/Registrierungsmodus
+            let userToEdit = null; // NEU: Speichert den aktuell zu bearbeitenden Benutzer
+            let isRegisterMode = false; 
             
             // SVG-Strings für die Lagertypen
             const SHELF_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4V4zm4 0v16m8-16v16M4 10h16M4 16h16"/></svg>';
             const WAREHOUSE_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l10 5l-10 5l-10-5zM2 12v6l10 5l10-5v-6M12 2v10"/></svg>';
+
+            // SVG-Strings für Benutzer-Status
+            const USER_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+            const ADMIN_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 4l-5 5l-5-5M17 20l-5-5l-5 5"/></svg>';
+            const BLOCKED_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>';
 
 
             /* --- HILFSFUNKTIONEN --- */
@@ -1013,7 +1079,7 @@
                     
                     if (!error && data.session) {
                         // Erfolgreicher Login. Rolle bestimmen und App starten.
-                        await handleLoginSuccess(data.session.user.id, email);
+                        await handleLoginSuccess(data.session.user.id, data.session.user.email);
                         submitButton.disabled = false;
                         submitButton.innerText = "Anmelden";
                         return; // Beende die Funktion hier, da erfolgreich
@@ -1032,26 +1098,33 @@
             
             /**
              * Behandelt den erfolgreichen Login und bestimmt die Rolle.
-             * KRITISCHE KORREKTUR: Sucht nun in 'user_roles' statt 'profiles'.
              */
             async function handleLoginSuccess(userId, email) {
                 currentUserId = userId;
                 let userRole = 'user'; // Standardrolle
+                let isBlocked = false;
                 
-                // Rollenbestimmung
-                // ACHTUNG: Hier wurde die Tabelle von 'profiles' auf 'user_roles' geändert.
-                // BITTE sicherstellen, dass die Tabelle 'user_roles' in Supabase existiert und die Spalten 'user_id' und 'role' hat!
+                // Rollenbestimmung und Sperrstatus
                 const { data, error } = await window.appSupabaseClient
-                    .from('user_roles') // <-- KORREKTUR
-                    .select('role')
+                    .from('user_roles') 
+                    .select('role, is_blocked')
                     .eq('id', userId)
                     .single();
 
-                if (data && data.role) {
-                    userRole = data.role; // Z.B. 'admin' oder 'user'
+                if (data) {
+                    userRole = data.role || 'user'; 
+                    isBlocked = data.is_blocked || false;
                 }
                 
-                // PGRST116 = kein Eintrag gefunden (Was bei neuen Nutzern passieren kann, die nur die Default-Rolle 'user' haben)
+                if (isBlocked) {
+                    // Benutzer ist gesperrt, sofort abmelden/Session beenden
+                    await window.appSupabaseClient.auth.signOut();
+                    document.getElementById("authError").innerText = "Ihr Konto ist gesperrt. Bitte wenden Sie sich an den Administrator.";
+                    showToast("Login fehlgeschlagen: Konto gesperrt.", 'error', 7000);
+                    return;
+                }
+
+                // PGRST116 = kein Eintrag gefunden
                 if (error && error.code !== 'PGRST116') {
                     console.error("Fehler beim Laden der Benutzerrolle (RLS-Policy prüfen):", error);
                     showToast("Login erfolgreich, aber Rollenprüfung fehlgeschlagen. Nur als USER angemeldet.", 'info');
@@ -1097,8 +1170,6 @@
             
             /* --- ENDE NEUE AUTH LOGIK --- */
             
-            // --- ALTE PIN-Logik-Funktionen entfernt: updatePinIndicators, handlePinInput, handlePinEntry
-
             /* --- SCANNEN LOGIK --- */
             
             async function activateCamera() {
@@ -1121,10 +1192,7 @@
                     qrbox: { width: 250, height: 250 },
                 };
                 
-                // KORREKTUR: Verwende "environment" als Kamera-ID/Constraint-Shortcut,
-                // da die Library die komplexe MediaTrackConstraints-Struktur
-                // als ersten Parameter ablehnt, wenn sie nicht "exact" enthält.
-                // FIX FÜR OVERCONSTRAINEDERROR: Verwendung des Constraint-Objekts statt des String-Shortcuts
+                // FIX FÜR OVERCONSTRAINEDERROR: Verwendung des Constraint-Objekts
                 const cameraIdOrConstraints = { facingMode: "environment" }; 
                 
                 html5QrCode.start(cameraIdOrConstraints, config, onScanSuccess, onScanError)
@@ -1318,8 +1386,6 @@
                 setTimeout(() => {
                     document.getElementById('adminEditPopupOverlay').style.display = "none";
                     // articleToEdit nur löschen, wenn es nicht gerade für den Löschvorgang gebraucht wird
-                    // Wichtig: articleToEdit muss bestehen bleiben, wenn wir das Delete-Popup aufrufen, 
-                    // aber den Bearbeitungs-Dialog schließen.
                     if (!window.articleToDelete) { 
                         window.articleToEdit = null;
                     }
@@ -1529,7 +1595,7 @@
                 });
             }
             
-            /* --- NEU: ADMIN LOGGING FUNKTION --- */
+            /* --- ADMIN LOGGING FUNKTION --- */
 
             /**
              * Protokolliert eine Admin-Aktion in der audit_log Tabelle.
@@ -1555,64 +1621,238 @@
                 }
             }
 
-/* --- NEU: ADMIN LOG LISTE LOGIK --- */
+            /* --- ADMIN LOG LISTE LOGIK --- */
 
-async function loadAdminLog() {
-    const logListContainer = document.getElementById('logList');
-    
-    // NUR Admins dürfen Log sehen
-    if (window.currentUserRole !== 'admin') {
-        logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
-        return;
-    }
-    
-    logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>'; 
+            async function loadAdminLog() {
+                const logListContainer = document.getElementById('logList');
+                
+                // NUR Admins dürfen Log sehen
+                if (window.currentUserRole !== 'admin') {
+                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
+                    return;
+                }
+                
+                logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>'; 
 
-    // DATENBANK-ABFRAGE
-    // WICHTIG: Prüft den Tabellennamen "audit_log" und die Spalte "timestamp"
-    const { data, error } = await window.appSupabaseClient
-        .from("audit_log") // <-- Prüfen Sie, ob Ihre Tabelle WIRKLICH "audit_log" heißt!
-        .select("*")
-        .order("created_at", { ascending: false }) // Verwenden created_at als Standard-Timestamp
-        .limit(50); 
-        
-    if (error) {
-        showToast("Fehler beim Laden des Admin-Protokolls.", 'error');
-        console.error("Fehler beim Laden des Logs:", error);
-        logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle und Spaltennamen prüfen.</li>';
-        return;
-    }
+                // DATENBANK-ABFRAGE
+                const { data, error } = await window.appSupabaseClient
+                    .from("audit_log") 
+                    .select("*")
+                    .order("created_at", { ascending: false }) 
+                    .limit(50); 
+                    
+                if (error) {
+                    showToast("Fehler beim Laden des Admin-Protokolls.", 'error');
+                    console.error("Fehler beim Laden des Logs:", error);
+                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle und Spaltennamen prüfen.</li>';
+                    return;
+                }
 
-    logListContainer.innerHTML = ''; // Liste leeren
-    
-    if (data.length === 0) {
-        logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Protokolleinträge vorhanden.</li>';
-        return;
-    }
+                logListContainer.innerHTML = ''; // Liste leeren
+                
+                if (data.length === 0) {
+                    logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Protokolleinträge vorhanden.</li>';
+                    return;
+                }
 
-    data.forEach(item => {
-        // Verwenden Sie created_at von Supabase
-        const dateSource = item.created_at; 
-        const timestamp = new Date(dateSource).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
-        
-        let color = 'var(--color-accent-blue)';
-        if (item.action_type.includes('ADDED')) color = 'var(--color-accent-green)';
-        if (item.action_type.includes('DELETED')) color = 'var(--color-error-red)';
-        
-        const listItem = document.createElement('li');
-        listItem.style.borderLeft = `5px solid ${color}`;
-        
-        const details = `
-            <div class="item-details">
-                <strong style="font-size: 0.95rem; font-weight: 600;">${item.action_type.replace(/_/g, ' ')}</strong>
-                <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 5px; line-height: 1.3;">${item.description}</span>
-                <span style="display: block; font-size: 0.75rem; opacity: 0.6; margin-top: 5px;">${timestamp} (Rolle: ${item.user_role || 'N/A'})</span>
-            </div>
-        `;
-        listItem.innerHTML = details;
-        logListContainer.appendChild(listItem);
-    });
-}
+                data.forEach(item => {
+                    // Verwenden Sie created_at von Supabase
+                    const dateSource = item.created_at; 
+                    const timestamp = new Date(dateSource).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
+                    
+                    let color = 'var(--color-accent-blue)';
+                    if (item.action_type.includes('ADDED')) color = 'var(--color-accent-green)';
+                    if (item.action_type.includes('DELETED')) color = 'var(--color-error-red)';
+                    
+                    const listItem = document.createElement('li');
+                    listItem.style.borderLeft = `5px solid ${color}`;
+                    
+                    const details = `
+                        <div class="item-details">
+                            <strong style="font-size: 0.95rem; font-weight: 600;">${item.action_type.replace(/_/g, ' ')}</strong>
+                            <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 5px; line-height: 1.3;">${item.description}</span>
+                            <span style="display: block; font-size: 0.75rem; opacity: 0.6; margin-top: 5px;">${timestamp} (Rolle: ${item.user_role || 'N/A'})</span>
+                        </div>
+                    `;
+                    listItem.innerHTML = details;
+                    logListContainer.appendChild(listItem);
+                });
+            }
+            
+            /* --- NEU: PERSONAL / BENUTZERVERWALTUNG LOGIK --- */
+            
+            /**
+             * Lädt die Liste der Benutzer (NUR FÜR ADMINS!).
+             * HINWEIS: Dies erfordert eine spezielle RLS-Policy, die Admins Lesezugriff
+             * auf die 'auth.users' oder eine kombinierte 'user_profiles' Tabelle gibt.
+             */
+            async function loadUserList() {
+                const userListContainer = document.getElementById('userList');
+                userListContainer.innerHTML = ''; // Liste leeren
+                
+                if (window.currentUserRole !== 'admin') {
+                    userListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen Benutzer verwalten.</li>';
+                    return;
+                }
+                
+                userListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Benutzerliste... (RLS-Policy für auth.users/user_roles notwendig)</li>';
+
+                // 1. Alle Benutzer aus der auth.users Tabelle abfragen (Supabase Admin-RPC oder View nötig)
+                // Da wir keine Admin-API aufrufen können, verwenden wir eine kombinierte View/Tabelle: user_roles
+                // Diese Tabelle muss die user_id, email, role, is_blocked und notes enthalten!
+                const { data: users, error } = await window.appSupabaseClient
+                    .from('user_roles')
+                    .select('*')
+                    .order('email', { ascending: true });
+
+                if (error) {
+                    showToast("Fehler beim Laden der Benutzerliste.", 'error');
+                    console.error("Fehler beim Laden der Benutzer (RLS-Policy prüfen):", error);
+                    userListContainer.innerHTML = `<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Benutzerliste konnte nicht geladen werden. Fehler: ${error.message}</li>`;
+                    return;
+                }
+                
+                if (users.length === 0) {
+                    userListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Benutzer gefunden.</li>';
+                    return;
+                }
+                
+                userListContainer.innerHTML = '';
+                
+                users.forEach(user => {
+                    const listItem = document.createElement('li');
+                    
+                    // Admin darf alle bearbeiten
+                    listItem.onclick = () => showUserEditPopup(user);
+                    listItem.style.cursor = 'pointer'; 
+                    listItem.setAttribute('data-role', 'admin-editable'); 
+                    
+                    const userRole = user.role || 'user';
+                    const isBlocked = user.is_blocked || false;
+                    
+                    let roleIcon = USER_ICON_SVG;
+                    let roleLabel = 'USER';
+                    let listClass = '';
+
+                    if (userRole === 'admin') {
+                        roleIcon = ADMIN_ICON_SVG;
+                        roleLabel = 'ADMIN';
+                        listClass = 'user-role-admin';
+                    }
+                    if (isBlocked) {
+                        roleIcon = BLOCKED_ICON_SVG;
+                        roleLabel = 'GESPERRT';
+                        listClass = 'user-is-blocked';
+                    }
+                    
+                    // Der aktive Benutzer bekommt eine zusätzliche Kennzeichnung
+                    if (user.id === currentUserId) {
+                        roleLabel += ' (DU)';
+                    }
+
+                    listItem.className = listClass;
+                    
+                    const details = `
+                        <div class="item-details" style="flex-grow: 1;">
+                            <strong>${user.email}</strong>
+                            <span>Rolle: ${userRole.toUpperCase()} | ${isBlocked ? 'Gesperrt' : 'Aktiv'}</span>
+                            ${user.notes ? `<span style="font-style: italic; opacity: 0.6; margin-top: 5px;">Anm.: ${user.notes}</span>` : ''}
+                        </div>
+                        <div class="item-count" style="width: 70px;">
+                             <button class="user-edit-button">Bearbeiten</button>
+                        </div>
+                    `;
+                    listItem.innerHTML = details;
+                    userListContainer.appendChild(listItem);
+                });
+            }
+            
+            /**
+             * Zeigt das Admin-Popup zum Bearbeiten eines Benutzers.
+             */
+            function showUserEditPopup(user) {
+                if (window.currentUserRole !== 'admin') return;
+                
+                window.userToEdit = user;
+                
+                document.getElementById('userEditEmail').value = user.email;
+                document.getElementById('userEditRole').value = user.role || 'user';
+                document.getElementById('userEditBlocked').value = user.is_blocked ? 'true' : 'false';
+                document.getElementById('userEditNotes').value = user.notes || '';
+                
+                document.getElementById('userEditPopupOverlay').style.display = "flex";
+                setTimeout(() => document.getElementById('userEditPopupOverlay').classList.add('show'), 10);
+            }
+
+            /**
+             * Schließt das Benutzer-Edit-Popup.
+             */
+            function hideUserEditPopup() {
+                document.getElementById('userEditPopupOverlay').classList.remove('show');
+                setTimeout(() => {
+                    document.getElementById('userEditPopupOverlay').style.display = "none";
+                    window.userToEdit = null;
+                }, 300);
+            }
+            
+            /**
+             * Speichert die Benutzeränderungen in der user_roles Tabelle.
+             */
+            async function saveUserEdit() {
+                if (!window.userToEdit || window.currentUserRole !== 'admin') {
+                    showToast("Keine Berechtigung oder Benutzer nicht ausgewählt.", 'error');
+                    return;
+                }
+                
+                const newRole = document.getElementById('userEditRole').value;
+                const newBlockedStatus = document.getElementById('userEditBlocked').value === 'true';
+                const newNotes = document.getElementById('userEditNotes').value.trim();
+                
+                const oldRole = window.userToEdit.role || 'user';
+                const oldBlockedStatus = window.userToEdit.is_blocked || false;
+                
+                let changes = [];
+                let description = `Benutzer ${window.userToEdit.email} bearbeitet: `;
+
+                if (newRole !== oldRole) {
+                    changes.push(`Rolle von ${oldRole.toUpperCase()} auf ${newRole.toUpperCase()}`);
+                }
+                if (newBlockedStatus !== oldBlockedStatus) {
+                    changes.push(`Status: ${newBlockedStatus ? 'Gesperrt' : 'Entsperrt'}`);
+                }
+                
+                if (changes.length === 0) {
+                    // Prüfe nur Anmerkungen (die keinen Log-Eintrag auslösen sollen, wenn nichts anderes geändert wird)
+                    if (newNotes === (window.userToEdit.notes || '')) {
+                        showToast("Keine Änderungen vorgenommen.", "info");
+                        hideUserEditPopup();
+                        return;
+                    }
+                }
+
+                // Update der user_roles Tabelle
+                const { error } = await window.appSupabaseClient
+                    .from("user_roles")
+                    .update({ 
+                        role: newRole, 
+                        is_blocked: newBlockedStatus,
+                        notes: newNotes
+                    })
+                    .eq("id", window.userToEdit.id);
+
+                if (error) {
+                    showToast(`FEHLER beim Speichern des Benutzers: ${error.message}`, "error");
+                    console.error("Benutzer-Speicherfehler:", error);
+                } else {
+                    description += changes.join(', ');
+                    logAdminAction('USER_UPDATED', description);
+                    
+                    hideUserEditPopup();
+                    showToast(`Benutzer ${window.userToEdit.email} erfolgreich aktualisiert.`, "success");
+                    loadUserList(); // Liste aktualisieren
+                }
+            }
+
 
             /* --- NAVIGATION LOGIK --- */
             
@@ -1640,8 +1880,10 @@ async function loadAdminLog() {
                     
                     if (targetTabId === 'listTab') {
                         loadArticleList();
-                    } else if (targetTabId === 'logTab') { // NEU: Log Tab
+                    } else if (targetTabId === 'logTab') { 
                         loadAdminLog();
+                    } else if (targetTabId === 'usersTab') { // NEU: Benutzer-Tab
+                        loadUserList();
                     }
                 }
             }
@@ -1678,4 +1920,3 @@ async function loadAdminLog() {
 
     </body>
     </html>
-}
