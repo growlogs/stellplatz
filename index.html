@@ -1460,23 +1460,38 @@
                     data = response.data;
                     error = response.error;
 
+                    if (error) {
+                        // Explizite Prüfung auf Netzwerkfehler, falls Supabase einen API-Fehler wirft
+                        if (error.message.includes('Failed to fetch') || !navigator.onLine) {
+                            throw new Error("Offline"); // Gehe in den Offline-Zweig
+                        }
+                        throw error; // Anderer Supabase-Fehler
+                    }
+
                     if (data) {
                         // Bei Erfolg: Lokale Kopie aktualisieren (upsert)
                         await window.offlineDB.upsertData('artikel', data);
                     }
                 } catch (e) {
-                    // 2. Offline-Fallback
-                    isOffline = true;
-                    showToast("Netzwerkfehler. Suche in lokalen Daten...", 'info');
-                    try {
-                        data = await window.offlineDB.getArticleByBarcode(code);
-                        error = null;
-                        if (!data) {
-                            error = { message: "Lokaler Artikel nicht gefunden." };
+                    // 2. Offline-Fallback, wenn es ein "Offline"-Fehler oder ein Netzwerkproblem ist
+                    if (e.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                        showToast("Netzwerkfehler. Suche in lokalen Daten...", 'info');
+                        try {
+                            data = await window.offlineDB.getArticleByBarcode(code);
+                            error = null;
+                            if (!data) {
+                                error = { message: "Lokaler Artikel nicht gefunden." };
+                            }
+                        } catch (e2) {
+                            console.error("Lokale Suche fehlgeschlagen:", e2);
+                            error = { message: "Lokale Datenbank nicht verfügbar." };
                         }
-                    } catch (e2) {
-                        console.error("Lokale Suche fehlgeschlagen:", e2);
-                        error = { message: "Lokale Datenbank nicht verfügbar." };
+                    } else {
+                         // Ein unerwarteter Fehler, der nicht auf Offline hindeutet
+                        console.error("Unerwarteter Fehler beim Artikel-Abruf:", e);
+                        showToast("Unerwarteter Fehler beim Abruf des Artikels.", 'error');
+                        return;
                     }
                 }
                 
@@ -1593,8 +1608,8 @@
                         .insert([newArticle]);
                         
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) {
-                             throw new Error("Offline");
+                        if (error.message.includes('Failed to fetch') || !navigator.onLine) {
+                             throw new Error("Offline"); // Gehe in den Offline-Zweig
                         }
                         showToast(`FEHLER beim Speichern des Artikels.`, "error");
                         console.error("Speicherfehler:", error);
@@ -1678,8 +1693,8 @@
                         .eq("barcode", barcode);
 
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) {
-                             throw new Error("Offline");
+                         if (error.message.includes('Failed to fetch') || !navigator.onLine) {
+                             throw new Error("Offline"); // Gehe in den Offline-Zweig
                         }
                         showToast(`FEHLER beim Speichern des Stellplatzes.`, "error");
                         console.error("Speicherfehler:", error);
@@ -1742,8 +1757,8 @@
                         .eq("barcode", barcode);
                         
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) {
-                             throw new Error("Offline");
+                        if (error.message.includes('Failed to fetch') || !navigator.onLine) {
+                             throw new Error("Offline"); // Gehe in den Offline-Zweig
                         }
                         showToast(`FEHLER beim Löschen des Artikels.`, "error");
                         console.error("Löschfehler:", error);
@@ -1814,7 +1829,7 @@
                     const { data, error } = await query.order('name', { ascending: true });
                     
                     if (error) {
-                         if (error.message.includes('Failed to fetch')) {
+                         if (error.message.includes('Failed to fetch') || !navigator.onLine) {
                              // Supabase Netzwerkfehler
                              throw new Error("Offline");
                          }
@@ -1830,22 +1845,27 @@
                     }
 
                 } catch (error) {
-                    isOffline = true;
-                    showToast("Netzwerkfehler. Zeige lokale Artikeldaten...", 'info');
-                    // 2. Offline-Fallback (IndexedDB)
-                    try {
-                        const localData = await window.offlineDB.getAllArticles();
-                        articles = localData.filter(item => {
-                            if (!searchTerm) return true;
-                            const term = searchTerm.toLowerCase();
-                            return item.name.toLowerCase().includes(term) ||
-                                   item.barcode.toLowerCase().includes(term) ||
-                                   item.stellplatz.toLowerCase().includes(term);
-                        }).sort((a, b) => a.name.localeCompare(b.name));
+                    if (error.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                        showToast("Netzwerkfehler. Zeige lokale Artikeldaten...", 'info');
+                        // 2. Offline-Fallback (IndexedDB)
+                        try {
+                            const localData = await window.offlineDB.getAllArticles();
+                            articles = localData.filter(item => {
+                                if (!searchTerm) return true;
+                                const term = searchTerm.toLowerCase();
+                                return item.name.toLowerCase().includes(term) ||
+                                       item.barcode.toLowerCase().includes(term) ||
+                                       item.stellplatz.toLowerCase().includes(term);
+                            }).sort((a, b) => a.name.localeCompare(b.name));
 
-                    } catch (e) {
-                         showToast("Fehler beim Laden der lokalen Artikelliste.", 'error');
-                         console.error("IndexedDB Fehler:", e);
+                        } catch (e) {
+                             showToast("Fehler beim Laden der lokalen Artikelliste.", 'error');
+                             console.error("IndexedDB Fehler:", e);
+                        }
+                    } else {
+                        showToast("Fehler beim Laden der Artikelliste.", 'error');
+                        console.error("Ladefehler:", error);
                     }
                 }
                 
@@ -1911,7 +1931,7 @@
                         .insert([logEntry]);
                         
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) {
+                        if (error.message.includes('Failed to fetch') || !navigator.onLine) {
                              // Supabase Netzwerkfehler
                              throw new Error("Offline");
                         }
@@ -1956,7 +1976,7 @@
                         .order('created_at', { ascending: false });
 
                     if (error) {
-                         if (error.message.includes('Failed to fetch')) {
+                         if (error.message.includes('Failed to fetch') || !navigator.onLine) {
                              // Supabase Netzwerkfehler
                              throw new Error("Offline");
                          }
@@ -1972,19 +1992,24 @@
                     }
 
                 } catch (error) {
-                    isOffline = true;
-                    showToast("Netzwerkfehler. Zeige lokale Log-Einträge...", 'info');
-                    // 2. Offline-Fallback (IndexedDB)
-                    try {
-                        const localData = await window.offlineDB.getAllLogs();
-                        logData = localData.filter(item => {
-                            if (!searchTerm) return true;
-                            const term = searchTerm.toLowerCase();
-                            return item.action_type.toLowerCase().includes(term) || item.description.toLowerCase().includes(term);
-                        }).sort((a, b) => b.created_at.localeCompare(a.created_at));
-                    } catch (e) {
-                        showToast("Fehler beim Laden der lokalen Log-Einträge.", 'error');
-                        console.error("IndexedDB Fehler:", e);
+                    if (error.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                        showToast("Netzwerkfehler. Zeige lokale Log-Einträge...", 'info');
+                        // 2. Offline-Fallback (IndexedDB)
+                        try {
+                            const localData = await window.offlineDB.getAllLogs();
+                            logData = localData.filter(item => {
+                                if (!searchTerm) return true;
+                                const term = searchTerm.toLowerCase();
+                                return item.action_type.toLowerCase().includes(term) || item.description.toLowerCase().includes(term);
+                            }).sort((a, b) => b.created_at.localeCompare(a.created_at));
+                        } catch (e) {
+                            showToast("Fehler beim Laden der lokalen Log-Einträge.", 'error');
+                            console.error("IndexedDB Fehler:", e);
+                        }
+                    } else {
+                        showToast("Fehler beim Laden des Logbuchs.", 'error');
+                        console.error("Ladefehler:", error);
                     }
                 }
 
@@ -2061,7 +2086,7 @@
                         .order('email', { ascending: true });
 
                     if (error) {
-                         if (error.message.includes('Failed to fetch')) {
+                         if (error.message.includes('Failed to fetch') || !navigator.onLine) {
                              // Supabase Netzwerkfehler
                              throw new Error("Offline");
                          }
@@ -2077,19 +2102,24 @@
                     }
 
                 } catch (error) {
-                    isOffline = true;
-                    showToast("Netzwerkfehler. Zeige lokale Benutzerdaten...", 'info');
-                    // 2. Offline-Fallback (IndexedDB)
-                    try {
-                        const localData = await window.offlineDB.getAllUsers();
-                        users = localData.filter(item => {
-                            if (!searchTerm) return true;
-                            const term = searchTerm.toLowerCase();
-                            return item.email.toLowerCase().includes(term) || (item.notes || '').toLowerCase().includes(term) || (item.role || '').toLowerCase().includes(term);
-                        }).sort((a, b) => a.email.localeCompare(b.email));
-                    } catch (e) {
-                        showToast("Fehler beim Laden der lokalen Benutzerliste.", 'error');
-                        console.error("IndexedDB Fehler:", e);
+                    if (error.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                        showToast("Netzwerkfehler. Zeige lokale Benutzerdaten...", 'info');
+                        // 2. Offline-Fallback (IndexedDB)
+                        try {
+                            const localData = await window.offlineDB.getAllUsers();
+                            users = localData.filter(item => {
+                                if (!searchTerm) return true;
+                                const term = searchTerm.toLowerCase();
+                                return item.email.toLowerCase().includes(term) || (item.notes || '').toLowerCase().includes(term) || (item.role || '').toLowerCase().includes(term);
+                            }).sort((a, b) => a.email.localeCompare(b.email));
+                        } catch (e) {
+                            showToast("Fehler beim Laden der lokalen Benutzerliste.", 'error');
+                            console.error("IndexedDB Fehler:", e);
+                        }
+                    } else {
+                        showToast("Fehler beim Laden der Benutzerliste.", 'error');
+                        console.error("Ladefehler:", error);
                     }
                 }
 
@@ -2188,9 +2218,8 @@
                         .eq("id", userId);
 
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) {
-                             // Supabase Netzwerkfehler
-                             throw new Error("Offline");
+                        if (error.message.includes('Failed to fetch') || !navigator.onLine) {
+                             throw new Error("Offline"); // Gehe in den Offline-Zweig
                         }
                         showToast(`FEHLER beim Speichern der Benutzerdaten.`, "error");
                         console.error("Speicherfehler Benutzer:", error);
@@ -2427,7 +2456,7 @@
                     if (error) throw error;
                     
                     const importedCount = data.length;
-                    const updatedCount = importedData.length - importedCount; // Dies ist eine Schätzung und nicht direkt von upsert-Funktion in Supabase zurückgegeben, aber wir verwenden die Anzahl der hochgeladenen Elemente.
+                    const updatedCount = upsertData.length - importedCount; // Dies ist eine Schätzung und nicht direkt von upsert-Funktion in Supabase zurückgegeben, aber wir verwenden die Anzahl der hochgeladenen Elemente.
 
                     showToast(`${importedCount} Artikel erfolgreich importiert/aktualisiert.`, 'success', 7000);
                     logAdminAction('DATA_IMPORT', `${importedCount} Artikel (CSV/JSON) per Upsert importiert/aktualisiert.`);
@@ -2684,12 +2713,13 @@
                     
                     // NEU: Logbuch-Daten synchronisieren (Pull)
                     if (window.currentUserRole === 'admin') {
-                         await loadAdminLog(document.getElementById('logSearchInput').value);
+                         // Lade Logs neu, um neue Online-Einträge zu ziehen und Cache zu aktualisieren
+                         await loadAdminLog(document.getElementById('logSearchInput').value); 
                     }
 
                 } catch (e) {
                     console.error("Fehler bei der Synchronisation:", e);
-                    showToast("Fehler bei der Offline-Synchronisation.", 'error', 5000);
+                    showToast("Fehler bei der Offline-Synchronisation. Prüfe Netzwerk.", 'error', 5000);
                 } finally {
                     window.isSyncing = false;
                     console.log("Offline-Synchronisation beendet.");
@@ -2755,9 +2785,16 @@
                                 // Wenn ein Update oder Delete fehlschlägt, weil der Datensatz fehlt, überspringen
                                 console.warn(`Fehler beim Sync von ${op.type} (${op.table}): Datensatz nicht gefunden. Aktion gelöscht.`, error);
                                 showToast(`Fehler beim Synchronisieren von ${op.type} (${op.table}). Aktion übersprungen.`, 'error', 7000);
-                            } else {
+                            } else if (error.message.includes('Failed to fetch') || !navigator.onLine) {
                                 // Netzwerkfehler oder Timeout: Abbrechen und warten auf nächste Sync
+                                console.warn("Netzwerkfehler beim Push. Synchronisation abgebrochen.", error);
                                 throw new Error("Netzwerkfehler beim Push.");
+                            } else {
+                                // Andere nicht-behebbare Supabase-Fehler: Loggen und löschen
+                                console.error(`Unbehebbarer Supabase-Fehler bei ${op.type}:`, error);
+                                showToast(`Unbehebbarer Fehler bei ${op.type}. Aktion gelöscht.`, 'error', 7000);
+                                await window.offlineDB.deleteData('outbox', op.id); 
+                                continue;
                             }
                         }
                         
