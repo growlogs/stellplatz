@@ -969,6 +969,9 @@
                 </div>
                 
                 <div id="logTab" class="tab-content">
+                    <div class="search-container">
+                        <input type="text" id="logSearchInput" placeholder="Suche im Log (Aktion oder Beschreibung)..." oninput="debounceLoadAdminLog()">
+                    </div>
                     <div class="list-content-container">
                         <ul id="logList">
                             <li>Lade Log-Protokoll...</li>
@@ -1040,9 +1043,11 @@
                     timeoutId = setTimeout(() => func.apply(this, args), delay);
                 };
             }
+            
             // NEU: Debounce-Funktionsaufrufe für die Suche
             const debounceLoadArticleList = debounce(() => loadArticleList(document.getElementById('articleSearchInput').value), 300);
             const debounceLoadUserList = debounce(() => loadUserList(document.getElementById('userSearchInput').value), 300);
+            const debounceLoadAdminLog = debounce(() => loadAdminLog(document.getElementById('logSearchInput').value), 300); // HINZUGEFÜGT
 
 
             /* --- FEEDBACK & EINSTELLUNGEN LOGIK --- */
@@ -1670,7 +1675,8 @@
 
             /* --- ADMIN LOG LISTE LOGIK --- */
 
-            async function loadAdminLog() {
+            // NEU: Nimmt optional einen Suchbegriff entgegen
+            async function loadAdminLog(searchTerm = '') {
                 const logListContainer = document.getElementById('logList');
                 
                 if (window.currentUserRole !== 'admin') {
@@ -1680,9 +1686,17 @@
                 
                 logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>'; 
 
-                const { data, error } = await window.appSupabaseClient
+                let query = window.appSupabaseClient
                     .from("audit_log") 
-                    .select("*")
+                    .select("*");
+
+                // HINZUGEFÜGT: Filter für die Suche (in action_type oder description)
+                if (searchTerm) {
+                    const search = `%${searchTerm.toLowerCase()}%`;
+                    query = query.or(`action_type.ilike.${search},description.ilike.${search}`);
+                }
+                    
+                const { data, error } = await query
                     .order("created_at", { ascending: false }) 
                     .limit(50); 
                     
@@ -1696,7 +1710,8 @@
                 logListContainer.innerHTML = ''; 
                 
                 if (data.length === 0) {
-                    logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Protokolleinträge vorhanden.</li>';
+                    // Aktualisierte Meldung für den Suchfall
+                    logListContainer.innerHTML = `<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">${searchTerm ? 'Keine Protokolleinträge gefunden, die der Suche entsprechen.' : 'Keine Protokolleinträge vorhanden.'}</li>`;
                     return;
                 }
 
@@ -1914,7 +1929,8 @@
                         // Direkter Aufruf der Ladefunktion mit dem aktuellen Suchbegriff
                         loadArticleList(document.getElementById('articleSearchInput').value); 
                     } else if (targetTabId === 'logTab') { 
-                        loadAdminLog();
+                        // Direkter Aufruf der Ladefunktion mit dem aktuellen Suchbegriff
+                        loadAdminLog(document.getElementById('logSearchInput').value); // AKTUALISIERT
                     } else if (targetTabId === 'usersTab') { 
                         // Direkter Aufruf der Ladefunktion mit dem aktuellen Suchbegriff
                         loadUserList(document.getElementById('userSearchInput').value); 
