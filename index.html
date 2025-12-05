@@ -1044,7 +1044,7 @@
                 const { data, error } = await window.appSupabaseClient
                     .from('user_roles') // <-- KORREKTUR
                     .select('role')
-                    .eq('id', userId)
+                    .eq('user_id', userId)
                     .single();
 
                 if (data && data.role) {
@@ -1572,7 +1572,7 @@ async function loadAdminLog() {
     const { data, error } = await window.appSupabaseClient
         .from("audit_log") // <-- Prüfen Sie, ob Ihre Tabelle WIRKLICH "audit_log" heißt!
         .select("*")
-        .order("timestamp", { ascending: false })
+        .order("created_at", { ascending: false }) // Verwenden created_at als Standard-Timestamp
         .limit(50); 
         
     if (error) {
