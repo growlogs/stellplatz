@@ -1044,7 +1044,7 @@
                 const { data, error } = await window.appSupabaseClient
                     .from('user_roles') // <-- KORREKTUR
                     .select('role')
-                    .eq('id', userId)
+                    .eq('user_id', userId)
                     .single();
 
                 if (data && data.role) {
@@ -1119,16 +1119,14 @@
                 const config = { 
                     fps: 10, 
                     qrbox: { width: 250, height: 250 },
-                    // KRITISCHE KORREKTUR: Entferne 'exact' um OverconstrainedError zu vermeiden
-                    facingMode: "environment" 
                 };
                 
-                // NUR die Facing Mode Präferenz übergeben, nicht die strikte 'exact'-Anforderung
-                const startConfig = {
-                     facingMode: { ideal: "environment" } 
-                };
+                // KORREKTUR: Verwende "environment" als Kamera-ID/Constraint-Shortcut,
+                // da die Library die komplexe MediaTrackConstraints-Struktur
+                // als ersten Parameter ablehnt, wenn sie nicht "exact" enthält.
+                const cameraIdOrConstraints = "environment"; 
                 
-                html5QrCode.start(startConfig, config, onScanSuccess, onScanError)
+                html5QrCode.start(cameraIdOrConstraints, config, onScanSuccess, onScanError)
                 .catch(err => {
                     // Overlay wieder, falls der Start fehlschlägt
                     document.getElementById("preScan").style.display = "flex";
