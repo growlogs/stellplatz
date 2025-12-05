@@ -823,13 +823,11 @@
                     </button>
                 </div>
             </div>
-            
+
             <div id="loadingAuth">
                 Initialisiere App...
             </div>
-            
         </div>
-
 
         <div id="appView" class="app-view-container">
 
@@ -839,7 +837,6 @@
             </header>
 
             <div id="tabContentContainer">
-
                 <div id="scannerTab" class="tab-content active">
                     <div id="reader-container">
                         <div id="reader"></div>
@@ -857,6 +854,7 @@
                         <div class="card-handle"></div>
                         <div id="cardTitle"><span id="cardStatusIcon"></span> <span id="cardTitleText"></span></div>
                         <div id="cardContent"></div>
+                        
                         <div class="action-button-group">
                             <button class="action-button cancel" onclick="hideResultCard()">Fertig</button>
                             <button class="action-button register" id="registerButton" onclick="showPopup()">Registrieren</button>
@@ -869,7 +867,7 @@
                         <li>Lade Artikel...</li>
                     </ul>
                 </div>
-                
+
                 <div id="logTab" class="tab-content">
                     <ul id="logList">
                         <li>Lade Log-Protokoll...</li>
@@ -893,18 +891,17 @@
             </footer>
         </div>
 
-
         <script>
             let html5QrCode = null;
             let lastCode = "";
             let currentScannedBarcode = "";
             let currentTabId = "scannerTab";
             let currentUserId = null;
-            let currentUserRole = null; 
+            let currentUserRole = null;
             let isAuthReady = false;
-            let articleToEdit = null; 
-            let articleToDelete = null; 
-            
+            let articleToEdit = null;
+            let articleToDelete = null;
+
             // SVG-Strings für die Lagertypen
             const SHELF_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4V4zm4 0v16m8-16v16M4 10h16M4 16h16"/></svg>';
             const WAREHOUSE_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l10 5l-10 5l-10-5zM2 12v6l10 5l10-5v-6M12 2v10"/></svg>';
@@ -919,11 +916,12 @@
                 const container = document.getElementById('toastContainer');
                 const toast = document.createElement('div');
                 toast.className = `toast ${type}`;
+
                 let icon = 'ℹ️';
                 if (type === 'success') icon = '✅';
                 if (type === 'error') icon = '❌';
-                toast.innerHTML = `<span class="toast-icon">${icon}</span>${message}`;
 
+                toast.innerHTML = `<span class="toast-icon">${icon}</span>${message}`;
                 container.appendChild(toast);
 
                 // Trigger CSS transition
@@ -940,7 +938,7 @@
                     }, 300);
                 }, duration);
             }
-            
+
             /** Ansicht zwischen Login und App wechseln */
             function switchView(targetViewId) {
                 const views = document.querySelectorAll('.app-view-container');
@@ -952,11 +950,12 @@
                 });
             }
 
+
             /* --- LOGIN LOGIK --- */
 
             function updatePinIndicators() {
                 // HINWEIS: Wählt nur die 4 vorhandenen Indikatoren
-                const indicators = document.querySelectorAll('#pinIndicators .pin-indicator'); 
+                const indicators = document.querySelectorAll('#pinIndicators .pin-indicator');
                 indicators.forEach((indicator, index) => {
                     if (index < window.currentPin.length) {
                         indicator.classList.add('active');
@@ -968,26 +967,25 @@
 
             // Automatischer 4-stelliger Login
             function handlePinInput(key) {
-                document.getElementById("authError").innerText = ""; 
+                document.getElementById("authError").innerText = "";
                 const MAX_PIN_LENGTH = 4; // Max 4 Ziffern
 
                 if (key === 'backspace') {
                     window.currentPin = window.currentPin.slice(0, -1);
-                } else if (typeof key === 'number' && window.currentPin.length < MAX_PIN_LENGTH) { 
+                } else if (typeof key === 'number' && window.currentPin.length < MAX_PIN_LENGTH) {
                     window.currentPin += key.toString();
                 }
 
                 updatePinIndicators();
-                
+
                 // Automatischer Login-Versuch, sobald 4 Ziffern eingegeben wurden
                 if (window.currentPin.length === MAX_PIN_LENGTH) {
                     handlePinEntry(window.currentPin);
                     // PIN zurücksetzen, um den nächsten Versuch zu ermöglichen
-                    window.currentPin = "";
-                    setTimeout(updatePinIndicators, 300); 
+                    window.currentPin = ""; 
+                    setTimeout(updatePinIndicators, 300);
                 }
             }
-
 
             function handlePinEntry(pin) {
                 let role = null;
@@ -1000,7 +998,7 @@
                     role = 'admin';
                     success = true;
                 }
-                
+
                 if (success) {
                     document.getElementById("authError").innerText = "";
                     window.currentUserRole = role; // Rolle setzen
@@ -1017,11 +1015,12 @@
                 }
             }
 
+
             // Beim Start die Login- oder App-Ansicht festlegen
             async function checkLogin() {
                 const authContent = document.getElementById("authContent");
                 const loadingIndicator = document.getElementById("loadingAuth");
-                
+
                 if (isAuthReady) {
                     authContent.style.display = "flex";
                     loadingIndicator.style.display = "none";
@@ -1044,531 +1043,515 @@
                 authContent.style.display = "flex";
             }
 
+
             /* --- SCANNEN LOGIK --- */
-            
+
             async function activateCamera() {
                 if (html5QrCode) {
                     // Falls bereits initialisiert, einfach starten (oder neustarten)
                     await startScanner();
                     return;
                 }
-
+                
                 html5QrCode = new Html5Qrcode("reader");
                 await startScanner();
             }
-            
-            async function startScanner() {
-                 document.getElementById("preScan").style.display = "none";
-                 document.getElementById("scanFrame").style.display = "block";
 
-                const config = { 
-                    fps: 10, 
+            async function startScanner() {
+                document.getElementById("preScan").style.display = "none";
+                document.getElementById("scanFrame").style.display = "block";
+                
+                const config = {
+                    fps: 10,
                     qrbox: { width: 250, height: 250 },
                     // Bevorzuge die rückwärtige Kamera auf mobilen Geräten
-                    facingMode: "environment"
+                    facingMode: "environment" 
                 };
-                
-                html5QrCode.start({ facingMode: { exact: "environment"} }, config, onScanSuccess, onScanError)
-                .catch(err => {
-                    // Overlay wieder, falls der Start fehlschlägt
+
+                // Fängt Fehler ab, falls die Kamera nicht gestartet werden kann (z.B. keine Berechtigung)
+                try {
+                    // Verwende facingMode als Konfiguration, um die rückwärtige Kamera zu erzwingen
+                    await html5QrCode.start({ facingMode: { exact: "environment"} }, config, onScanSuccess, onScanError);
+                } catch (err) {
+                    console.error("Kamera konnte nicht gestartet werden.", err);
                     document.getElementById("preScan").style.display = "flex";
                     document.getElementById("scanFrame").style.display = "none";
-                    showToast("Kamera Fehler: Zugriff verweigert oder Gerät nicht gefunden.", 'error', 4000);
-                    console.error("Scanner Start Fehler:", err);
-                });
+                    document.getElementById("preScan").innerHTML = `
+                        <div style="font-size: 4em; margin-bottom: 20px; color: var(--color-error-red);">❌</div>
+                        <h2>Fehler</h2>
+                        <p style="opacity: 0.7; margin-bottom: 30px;">Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen oder eine andere Kamera auswählen.</p>
+                        <button class="primary-button" style="max-width: 250px;" onclick="activateCamera()">NEU STARTEN</button>
+                    `;
+                    showToast("Kamerafehler. Berechtigungen prüfen.", 'error');
+                }
             }
 
+
             async function stopScanner() {
+                document.getElementById("scanFrame").style.display = "none";
                 if (html5QrCode && html5QrCode.isScanning) {
                     try {
                         await html5QrCode.stop();
-                        // Wichtig: Visuals zurücksetzen, falls die Kamera gestoppt wird
-                        document.getElementById("preScan").style.display = "flex";
-                        document.getElementById("scanFrame").style.display = "none";
+                        console.log("Scanner gestoppt.");
                     } catch (err) {
-                        console.warn("Kamera Stoppen fehlgeschlagen:", err);
+                        // console.error("Fehler beim Stoppen des Scanners:", err); // Wird ignoriert
                     }
                 }
+                // setze preScan zurück, falls der Tab gewechselt wird
+                if (currentTabId === 'scannerTab') {
+                    document.getElementById("preScan").style.display = "flex";
+                }
             }
-            
+
+            function onScanSuccess(decodedText, decodedResult) {
+                // Debouncing: Scanne nur, wenn der Code neu ist oder 5 Sekunden vergangen sind
+                if (decodedText === lastCode && (Date.now() - lastCode.timestamp) < 5000) {
+                    return;
+                }
+                
+                lastCode = { code: decodedText, timestamp: Date.now() };
+                currentScannedBarcode = decodedText;
+                
+                // Visuelles Feedback
+                document.getElementById('scanFrame').style.borderColor = 'var(--color-accent-blue)';
+                setTimeout(() => {
+                    document.getElementById('scanFrame').style.borderColor = 'var(--color-accent-green)';
+                }, 500);
+
+                showToast(`Code gescannt: ${decodedText}`, 'success');
+                lookupBarcode(decodedText);
+            }
+
             function onScanError(errorMessage) {
-                // Nur loggen, um die Konsole nicht zu überfluten.
+                // Wenn die Karte sichtbar ist, nichts tun, um nicht zu unterbrechen
+                if (document.getElementById('result-card').classList.contains('active')) {
+                    return;
+                }
+                // console.log("Scan Error: ", errorMessage); // Zu viel Log-Output
             }
 
-            async function onScanSuccess(code) {
-                if (code === lastCode) return;
-                lastCode = code;
 
-                // Scanner temporär stoppen, um den Code zu verarbeiten
-                if (html5QrCode) html5QrCode.pause(true); 
+            async function lookupBarcode(barcode) {
+                showResultCard({ name: "Suche...", placement_slot: "...", block_warehouse: false }, barcode, 'info');
 
-                currentScannedBarcode = code;
-                showToast(`Barcode gescannt: ${code}`, 'info', 2000);
-
-                // 1. Suche Artikel in der Datenbank
                 const { data, error } = await window.appSupabaseClient
-                    .from("artikel")
-                    .select("*")
-                    .eq("barcode", code)
+                    .from('articles')
+                    .select('*')
+                    .eq('barcode', barcode)
                     .single();
 
-                if (error && error.code !== 'PGRST116') { // PGRST116 = kein Eintrag gefunden
-                    showToast("Fehler bei der Datenbankabfrage.", 'error');
-                    console.error(error);
-                    showResultCard("Fehler", "Datenbankfehler beim Suchen.", '❌');
-                    // Scanner nach Fehler wieder starten
-                    html5QrCode.resume();
-                    lastCode = ""; // Code-Debouncing zurücksetzen
+                if (error && error.code !== 'PGRST116') { // PGRST116 = No Rows Found
+                    console.error('Fehler bei der Barcode-Suche:', error);
+                    showToast("Fehler bei der Datenbanksuche.", 'error');
+                    showResultCard({ name: "Fehler", placement_slot: "DB-Fehler", block_warehouse: false }, barcode, 'error');
                     return;
                 }
 
                 if (data) {
-                    // ARTIKEL GEFUNDEN
-                    const lagertyp = data.blocklager ? 'Blocklager' : 'Regal/Fach'; // Text für die Karte
-                    
-                    const content = `
-                        <p><strong>Stellplatz:</strong> ${data.stellplatz}</p>
-                        <p><strong>Typ:</strong> ${lagertyp}</p>
-                        <p><strong>Erster Scan:</strong> ${new Date(data.created_at).toLocaleDateString()}</p>
-                        <p><strong>Barcode:</strong> ${data.barcode}</p>
-                    `;
-                    showResultCard(data.name, content, '✅');
-                    document.getElementById("registerButton").style.display = "none"; // Registrieren verstecken
-                    
-                    // Scans inkrementieren (im Hintergrund)
-                    const { error: updateError } = await window.appSupabaseClient
-                        .from("artikel")
-                        .update({ scans: (data.scans || 0) + 1 }) 
-                        .eq("barcode", code);
-                        
-                    if(updateError) console.error("Update Fehler:", updateError);
-                    
+                    // Artikel gefunden
+                    showResultCard(data, barcode, 'success');
                 } else {
-                    // ARTIKEL NICHT GEFUNDEN
-                    const content = `<p>Der Barcode <strong>${code}</strong> wurde noch nicht registriert.</p>`;
-                    showResultCard("Unbekannter Artikel", content, '❓');
-                    // NEU: Registrieren nur für Admin anzeigen
-                    if (window.currentUserRole === 'admin') {
-                        document.getElementById("registerButton").style.display = "block";
-                    } else {
-                        document.getElementById("registerButton").style.display = "none";
-                    }
+                    // Artikel nicht gefunden (PGRST116)
+                    showResultCard(null, barcode, 'warning');
                 }
             }
-            
-            
-            /* --- ARTIKEL SPEICHERN LOGIK (FÜR NEUE ARTIKEL) --- */
-            
-            function showPopup() {
-                // NEU: Nur Admins dürfen registrieren
-                if (window.currentUserRole !== 'admin') {
-                    showToast("Nur Administratoren dürfen neue Artikel registrieren.", 'error');
-                    return;
+
+
+            function showResultCard(article, barcode, type = 'info') {
+                const card = document.getElementById('result-card');
+                const titleText = document.getElementById('cardTitleText');
+                const content = document.getElementById('cardContent');
+                const icon = document.getElementById('cardStatusIcon');
+                const registerButton = document.getElementById('registerButton');
+
+                registerButton.style.display = 'none'; // Standardmäßig ausblenden
+                
+                // Speichert den aktuellen Artikel für die Admin-Bearbeitung
+                articleToEdit = article; 
+
+                if (type === 'success' && article) {
+                    titleText.textContent = article.name;
+                    icon.innerHTML = '✅';
+                    
+                    const blockText = article.block_warehouse ? 'Blocklager' : 'Regal / Fach';
+                    
+                    content.innerHTML = `
+                        <p><strong>Status:</strong> Verfügbar</p>
+                        <p><strong>Stellplatz:</strong> ${article.placement_slot}</p>
+                        <p><strong>Lagertyp:</strong> ${blockText}</p>
+                        <p><strong>Barcode:</strong> ${article.barcode}</p>
+                    `;
+                    
+                    // Admin: Zeigt Bearbeiten/Löschen an. User: Zeigt nur "Fertig" an (ist Standard).
+                    if (window.currentUserRole === 'admin') {
+                         registerButton.textContent = 'Bearbeiten (Admin)';
+                         registerButton.classList.add('register');
+                         registerButton.classList.remove('delete');
+                         registerButton.onclick = () => showAdminEditPopup(article);
+                         registerButton.style.display = 'block';
+                    }
+                } else if (type === 'warning') {
+                    titleText.textContent = "Artikel nicht gefunden";
+                    icon.innerHTML = '⚠️';
+                    content.innerHTML = `
+                        <p>Der Barcode <strong>${barcode}</strong> ist nicht registriert.</p>
+                        <p style="margin-top: 10px;">Möchten Sie ihn jetzt registrieren?</p>
+                    `;
+                    registerButton.textContent = 'Registrieren';
+                    registerButton.classList.add('register');
+                    registerButton.classList.remove('delete');
+                    registerButton.onclick = showPopup;
+                    registerButton.style.display = 'block';
+                } else {
+                    // Info/Error State
+                    titleText.textContent = article ? article.name : "System-Info";
+                    icon.innerHTML = type === 'error' ? '❌' : '🔎';
+                    content.innerHTML = `<p>${article ? article.placement_slot : 'Daten werden verarbeitet...'}</p>`;
                 }
                 
+                card.classList.add('active');
+            }
+
+            function hideResultCard() {
+                document.getElementById('result-card').classList.remove('active');
+                articleToEdit = null;
+            }
+
+
+            /* --- POPUP LOGIK --- */
+            
+            // Registrierungs-Popup anzeigen
+            function showPopup() {
+                hideResultCard();
                 document.getElementById('popupBarcode').value = currentScannedBarcode;
                 document.getElementById('popupOverlay').classList.add('show');
             }
-            
+
             function hidePopup() {
                 document.getElementById('popupOverlay').classList.remove('show');
-                // Formular zurücksetzen
+                // Formular zurücksetzen, falls es geschlossen wird
                 document.getElementById('popupBaseName').value = '';
-                document.getElementById('popupSize').value = ''; // NEU: Größe zurücksetzen
+                document.getElementById('popupSize').value = '';
                 document.getElementById('popupPlatz').value = '';
                 document.getElementById('popupBlocklager').value = 'false';
+                currentScannedBarcode = ""; // Barcode zurücksetzen
             }
 
             async function saveArticle() {
+                const name = document.getElementById('popupBaseName').value.trim();
+                const size = document.getElementById('popupSize').value.trim();
+                const platz = document.getElementById('popupPlatz').value.trim().toUpperCase();
+                const isBlocklager = document.getElementById('popupBlocklager').value === 'true';
                 const barcode = document.getElementById('popupBarcode').value.trim();
-                const baseName = document.getElementById('popupBaseName').value.trim();
-                const sizeValue = document.getElementById('popupSize').value.trim(); // NEU: Größe lesen
-                const platz = document.getElementById('popupPlatz').value.trim();
-                const block = document.getElementById('popupBlocklager').value === 'true';
 
-                // NEU: Name Konstruktion mit optionaler Größe
-                let name = baseName;
-                if (sizeValue) {
-                    // Ersetze . durch , für die Anzeige im Namen
-                    const sizeDisplay = sizeValue.replace('.', ','); 
-                    name += ` (${sizeDisplay} L)`; 
-                }
-
-                const lagertyp = block ? 'Blocklager' : 'Regal/Fach'; // Text für die Karte
-
-
-                if (!baseName || !platz) {
-                    showToast("Bitte Basis-Name und Stellplatz ausfüllen.", "error");
+                if (!name || !platz || !barcode) {
+                    showToast("Bitte alle Pflichtfelder ausfüllen.", 'error');
                     return;
                 }
+                
+                // Name mit Größe/Volumen ergänzen, falls vorhanden
+                const finalName = size ? `${name} (${size}L)` : name;
 
-                const { data, error } = await window.appSupabaseClient
-                    .from("artikel")
-                    .insert([{ 
-                        barcode: barcode, 
-                        name: name, // Verwende den neuen Namen
-                        stellplatz: platz, 
-                        blocklager: block, 
-                        scans: 1 
-                    }]);
+                const newArticle = {
+                    barcode: barcode,
+                    name: finalName,
+                    placement_slot: platz,
+                    block_warehouse: isBlocklager,
+                };
+                
+                // Eintrag in die Haupttabelle
+                const { error: insertError } = await window.appSupabaseClient
+                    .from('articles')
+                    .insert([newArticle]);
 
-                if (error) {
-                    showToast(`FEHLER beim Speichern.`, "error");
-                    console.error("Speicherfehler:", error);
-                } else {
-                    // NEU: Loggen der Hinzufügung
-                    logAdminAction('ARTICLE_ADDED', `Neuer Artikel "${name}" registriert (Barcode: ${barcode}). Stellplatz: ${platz}.`);
-                    
-                    hidePopup();
-                    showToast(`Artikel "${name}" erfolgreich gespeichert.`, "success");
-                    showResultCard(
-                        name, 
-                        // Nur Stellplatz und den Lagertyp anzeigen
-                        `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${lagertyp}</p>`,
-                        '✅'
-                    );
-                    
-                    if (currentTabId === 'listTab') loadArticleList();
+                if (insertError) {
+                    showToast("Fehler beim Speichern des Artikels.", 'error');
+                    console.error("Insert Error:", insertError);
+                    return;
                 }
+                
+                // Eintrag in die Log-Tabelle
+                const logEntry = {
+                    action_type: 'ARTICLE_ADDED',
+                    description: `Neuer Artikel: ${finalName} registriert am Platz ${platz}.`,
+                    user_role: window.currentUserRole,
+                    // Die Spalte heißt 'timestamp' in der DB!
+                    timestamp: new Date().toISOString(), 
+                };
+                
+                const { error: logError } = await window.appSupabaseClient
+                    .from('audit_log')
+                    .insert([logEntry]);
+                    
+                if (logError) {
+                    console.error("Log-Eintrag Fehler:", logError);
+                    // Dennoch als Erfolg melden, da Artikel gespeichert wurde
+                }
+
+                showToast(`Artikel "${finalName}" erfolgreich registriert!`, 'success', 5000);
+                hidePopup();
             }
 
 
-            /* --- ADMIN EDIT LOGIK --- */
+            // --- ADMIN BEARBEITUNG LOGIK ---
+            
+            // Aktuell bearbeiteter Artikel (globaler Zustand)
+            // articleToEdit global definiert
             
             function showAdminEditPopup(article) {
-                if (window.currentUserRole !== 'admin') {
-                    showToast("Keine Berechtigung zum Bearbeiten.", 'error');
-                    return;
-                }
+                hideResultCard();
                 
-                window.articleToEdit = article;
+                // articleToEdit wurde bereits in showResultCard gesetzt, aber hier zur Sicherheit erneut
+                articleToEdit = article; 
                 
                 document.getElementById('adminEditName').value = article.name;
                 document.getElementById('adminEditBarcode').value = article.barcode;
-                document.getElementById('adminEditPlatz').value = article.stellplatz; // Aktuellen Wert setzen
+                document.getElementById('adminEditPlatz').value = article.placement_slot;
                 
-                document.getElementById('adminEditPopupOverlay').style.display = "flex";
-                // Verzögerung für die CSS-Transition
-                setTimeout(() => document.getElementById('adminEditPopupOverlay').classList.add('show'), 10);
+                document.getElementById('adminEditPopupOverlay').classList.add('show');
             }
 
             function hideAdminEditPopup() {
                 document.getElementById('adminEditPopupOverlay').classList.remove('show');
-                
-                // Timeout, um sicherzustellen, dass die Transition abgeschlossen ist
-                setTimeout(() => {
-                    document.getElementById('adminEditPopupOverlay').style.display = "none";
-                    // articleToEdit nur löschen, wenn es nicht gerade für den Löschvorgang gebraucht wird
-                    // Wichtig: articleToEdit muss bestehen bleiben, wenn wir das Delete-Popup aufrufen, 
-                    // aber den Bearbeitungs-Dialog schließen.
-                    if (!window.articleToDelete) { 
-                        window.articleToEdit = null;
-                    }
-                }, 300);
+                articleToEdit = null;
             }
 
-            async function saveAdminEdit() {
-                if (!window.articleToEdit) return;
-
-                const newPlatz = document.getElementById('adminEditPlatz').value.trim();
-                const oldPlatz = window.articleToEdit.stellplatz;
-
-                if (!newPlatz) {
-                    showToast("Der Stellplatz darf nicht leer sein.", "error");
-                    return;
-                }
-                
-                if (newPlatz === oldPlatz) {
-                    showToast("Stellplatz wurde nicht geändert.", "info");
-                    hideAdminEditPopup();
-                    return;
-                }
-
-
-                const { error } = await window.appSupabaseClient
-                    .from("artikel")
-                    .update({ 
-                        stellplatz: newPlatz 
-                    })
-                    .eq("barcode", window.articleToEdit.barcode);
-
-                if (error) {
-                    showToast(`FEHLER beim Speichern des Stellplatzes.`, "error");
-                    console.error("Speicherfehler:", error);
-                } else {
-                    // NEU: Loggen der Bearbeitung
-                    logAdminAction('STELLPLATZ_UPDATED', `Stellplatz von Artikel "${window.articleToEdit.name}" (Barcode: ${window.articleToEdit.barcode}) von ${oldPlatz} auf ${newPlatz} geändert.`);
-                    
-                    hideAdminEditPopup();
-                    showToast(`Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`, "success");
-                    loadArticleList(); // Liste aktualisieren
-                }
-            }
-            
-            /**
-             * Öffnet das Lösch-Bestätigungs-Popup.
-             */
-            function deleteArticle() {
-                if (window.currentUserRole !== 'admin' || !window.articleToEdit) {
-                    showToast("Keine Berechtigung oder Artikel nicht ausgewählt.", 'error');
-                    return;
-                }
-                
-                // Wir lassen den Admin-Edit-Dialog geöffnet und zeigen das Bestätigungs-Popup darüber
-                showDeleteConfirmPopup(window.articleToEdit);
-            }
-
-            /**
-             * Öffnet das benutzerdefinierte Bestätigungs-Popup.
-             */
             function showDeleteConfirmPopup(article) {
-                window.articleToDelete = article; // Artikel global für die Löschung speichern
-                
-                document.getElementById('deleteConfirmMessage').innerHTML = `Sind Sie **SICHER**, dass Sie den Artikel<br><strong>"${article.name}"</strong><br>(Barcode: ${article.barcode}) unwiderruflich löschen möchten?`;
-                
-                document.getElementById('deleteConfirmPopupOverlay').style.display = "flex";
-                setTimeout(() => document.getElementById('deleteConfirmPopupOverlay').classList.add('show'), 10);
+                articleToDelete = article;
+                document.getElementById('deleteConfirmMessage').innerHTML = `Möchten Sie den Artikel <strong>"${article.name}"</strong> mit dem Stellplatz <strong>${article.placement_slot}</strong> wirklich löschen?`;
+                document.getElementById('deleteConfirmPopupOverlay').classList.add('show');
             }
 
-            /**
-             * Schließt das Lösch-Popup und setzt die Referenz zurück.
-             * Wenn der Benutzer Abbricht, wird das Admin-Edit-Popup wiederhergestellt.
-             */
             function hideDeleteConfirmPopup() {
                 document.getElementById('deleteConfirmPopupOverlay').classList.remove('show');
-                
-                setTimeout(() => {
-                    document.getElementById('deleteConfirmPopupOverlay').style.display = "none";
-                    
-                    // NEUE LOGIK: Wenn articleToEdit noch existiert (d.h. ABBRUCH),
-                    // mache das Admin-Edit-Popup wieder vollständig sichtbar.
-                    if (window.articleToEdit) {
-                        document.getElementById('adminEditPopupOverlay').style.display = "flex";
-                        document.getElementById('adminEditPopupOverlay').classList.add('show');
-                    }
-                    
-                    window.articleToDelete = null; // Lösche nur die delete-Referenz
-                    
-                }, 300);
+                articleToDelete = null;
             }
 
-            /**
-             * Führt die eigentliche Löschung nach Bestätigung aus.
-             */
+            async function deleteArticle() {
+                if (!articleToEdit) return;
+                
+                hideAdminEditPopup(); // Schließe Bearbeitungs-Popup
+                showDeleteConfirmPopup(articleToEdit); // Zeige Bestätigungs-Popup
+            }
+
             async function confirmDeleteArticle() {
-                if (window.currentUserRole !== 'admin' || !window.articleToDelete) {
+                if (!articleToDelete) return;
+
+                const name = articleToDelete.name;
+                const barcode = articleToDelete.barcode;
+                const platz = articleToDelete.placement_slot;
+                
+                // Haupttabelle Löschen
+                const { error: deleteError } = await window.appSupabaseClient
+                    .from('articles')
+                    .delete()
+                    .eq('id', articleToDelete.id); // Lösche anhand der ID
+
+                if (deleteError) {
+                    showToast("Fehler beim Löschen des Artikels.", 'error');
+                    console.error("Delete Error:", deleteError);
                     hideDeleteConfirmPopup();
                     return;
                 }
                 
-                const articleName = window.articleToDelete.name;
-                const barcode = window.articleToDelete.barcode;
+                // Log-Eintrag
+                const logEntry = {
+                    action_type: 'ARTICLE_DELETED',
+                    description: `Artikel: ${name} (Barcode: ${barcode}) von Platz ${platz} gelöscht.`,
+                    user_role: window.currentUserRole,
+                    timestamp: new Date().toISOString(),
+                };
                 
-                // Löschvorgang
-                const { error } = await window.appSupabaseClient
-                    .from("artikel")
-                    .delete()
-                    .eq("barcode", barcode);
-
-                if (error) {
-                    showToast(`FEHLER beim Löschen des Artikels.`, "error");
-                    console.error("Löschfehler:", error);
-                    // Auch bei Fehler muss der Löschdialog weg und der Bearbeitungsdialog wiederhergestellt werden
-                    hideDeleteConfirmPopup(); 
-                } else {
-                    showToast(`Artikel "${articleName}" wurde erfolgreich gelöscht.`, "success");
-                    
-                    // NEU: Loggen der Löschung
-                    logAdminAction('ARTICLE_DELETED', `Artikel "${articleName}" (Barcode: ${barcode}) unwiderruflich gelöscht.`);
-                    
-                    // WICHTIG: Setze articleToEdit auf null, damit hideDeleteConfirmPopup 
-                    // den Admin-Edit-Dialog NICHT wiederherstellt.
-                    window.articleToEdit = null;
-                    
-                    hideDeleteConfirmPopup(); 
-                    loadArticleList(); 
+                await window.appSupabaseClient.from('audit_log').insert([logEntry]);
+                
+                showToast(`Artikel "${name}" erfolgreich gelöscht.`, 'success', 5000);
+                
+                hideDeleteConfirmPopup();
+                articleToDelete = null;
+                
+                // Artikelliste neu laden, falls wir im Listen-Tab sind
+                if (currentTabId === 'listTab') {
+                    loadArticleList();
                 }
             }
 
 
-            /* --- RESULT CARD LOGIK --- */
-            
-            function showResultCard(title, contentHTML, icon) {
-                document.getElementById('cardTitleText').innerText = title;
-                document.getElementById('cardContent').innerHTML = contentHTML;
-                document.getElementById('cardStatusIcon').innerText = icon;
-                document.getElementById('result-card').classList.add('active');
-            }
-            
-            function hideResultCard() {
-                document.getElementById('result-card').classList.remove('active');
-                lastCode = ""; // Wichtig: Zurücksetzen, um den nächsten Scan zu ermöglichen
+            async function saveAdminEdit() {
+                if (!articleToEdit) return;
                 
-                // Starte den Scanner wieder, wenn wir uns im Scanner-Tab befinden
-                if (html5QrCode && currentTabId === 'scannerTab') {
-                    html5QrCode.resume();
-                }
-            }
-            
-            
-            /* --- ARTIKEL LISTE LOGIK --- */
-            
-            async function loadArticleList() {
-                const articleListContainer = document.getElementById('articleList');
-                // Konsistentes Styling für Lade-Status
-                articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Artikel...</li>'; 
+                const newPlatz = document.getElementById('adminEditPlatz').value.trim().toUpperCase();
 
-                // DATENBANK-ABFRAGE
-                const { data, error } = await window.appSupabaseClient
-                    .from("artikel")
-                    .select("*")
-                    .order("name", { ascending: true }); // Nach Name sortieren
-                    
-                if (error) {
-                    showToast("Fehler beim Laden der Artikelliste.", 'error');
-                    // KRITISCHER HINWEIS, DA DER FEHLER HIER HÄUFIG LIEGT:
-                    console.error("Fehler beim Laden der Artikel (Prüfen Sie RLS-Policies!):", error);
-                    articleListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Die Liste konnte nicht von der Datenbank geladen werden. BITTE RLS-POLICIES PRÜFEN!</li>';
+                if (!newPlatz) {
+                    showToast("Bitte den Stellplatz eingeben.", 'error');
+                    return;
+                }
+                
+                const oldPlatz = articleToEdit.placement_slot;
+
+                // Update in der Haupttabelle
+                const { error: updateError } = await window.appSupabaseClient
+                    .from('articles')
+                    .update({ placement_slot: newPlatz })
+                    .eq('id', articleToEdit.id);
+
+                if (updateError) {
+                    showToast("Fehler beim Speichern der Admin-Änderung.", 'error');
+                    console.error("Update Error:", updateError);
                     return;
                 }
 
-                articleListContainer.innerHTML = ''; // Liste leeren
+                // Log-Eintrag
+                const logEntry = {
+                    action_type: 'ARTICLE_UPDATED',
+                    description: `Stellplatz von Artikel "${articleToEdit.name}" von ${oldPlatz} zu ${newPlatz} geändert.`,
+                    user_role: window.currentUserRole,
+                    timestamp: new Date().toISOString(),
+                };
+                
+                await window.appSupabaseClient.from('audit_log').insert([logEntry]);
+                
+                showToast(`Stellplatz von ${articleToEdit.name} erfolgreich auf ${newPlatz} geändert.`, 'success', 5000);
+                
+                hideAdminEditPopup();
+                
+                // Artikelliste neu laden, falls wir im Listen-Tab sind
+                if (currentTabId === 'listTab') {
+                    loadArticleList();
+                }
+            }
+
+
+            // --- ARTIKELLISTE & LOG ---
+
+            async function loadArticleList() {
+                const listContainer = document.getElementById('articleList');
+                listContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Artikelliste...</li>'; 
+
+                // DATENBANK-ABFRAGE (Selectiert Artikel sortiert nach Stellplatz)
+                // Beachte: User haben nur Lesezugriff durch RLS-Policies
+                const { data, error } = await window.appSupabaseClient
+                    .from("articles") 
+                    .select("id, barcode, name, placement_slot, block_warehouse")
+                    .order("placement_slot", { ascending: true })
+                    .limit(100); 
+                    
+                if (error) {
+                    showToast("Fehler beim Laden der Artikelliste.", 'error');
+                    console.error("Fehler beim Laden der Liste:", error);
+                    listContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Die Artikelliste konnte nicht geladen werden.</li>';
+                    return;
+                }
+
+                listContainer.innerHTML = ''; // Liste leeren
                 
                 if (data.length === 0) {
-                    // KORRIGIERT: Fügt konsistentes Styling hinzu
-                    articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Noch keine Artikel vorhanden. Scannen Sie einen Barcode, um zu starten.</li>';
+                    listContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Artikel im Inventar.</li>';
+                    return;
+                }
+                
+                // Sortierung (wird bereits in der Query gemacht, aber zur Sicherheit)
+                // data.sort((a, b) => a.placement_slot.localeCompare(b.placement_slot));
+
+                data.forEach(article => {
+                    const isBlock = article.block_warehouse;
+                    const iconHtml = isBlock 
+                        ? `<div class="item-count" style="color: var(--color-accent-blue);">${WAREHOUSE_ICON_SVG}<span class="item-label">BLOCK</span></div>`
+                        : `<div class="item-count" style="color: var(--color-accent-green);">${SHELF_ICON_SVG}<span class="item-label">REGAL</span></div>`;
+
+                    const listItem = document.createElement('li');
+                    // Admin dürfen auf Listenelemente klicken, um sie zu bearbeiten
+                    if (window.currentUserRole === 'admin') {
+                         listItem.setAttribute('data-role', 'admin-editable');
+                         // Speichert die Artikeldaten direkt im Element für das Bearbeitungs-Popup
+                         listItem.onclick = () => showAdminEditPopup(article); 
+                    }
+                    
+                    const details = `
+                        <div class="item-details">
+                            <strong>${article.name}</strong>
+                            <span>Platz: ${article.placement_slot} | Barcode: ${article.barcode}</span>
+                        </div>
+                        ${iconHtml}
+                    `;
+                    listItem.innerHTML = details;
+                    listContainer.appendChild(listItem);
+                });
+            }
+
+            // --- LOG FUNKTION (KORRIGIERT) ---
+            async function loadAdminLog() {
+                const logListContainer = document.getElementById('logList');
+                
+                // NUR Admins dürfen Log sehen
+                if (window.currentUserRole !== 'admin') {
+                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
+                    return;
+                }
+                
+                logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>'; 
+
+                // DATENBANK-ABFRAGE
+                // Bestätigt: Tabelle heißt audit_log, Spalte heißt timestamp
+                const { data, error } = await window.appSupabaseClient
+                    .from("audit_log") 
+                    .select("*")
+                    .order("timestamp", { ascending: false })
+                    .limit(50); 
+                    
+                if (error) {
+                    showToast("Fehler beim Laden des Admin-Protokolls.", 'error');
+                    console.error("Fehler beim Laden des Logs:", error);
+                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle und RLS-Richtlinien prüfen.</li>';
+                    return;
+                }
+
+                logListContainer.innerHTML = ''; // Liste leeren
+                
+                if (data.length === 0) {
+                    logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Protokolleinträge vorhanden.</li>';
                     return;
                 }
 
                 data.forEach(item => {
+                    // KORREKTUR: Verwende item.timestamp direkt, um den 'Invalid Date' Fehler zu vermeiden.
+                    const dateSource = item.timestamp; 
+                    const timestamp = new Date(dateSource).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
+                    
+                    let color = 'var(--color-accent-blue)';
+                    if (item.action_type.includes('ADDED')) color = 'var(--color-accent-green)';
+                    if (item.action_type.includes('DELETED')) color = 'var(--color-error-red)';
+                    
                     const listItem = document.createElement('li');
+                    listItem.style.borderLeft = `5px solid ${color}`;
                     
-                    // Füge den Klick-Handler nur für Admins hinzu
-                    if (window.currentUserRole === 'admin') {
-                        listItem.onclick = () => showAdminEditPopup(item);
-                        listItem.style.cursor = 'pointer'; 
-                        listItem.setAttribute('data-role', 'admin-editable'); // Für CSS-Styling
-                    }
-                    
-                    // Lagertyp-Icon als SVG einfügen
-                    const isBlocklager = item.blocklager;
-                    const lagertypIconSvg = isBlocklager ? WAREHOUSE_ICON_SVG : SHELF_ICON_SVG;
-                    const lagertypLabel = isBlocklager ? 'BLOCK' : 'REGAL'; // Text Label
-
                     const details = `
                         <div class="item-details">
-                            <strong>${item.name}</strong>
-                            <span>Stellplatz: ${item.stellplatz} | Barcode: ${item.barcode}</span>
-                        </div>
-                        <div class="item-count">
-                            ${lagertypIconSvg}
-                            <span class="item-label">${lagertypLabel}</span>
+                            <strong style="font-size: 0.95rem; font-weight: 600;">${item.action_type.replace(/_/g, ' ')}</strong>
+                            <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 5px; line-height: 1.3;">${item.description}</span>
+                            <span style="display: block; font-size: 0.75rem; opacity: 0.6; margin-top: 5px;">${timestamp} (Rolle: ${item.user_role || 'N/A'})</span>
                         </div>
                     `;
                     listItem.innerHTML = details;
-                    articleListContainer.appendChild(listItem);
+                    logListContainer.appendChild(listItem);
                 });
             }
-            
-            /* --- NEU: ADMIN LOGGING FUNKTION --- */
 
-            /**
-             * Protokolliert eine Admin-Aktion in der audit_log Tabelle.
-             * WICHTIG: Die Tabelle 'audit_log' muss in Supabase existieren!
-             */
-            async function logAdminAction(actionType, description) {
-                if (window.currentUserRole !== 'admin') {
-                    console.warn("Versuch, eine Admin-Aktion ohne Admin-Rechte zu protokollieren.");
-                    return;
-                }
-                
-                const { error } = await window.appSupabaseClient
-                    .from('audit_log')
-                    .insert({
-                        action_type: actionType,
-                        description: description,
-                        user_role: window.currentUserRole
-                    });
 
-                if (error) {
-                    console.error("FEHLER beim Protokollieren der Admin-Aktion:", error);
-                    showToast("FEHLER: Konnte Aktion nicht im Log speichern.", 'error');
-                }
-            }
+            // --- INITIALISIERUNG & TABS ---
 
-/* --- NEU: ADMIN LOG LISTE LOGIK --- */
-
-async function loadAdminLog() {
-    const logListContainer = document.getElementById('logList');
-    
-    // NUR Admins dürfen Log sehen
-    if (window.currentUserRole !== 'admin') {
-        logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
-        return;
-    }
-    
-    logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>'; 
-
-    // DATENBANK-ABFRAGE
-    // WICHTIG: Prüft den Tabellennamen "audit_log" und die Spalte "timestamp"
-    const { data, error } = await window.appSupabaseClient
-        .from("audit_log") // <-- Prüfen Sie, ob Ihre Tabelle WIRKLICH "audit_log" heißt!
-        .select("*")
-        .order("timestamp", { ascending: false }) // <-- Prüfen Sie, ob Ihre Spalte WIRKLICH "timestamp" heißt!
-        .limit(50); 
-        
-    if (error) {
-        showToast("Fehler beim Laden des Admin-Protokolls.", 'error');
-        console.error("Fehler beim Laden des Logs:", error);
-        logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle und Spaltennamen prüfen.</li>';
-        return;
-    }
-
-    logListContainer.innerHTML = ''; // Liste leeren
-    
-    if (data.length === 0) {
-        logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Protokolleinträge vorhanden.</li>';
-        return;
-    }
-
-    data.forEach(item => {
-        // NEUE KORREKTUR: Verwenden Sie 'timestamp' oder 'created_at', je nachdem, wie Ihre Spalte heißt!
-        // Wir gehen davon aus, dass die Log-Tabelle die Supabase-Standardspalte 'created_at' verwendet,
-        // oder die von mir im Log-Code genannte Spalte 'timestamp'.
-        const dateSource = item.timestamp || item.created_at; 
-        const timestamp = new Date(dateSource).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
-        
-        let color = 'var(--color-accent-blue)';
-        if (item.action_type.includes('ADDED')) color = 'var(--color-accent-green)';
-        if (item.action_type.includes('DELETED')) color = 'var(--color-error-red)';
-        
-        const listItem = document.createElement('li');
-        listItem.style.borderLeft = `5px solid ${color}`;
-        
-        const details = `
-            <div class="item-details">
-                <strong style="font-size: 0.95rem; font-weight: 600;">${item.action_type.replace(/_/g, ' ')}</strong>
-                <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 5px; line-height: 1.3;">${item.description}</span>
-                <span style="display: block; font-size: 0.75rem; opacity: 0.6; margin-top: 5px;">${timestamp} (Rolle: ${item.user_role || 'N/A'})</span>
-            </div>
-        `;
-        listItem.innerHTML = details;
-        logListContainer.appendChild(listItem);
-    });
-}
-
-            /* --- NAVIGATION LOGIK --- */
-            
             function changeTab(targetTabId) {
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.classList.remove('active');
-                });
-
-                document.getElementById(targetTabId).classList.add('active');
-
-                document.querySelectorAll('.nav-item').forEach(item => {
+                // Navigations-Buttons aktualisieren
+                document.querySelectorAll('footer .nav-item').forEach(item => {
                     item.classList.remove('active');
                     if (item.getAttribute('data-tab') === targetTabId) {
+                        item.classList.add('active');
+                    }
+                });
+                
+                // Tab-Inhalte aktualisieren
+                document.querySelectorAll('#tabContentContainer .tab-content').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.id === targetTabId) {
                         item.classList.add('active');
                     }
                 });
