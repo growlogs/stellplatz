@@ -149,7 +149,7 @@
                 transition: background 0.2s;
             }
 
-             /* NEU: Icon Button für Settings */
+             /* Icon Button für Settings */
             .header-icon-btn {
                 background: none; border: none;
                 font-size: 1.5rem; cursor: pointer;
@@ -496,7 +496,7 @@
                 border-color: var(--color-accent-blue);
             }
 
-            /* --- NEU: SETTINGS STYLES --- */
+            /* --- SETTINGS STYLES --- */
             .setting-row {
                 display: flex; justify-content: space-between; align-items: center;
                 margin-bottom: 20px; padding-bottom: 15px;
@@ -615,8 +615,34 @@
             }
             
             /* --- ARTIKEL LIST VIEW STYLES / REUSABLE LIST STYLES --- */
+            /* Padding in .list-content-container, da das Tab-Content nun auch den Search-Header enthält */
+            .list-content-container {
+                overflow-y: auto; 
+                padding: 15px 15px 80px 15px; 
+            }
+            
+            /* NEU: Search Container Style */
+            .search-container {
+                padding: 15px; 
+                flex-shrink: 0; 
+                background: var(--color-bg-dark);
+                border-bottom: 1px solid var(--color-border);
+            }
+
+            .search-container input {
+                width: 100%;
+                padding: 10px 15px;
+                border-radius: 8px;
+                border: 1px solid var(--color-border);
+                background: var(--color-bg-card);
+                color: white;
+                font-size: 1rem;
+            }
+
+
+            /* Alte Paddings entfernt und durch list-content-container ersetzt */
             #listTab, #logTab, #usersTab { 
-                padding: 15px 15px 80px 15px;
+                padding: 0; /* Wichtig: Padding hier entfernen */
             }
             
             #articleList, #logList, #userList { 
@@ -932,21 +958,33 @@
                 </div>
 
                 <div id="listTab" class="tab-content">
-                    <ul id="articleList">
-                        <li>Lade Artikel...</li>
-                    </ul>
+                    <div class="search-container">
+                        <input type="text" id="articleSearchInput" placeholder="Suche nach Name, Barcode oder Stellplatz..." oninput="debounceLoadArticleList()">
+                    </div>
+                    <div class="list-content-container">
+                        <ul id="articleList">
+                            <li>Lade Artikel...</li>
+                        </ul>
+                    </div>
                 </div>
                 
                 <div id="logTab" class="tab-content">
-                    <ul id="logList">
-                        <li>Lade Log-Protokoll...</li>
-                    </ul>
+                    <div class="list-content-container">
+                        <ul id="logList">
+                            <li>Lade Log-Protokoll...</li>
+                        </ul>
+                    </div>
                 </div>
 
                 <div id="usersTab" class="tab-content">
-                    <ul id="userList">
-                        <li>Lade Benutzer...</li>
-                    </ul>
+                    <div class="search-container">
+                        <input type="text" id="userSearchInput" placeholder="Suche nach E-Mail, Rolle oder Anmerkungen..." oninput="debounceLoadUserList()">
+                    </div>
+                    <div class="list-content-container">
+                        <ul id="userList">
+                            <li>Lade Benutzer...</li>
+                        </ul>
+                    </div>
                 </div>
 
             </div>
@@ -992,7 +1030,22 @@
             const ADMIN_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 4l-5 5l-5-5M17 20l-5-5l-5 5"/></svg>';
             const BLOCKED_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>';
 
-            /* --- FEEDBACK & EINSTELLUNGEN LOGIK (NEU) --- */
+            /* --- HILFSFUNKTIONEN --- */
+            
+            // NEU: Debounce Funktion, um Supabase-Abfragen beim Tippen zu optimieren
+            function debounce(func, delay) {
+                let timeoutId;
+                return function(...args) {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => func.apply(this, args), delay);
+                };
+            }
+            // NEU: Debounce-Funktionsaufrufe für die Suche
+            const debounceLoadArticleList = debounce(() => loadArticleList(document.getElementById('articleSearchInput').value), 300);
+            const debounceLoadUserList = debounce(() => loadUserList(document.getElementById('userSearchInput').value), 300);
+
+
+            /* --- FEEDBACK & EINSTELLUNGEN LOGIK --- */
             
             let feedbackAudio = new Audio();
             let appSettings = { sound: true, volume: 50, vibrate: true };
@@ -1084,7 +1137,7 @@
                 });
             }
 
-            /* --- NEUE AUTH LOGIK (ersetzt PIN) --- */
+            /* --- AUTH LOGIK --- */
 
             function toggleAuthMode() {
                 isRegisterMode = !isRegisterMode;
@@ -1269,7 +1322,7 @@
 
                 if (html5QrCode) html5QrCode.pause(true); 
 
-                // --- NEU: Feedback beim Scannen ---
+                // Feedback beim Scannen
                 triggerScanFeedback();
                 // ----------------------------------
 
@@ -1385,7 +1438,7 @@
                         '✅'
                     );
                     
-                    if (currentTabId === 'listTab') loadArticleList();
+                    if (currentTabId === 'listTab') loadArticleList(document.getElementById('articleSearchInput').value); // Mit Suchbegriff neu laden
                 }
             }
 
@@ -1450,7 +1503,7 @@
                     logAdminAction('STELLPLATZ_UPDATED', `Stellplatz von Artikel "${window.articleToEdit.name}" (Barcode: ${window.articleToEdit.barcode}) von ${oldPlatz} auf ${newPlatz} geändert.`);
                     hideAdminEditPopup();
                     showToast(`Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`, "success");
-                    loadArticleList(); 
+                    loadArticleList(document.getElementById('articleSearchInput').value); // Mit Suchbegriff neu laden
                 }
             }
             
@@ -1507,7 +1560,7 @@
                     logAdminAction('ARTICLE_DELETED', `Artikel "${articleName}" (Barcode: ${barcode}) unwiderruflich gelöscht.`);
                     window.articleToEdit = null;
                     hideDeleteConfirmPopup(); 
-                    loadArticleList(); 
+                    loadArticleList(document.getElementById('articleSearchInput').value); // Mit Suchbegriff neu laden
                 }
             }
 
@@ -1533,13 +1586,22 @@
             
             /* --- ARTIKEL LISTE LOGIK --- */
             
-            async function loadArticleList() {
+            // NEU: Nimmt optional einen Suchbegriff entgegen
+            async function loadArticleList(searchTerm = '') {
                 const articleListContainer = document.getElementById('articleList');
                 articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Artikel...</li>'; 
 
-                const { data, error } = await window.appSupabaseClient
+                let query = window.appSupabaseClient
                     .from("artikel")
-                    .select("*")
+                    .select("*");
+
+                // NEU: Filter für die Suche (in Name, Barcode oder Stellplatz)
+                if (searchTerm) {
+                    const search = `%${searchTerm.toLowerCase()}%`;
+                    query = query.or(`name.ilike.${search},barcode.ilike.${search},stellplatz.ilike.${search}`);
+                }
+                
+                const { data, error } = await query
                     .order("name", { ascending: true }); 
                     
                 if (error) {
@@ -1552,7 +1614,7 @@
                 articleListContainer.innerHTML = ''; 
                 
                 if (data.length === 0) {
-                    articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Noch keine Artikel vorhanden. Scannen Sie einen Barcode, um zu starten.</li>';
+                    articleListContainer.innerHTML = `<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">${searchTerm ? 'Keine Artikel gefunden, die der Suche entsprechen.' : 'Noch keine Artikel vorhanden. Scannen Sie einen Barcode, um zu starten.'}</li>`;
                     return;
                 }
 
@@ -1663,7 +1725,8 @@
             
             /* --- PERSONAL / BENUTZERVERWALTUNG LOGIK --- */
             
-            async function loadUserList() {
+            // NEU: Nimmt optional einen Suchbegriff entgegen
+            async function loadUserList(searchTerm = '') {
                 const userListContainer = document.getElementById('userList');
                 userListContainer.innerHTML = ''; 
                 
@@ -1674,9 +1737,17 @@
                 
                 userListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Benutzerliste... (RLS-Policy für auth.users/user_roles notwendig)</li>';
 
-                const { data: users, error } = await window.appSupabaseClient
+                let query = window.appSupabaseClient
                     .from('user_roles')
-                    .select('*')
+                    .select('*');
+
+                // NEU: Filter für die Suche (in Email, Role oder Notes)
+                if (searchTerm) {
+                    const search = `%${searchTerm.toLowerCase()}%`;
+                    query = query.or(`email.ilike.${search},role.ilike.${search},notes.ilike.${search}`);
+                }
+
+                const { data: users, error } = await query
                     .order('email', { ascending: true });
 
                 if (error) {
@@ -1687,7 +1758,7 @@
                 }
                 
                 if (users.length === 0) {
-                    userListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Benutzer gefunden.</li>';
+                    userListContainer.innerHTML = `<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">${searchTerm ? 'Keine Benutzer gefunden, die der Suche entsprechen.' : 'Keine Benutzer gefunden.'}</li>`;
                     return;
                 }
                 
@@ -1727,7 +1798,7 @@
                     const details = `
                         <div class="item-details" style="flex-grow: 1;">
                             <strong>${user.email}</strong>
-                            <span>Von: ${userRole.toUpperCase()} | ${isBlocked ? 'Gesperrt' : 'Aktiv'}</span>
+                            <span>Rolle: ${userRole.toUpperCase()} | ${isBlocked ? 'Gesperrt' : 'Aktiv'}</span>
                             ${user.notes ? `<span style="font-style: italic; opacity: 0.6; margin-top: 5px;">Anm.: ${user.notes}</span>` : ''}
                         </div>
                         <div class="item-count" style="width: 70px;">
@@ -1810,7 +1881,7 @@
                     
                     hideUserEditPopup();
                     showToast(`Benutzer ${window.userToEdit.email} erfolgreich aktualisiert.`, "success");
-                    loadUserList(); 
+                    loadUserList(document.getElementById('userSearchInput').value); // Mit Suchbegriff neu laden
                 }
             }
 
@@ -1840,11 +1911,13 @@
                     stopScanner();
                     
                     if (targetTabId === 'listTab') {
-                        loadArticleList();
+                        // Direkter Aufruf der Ladefunktion mit dem aktuellen Suchbegriff
+                        loadArticleList(document.getElementById('articleSearchInput').value); 
                     } else if (targetTabId === 'logTab') { 
                         loadAdminLog();
                     } else if (targetTabId === 'usersTab') { 
-                        loadUserList();
+                        // Direkter Aufruf der Ladefunktion mit dem aktuellen Suchbegriff
+                        loadUserList(document.getElementById('userSearchInput').value); 
                     }
                 }
             }
@@ -1872,7 +1945,7 @@
 
 
             window.onload = function() {
-                initSettings(); // NEU: Einstellungen laden
+                initSettings(); // Einstellungen laden
                 checkLogin();
             };
         </script>
