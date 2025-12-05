@@ -912,54 +912,58 @@
         <div id="loginView" class="app-view-container active">
 
             <div class="login-header">
-                <div class="app-icon">🔐</div>
+                <div class="app-icon">📦</div>
                 <h2>Inventar Scanner Pro</h2>
-                <div id="authError"></div>
             </div>
 
-            <form id="authForm" onsubmit="event.preventDefault(); handleAuthSubmit();">
-                <h3 id="authTitle" style="margin-bottom: 30px;">Anmelden</h3>
-                
-                <div class="input-group">
-                    <label for="authEmail">E-Mail</label>
-                    <input type="email" id="authEmail" required placeholder="name@firma.de">
+            <div style="width: 100%; max-width: 320px;">
+                <p id="authError"></p>
+                <div id="loadingAuth" style="display: block;">
+                    App wird initialisiert...
                 </div>
                 
-                <div class="input-group">
-                    <label for="authPassword">Passwort</label>
-                    <input type="password" id="authPassword" required placeholder="Mindestens 6 Zeichen">
-                </div>
-                
-                <button type="submit" id="authSubmitButton">Anmelden</button>
-                
-                <div id="registerToggle" onclick="toggleAuthMode()">Noch keinen Account? Registrieren</div>
-            </form>
-            <div id="pinIndicators"></div>
-            <div id="keypad"></div>
-            <div id="loadingAuth">
-                Initialisiere App...
+                <form id="authForm" onsubmit="event.preventDefault(); handleAuthSubmit();" style="display: none;">
+                    
+                    <div id="pinIndicators" style="display: none; text-align: center; margin-bottom: 20px;">
+                        <span style="font-size: 2rem; opacity: 0.5;">••••</span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="authEmail">E-Mail</label>
+                        <input type="email" id="authEmail" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="authPassword">Passwort</label>
+                        <input type="password" id="authPassword" required>
+                    </div>
+                    
+                    <button type="submit" id="authSubmitButton">Anmelden</button>
+
+                    <div id="keypad" style="display: none; margin-top: 20px;">
+                        </div>
+
+                    <p id="registerToggle" onclick="toggleAuthMode()">Noch kein Konto? Jetzt registrieren</p>
+                </form>
             </div>
-            
         </div>
 
-
         <div id="appView" class="app-view-container">
-
             <header>
-                <h1>Inventar Scanner Pro</h1>
+                <h1 id="headerTitle">Scanner</h1>
                 <div style="display: flex; align-items: center;">
+                    <span id="userDisplay" style="font-size: 0.9rem; opacity: 0.8; margin-right: 15px;"></span>
                     <button class="header-icon-btn" onclick="showSettingsPopup()">⚙️</button>
-                    <button class="header-button" onclick="logout()">Logout (<span id="userDisplay"></span>)</button>
+                    <button class="header-button" onclick="logout()">Abmelden</button>
                 </div>
             </header>
 
             <div id="tabContentContainer">
-
+                
                 <div id="scannerTab" class="tab-content active">
                     <div id="reader-container">
                         <div id="reader"></div>
                         <div class="scan-frame" id="scanFrame" style="display:none;"></div>
-
                         <div id="preScan">
                             <div style="font-size: 4em; margin-bottom: 20px;">📦</div>
                             <h2>Scanner bereit</h2>
@@ -990,7 +994,7 @@
 
                 <div id="logTab" class="tab-content">
                     <div class="search-container">
-                        <input type="text" id="logSearchInput" placeholder="Suche nach Aktion oder Beschreibung..." oninput="loadAdminLog(this.value)">
+                        <input type="text" id="logSearchInput" placeholder="Suche nach Aktion oder Beschreibung..." oninput="debounce(loadAdminLog, 300, this.value)">
                     </div>
                     <div class="list-content-container">
                         <ul id="logList"></ul>
@@ -999,7 +1003,7 @@
 
                 <div id="usersTab" class="tab-content">
                     <div class="search-container">
-                        <input type="text" id="userSearchInput" placeholder="Suche nach E-Mail, Rolle oder Anmerkungen..." oninput="loadUserList(this.value)">
+                        <input type="text" id="userSearchInput" placeholder="Suche nach E-Mail, Rolle oder Anmerkungen..." oninput="debounce(loadUserList, 300, this.value)">
                     </div>
                     <div class="list-content-container">
                         <ul id="userList"></ul>
@@ -1010,42 +1014,37 @@
 
             <footer>
                 <div class="nav-item active" data-tab="scannerTab" onclick="changeTab('scannerTab')">
-                    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18h.01"/><path d="M10 21h4"/><path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>
+                    <svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z"/><path d="M16 5l-4 4-4-4"/></svg>
                     <span>Scan</span>
                 </div>
                 <div class="nav-item" data-tab="listTab" onclick="changeTab('listTab')">
-                    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-                    <span>Liste</span>
+                    <svg viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+                    <span>Artikel</span>
                 </div>
                 <div class="nav-item" data-tab="logTab" onclick="changeTab('logTab')">
-                    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 11H5M19 11v6m0-6V5m-4 16H9M12 4v16M21 11H3"/></svg>
+                    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 11V7M12 15h.01"/></svg>
                     <span>Log</span>
                 </div>
                 <div class="nav-item" data-tab="usersTab" onclick="changeTab('usersTab')">
-                    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87m-4-1.63a4 4 0 0 1 0-7.74"/></svg>
-                    <span>Personal</span>
+                    <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span>Benutzer</span>
                 </div>
             </footer>
-
         </div>
+        
+        <audio id="scanSound" src="scan_sound.mp3"></audio>
+
 
         <script>
-            let html5QrCode = null;
-            let lastCode = "";
-            let currentScannedBarcode = "";
-            let currentTabId = "scannerTab";
-            let currentUserId = null;
-            let currentUserRole = null;
-            let isAuthReady = false;
-            let articleToEdit = null;
-            let articleToDelete = null;
-            let userToEdit = null;
+            // Globale Zustände und Icons
             let isRegisterMode = false;
+            let currentScannedBarcode = null;
+            let currentUserId = null;
+            const html5QrCode = new Html5Qrcode("reader");
 
-            const SHELF_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4V4zm4 0v16m8-16v16M4 10h16M4 16h16"/></svg>';
-            const WAREHOUSE_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l10 5l-10 5l-10-5zM2 12v6l10 5l10-5v-6M12 2v10"/></svg>';
-            const USER_ICON_SVG = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
-            
+            const WAREHOUSE_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-warehouse"><path d="M22 21V9a2 2 0 0 0-2-2h-3a2 2 0 0 0-2 2v12"/><path d="M2 10.27V21h3"/><path d="M6 10.27v10.73"/><path d="M10 10.27v10.73"/><path d="M15 10.27v10.73"/><path d="M20 10.27v10.73"/><path d="m5 7 7-4 7 4"/></svg>';
+            const SHELF_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shelves"><rect x="2" y="10" width="20" height="4" rx="1"/><rect x="2" y="3" width="20" height="4" rx="1"/><rect x="2" y="17" width="20" height="4" rx="1"/></svg>';
+
             // Simpler debounce-Ersatz, da die eigentliche Funktion im Snippet fehlte.
             let debounceTimer;
             function debounce(func, delay, ...args) {
@@ -1053,8 +1052,9 @@
                 debounceTimer = setTimeout(() => func(...args), delay);
             }
 
+
             /* --- EINSTELLUNGEN LOGIK --- */
-            const feedbackAudio = new Audio('scan_sound.mp3'); // Annahme: Existierende Datei
+            const feedbackAudio = document.getElementById('scanSound'); 
             let appSettings = {
                 sound: true,
                 vibrate: true,
@@ -1066,7 +1066,6 @@
                 if (storedSettings) {
                     appSettings = JSON.parse(storedSettings);
                 }
-                
                 document.getElementById('settingSound').checked = appSettings.sound;
                 document.getElementById('settingVibrate').checked = appSettings.vibrate;
                 document.getElementById('settingVolume').value = appSettings.volume;
@@ -1075,7 +1074,7 @@
             }
 
             function updateVolumeLabel() {
-                 document.getElementById('volValue').innerText = `${document.getElementById('settingVolume').value}%`;
+                document.getElementById('volValue').innerText = `${document.getElementById('settingVolume').value}%`;
             }
 
             function saveSettings() {
@@ -1089,87 +1088,189 @@
             function showSettingsPopup() {
                 document.getElementById('settingsPopupOverlay').style.display = 'flex';
                 setTimeout(() => document.getElementById('settingsPopupOverlay').classList.add('show'), 10);
+                if (window.currentUserRole !== 'admin') {
+                    // Verstecke Admin-Bereich
+                    document.querySelector('#settingsPopupOverlay h4').style.display = 'none';
+                    document.querySelector('#settingsPopupOverlay p').style.display = 'none';
+                    const adminRows = document.querySelectorAll('#settingsPopupOverlay .setting-row');
+                    adminRows.forEach(row => {
+                        if (row.querySelector('button[onclick*="exportData"]') || row.querySelector('button[onclick*="prepareImport"]')) {
+                             row.style.display = 'none';
+                        }
+                    });
+                } else {
+                    // Zeige Admin-Bereich
+                    document.querySelector('#settingsPopupOverlay h4').style.display = 'block';
+                    document.querySelector('#settingsPopupOverlay p').style.display = 'block';
+                    const adminRows = document.querySelectorAll('#settingsPopupOverlay .setting-row');
+                    adminRows.forEach(row => {
+                        if (row.querySelector('button[onclick*="exportData"]') || row.querySelector('button[onclick*="prepareImport"]')) {
+                             row.style.display = 'flex';
+                             // Setzt den Import-Button-Status basierend auf File Input
+                             document.getElementById('importButton').disabled = !document.getElementById('importFile').files.length;
+                        }
+                    });
+                }
             }
 
             function hideSettingsPopup() {
                 document.getElementById('settingsPopupOverlay').classList.remove('show');
                 setTimeout(() => document.getElementById('settingsPopupOverlay').style.display = 'none', 300);
             }
-            
+
             function triggerScanFeedback() {
                 if (appSettings.sound) {
                     feedbackAudio.currentTime = 0;
                     feedbackAudio.play().catch(e => console.log("Audio blockiert", e));
                 }
                 if (appSettings.vibrate && navigator.vibrate) {
-                    // Vibration funktioniert auf Android meistens.
-                    // Auf iOS (iPhone) wird dies vom Browser blockiert und funktioniert dort nicht.
+                    // Vibration funktioniert auf vielen iOS- und Desktop-Browsern nicht, aber auf Android
                     navigator.vibrate(200);
                 }
             }
             
             function testFeedback() {
                 triggerScanFeedback();
+                showToast("Feedback getestet!", 'info');
             }
 
-            /* --- HILFSFUNKTIONEN --- */
+
+            /* --- TOAST LOGIK --- */
             function showToast(message, type = 'info', duration = 3000) {
                 const container = document.getElementById('toastContainer');
                 const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
-                let icon = 'ℹ️';
-                if (type === 'success') icon = '✅';
-                if (type === 'error') icon = '❌';
+                toast.classList.add('toast', type);
 
-                toast.innerHTML = `<span class="toast-icon">${icon}</span>${message}`;
+                let icon = '';
+                if (type === 'success') {
+                    icon = '✅';
+                } else if (type === 'error') {
+                    icon = '❌';
+                } else if (type === 'info') {
+                    icon = 'ℹ️';
+                } else if (type === 'warning') {
+                    icon = '⚠️';
+                }
+
+                toast.innerHTML = `<span class="toast-icon">${icon}</span> ${message}`;
                 container.appendChild(toast);
 
-                setTimeout(() => toast.classList.add('show'), 10);
-                
+                setTimeout(() => {
+                    toast.classList.add('show');
+                }, 10);
+
                 setTimeout(() => {
                     toast.classList.remove('show');
                     setTimeout(() => {
-                        if (toast.parentNode === container) {
-                            container.removeChild(toast);
-                        }
+                        container.removeChild(toast);
                     }, 300);
                 }, duration);
             }
 
-            function switchView(targetViewId) {
-                const views = document.querySelectorAll('.app-view-container');
-                views.forEach(view => {
-                    view.classList.remove('active');
-                    if (view.id === targetViewId) {
-                        view.classList.add('active');
+
+            /* --- NAVIGATION LOGIK --- */
+            function changeTab(tabId) {
+                if (tabId === window.currentTabId) return;
+
+                // Scanner stoppen, wenn wir den Tab wechseln
+                if (window.currentTabId === 'scannerTab') {
+                    stopScanner();
+                }
+
+                // Header Titel aktualisieren
+                let newTitle = '';
+                if (tabId === 'scannerTab') {
+                    newTitle = 'Scanner';
+                } else if (tabId === 'listTab') {
+                    newTitle = 'Artikelliste';
+                    loadArticleList(document.getElementById('articleSearchInput').value);
+                } else if (tabId === 'logTab') {
+                    newTitle = 'Admin Logbuch';
+                    if (window.currentUserRole !== 'admin') {
+                        showToast("Keine Berechtigung für diese Ansicht.", 'error');
+                        return; // Kein Tab-Wechsel
                     }
+                    loadAdminLog(document.getElementById('logSearchInput').value);
+                } else if (tabId === 'usersTab') {
+                    newTitle = 'Benutzerverwaltung';
+                    if (window.currentUserRole !== 'admin') {
+                        showToast("Keine Berechtigung für diese Ansicht.", 'error');
+                        return; // Kein Tab-Wechsel
+                    }
+                    loadUserList(document.getElementById('userSearchInput').value);
+                }
+                document.getElementById('headerTitle').innerText = newTitle;
+
+                // Tabs wechseln
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.remove('active');
                 });
+                document.getElementById(tabId).classList.add('active');
+
+                // Navigation Items aktualisieren
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                document.querySelector(`.nav-item[data-tab="${tabId}"]`).classList.add('active');
+
+                window.currentTabId = tabId;
             }
 
-            /* --- AUTH LOGIK --- */
+
+            /* --- AUTHENTIFIZIERUNG LOGIK --- */
             function toggleAuthMode() {
                 isRegisterMode = !isRegisterMode;
-                const title = document.getElementById('authTitle');
+                const form = document.getElementById('authForm');
                 const submitButton = document.getElementById('authSubmitButton');
-                const toggleLink = document.getElementById('registerToggle');
+                const toggle = document.getElementById('registerToggle');
+                const error = document.getElementById("authError");
+                const header = document.querySelector(".login-header h2");
+                const defaultText = "Melden Sie sich an, um den Scanner zu nutzen.";
+
+                error.innerText = "";
+                form.reset(); 
 
                 if (isRegisterMode) {
-                    title.innerText = "Registrieren";
                     submitButton.innerText = "Registrieren";
-                    toggleLink.innerText = "Bereits registriert? Anmelden";
+                    toggle.innerText = "Bereits registriert? Hier anmelden";
+                    header.innerText = "Konto erstellen";
+                    error.innerText = "Mind. 6 Zeichen Passwort. Bitte E-Mail bestätigen.";
                 } else {
-                    title.innerText = "Anmelden";
                     submitButton.innerText = "Anmelden";
-                    toggleLink.innerText = "Noch keinen Account? Registrieren";
+                    toggle.innerText = "Noch kein Konto? Jetzt registrieren";
+                    header.innerText = "Inventar Scanner Pro";
+                    error.innerText = defaultText; 
                 }
-                document.getElementById("authError").innerText = "";
+            }
+            
+            async function checkLogin() {
+                document.getElementById("loadingAuth").style.display = "block";
+                document.getElementById("authForm").style.display = "none";
+                document.getElementById("authError").innerText = ""; 
+
+                try {
+                    const { data: { user } } = await window.appSupabaseClient.auth.getUser();
+
+                    if (user) {
+                        await handleLoginSuccess(user.id, user.email);
+                    } else {
+                        document.getElementById("loadingAuth").style.display = "none";
+                        document.getElementById("authForm").style.display = "block";
+                        document.getElementById("authError").innerText = "Bitte E-Mail und Passwort eingeben."; 
+                    }
+                } catch (e) {
+                    console.error("Fehler beim Abrufen des Benutzers:", e);
+                    document.getElementById("loadingAuth").style.display = "none";
+                    document.getElementById("authForm").style.display = "block";
+                    document.getElementById("authError").innerText = "Fehler beim Initialisieren der Sitzung.";
+                }
             }
 
+
             async function handleAuthSubmit() {
-                const email = document.getElementById('authEmail').value;
-                const password = document.getElementById('authPassword').value;
-                const submitButton = document.getElementById('authSubmitButton');
-                document.getElementById("authError").innerText = "";
+                const email = document.getElementById("authEmail").value;
+                const password = document.getElementById("authPassword").value;
+                const submitButton = document.getElementById("authSubmitButton");
 
                 if (!email || !password) {
                     document.getElementById("authError").innerText = "Bitte E-Mail und Passwort eingeben.";
@@ -1187,7 +1288,7 @@
                         });
 
                         if (error) throw error;
-
+                        
                         showToast("Registrierung erfolgreich. Bitte E-Mail bestätigen.", 'info', 7000);
                         toggleAuthMode(); // Zurück zum Login
                     } else {
@@ -1195,7 +1296,7 @@
                             email: email,
                             password: password,
                         });
-
+                        
                         if (error) throw error;
                         
                         await handleLoginSuccess(data.user.id, data.user.email);
@@ -1210,8 +1311,9 @@
                     
                     document.getElementById("authError").innerText = errorMessage;
                     showToast("Login fehlgeschlagen.", 'error', 5000);
-                }
 
+                }
+                
                 submitButton.disabled = false;
                 submitButton.innerText = (isRegisterMode ? "Registrieren" : "Anmelden");
             }
@@ -1220,7 +1322,8 @@
                 currentUserId = userId;
                 let userRole = 'user';
                 let isBlocked = false;
-                
+
+                // Rolle und Sperrstatus abrufen
                 const { data, error } = await window.appSupabaseClient
                     .from('user_roles')
                     .select('role, is_blocked')
@@ -1231,81 +1334,81 @@
                     userRole = data.role || 'user';
                     isBlocked = data.is_blocked || false;
                 }
-
+                
                 if (isBlocked) {
                     await window.appSupabaseClient.auth.signOut();
                     document.getElementById("authError").innerText = "Ihr Konto ist gesperrt. Bitte wenden Sie sich an den Administrator.";
-                    showToast("Login fehlgeschlagen: Konto gesperrt.", 'error', 7000);
+                    showToast("Login fehlgeschlagen: Konto gesperrt.", 'error', 5000);
                     return;
                 }
-
-                if (error && error.code !== 'PGRST116') {
-                    console.error("Fehler beim Laden der Benutzerrolle (RLS-Policy prüfen):", error);
-                    showToast("Login erfolgreich, aber Rollenprüfung fehlgeschlagen. Nur als USER angemeldet.", 'info');
-                }
-
+                
                 window.currentUserRole = userRole;
-                const roleDisplay = (userRole === 'admin' ? "ADMIN" : "USER");
-                document.getElementById("userDisplay").innerText = `${email.split('@')[0]} (${roleDisplay})`;
-                
+
+                // Ansicht wechseln
                 switchView('appView');
+                
+                // Benutzerinformationen anzeigen
+                document.getElementById("userDisplay").innerText = `Angemeldet als: ${email} (${userRole})`;
+                
+                // Erstmals den Scanner-Tab initialisieren
                 changeTab('scannerTab');
-                showToast(`Willkommen als ${roleDisplay}!`, 'success');
                 
-                // NEU: Sofortige Datensynchronisation nach erfolgreichem Login
-                await syncData(true); 
+                // Gegebenenfalls Daten synchronisieren
+                syncData(true); 
+
+                showToast(`Erfolgreich angemeldet als ${userRole}!`, 'success');
+            }
+            
+            function switchView(viewId) {
+                document.querySelectorAll('.app-view-container').forEach(view => {
+                    view.classList.remove('active');
+                });
+                document.getElementById(viewId).classList.add('active');
             }
 
-            async function checkLogin() {
-                const authForm = document.getElementById("authForm");
-                const loadingIndicator = document.getElementById("loadingAuth");
-                loadingIndicator.style.display = "block";
-                authForm.style.display = "none";
-                
-                const { data } = await window.appSupabaseClient.auth.getSession();
-                const currentSession = data.session;
-                isAuthReady = true;
+            async function logout() {
+                const { error } = await window.appSupabaseClient.auth.signOut();
 
-                loadingIndicator.style.display = "none";
-
-                if (currentSession) {
-                    await handleLoginSuccess(currentSession.user.id, currentSession.user.email);
-                } else {
-                    switchView('loginView');
-                    authForm.style.display = "block";
-                    toggleAuthMode();
+                if (error) {
+                    showToast("Fehler beim Abmelden.", 'error');
+                    console.error("Logout Fehler:", error);
                 }
+
+                switchView('loginView');
+                window.currentUserRole = null;
+                showToast("Erfolgreich abgemeldet.", 'info');
+                lastCode = "";
+                document.getElementById("userDisplay").innerText = "";
+                document.getElementById("authEmail").value = "";
+                document.getElementById("authPassword").value = "";
+                document.getElementById("authError").innerText = "";
             }
 
-            /* --- SCANNEN LOGIK --- */
+
+            /* --- SCANNER LOGIK (html5-qrcode) --- */
+            
             async function activateCamera() {
-                if (html5QrCode) {
-                    await startScanner();
-                    return;
-                }
-
-                html5QrCode = new Html5Qrcode("reader");
-                await startScanner();
-            }
-
-            async function startScanner() {
                 document.getElementById("preScan").style.display = "none";
                 document.getElementById("scanFrame").style.display = "block";
                 
-                const config = {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 },
-                };
+                const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+                
+                let cameraIdOrConstraints = { facingMode: "environment" }; // Bevorzuge Rückkamera
 
-                const cameraIdOrConstraints = { facingMode: "environment" };
-
-                html5QrCode.start(cameraIdOrConstraints, config, onScanSuccess, onScanError)
+                try {
+                    await html5QrCode.start(cameraIdOrConstraints, config, onScanSuccess, onScanError)
                     .catch(err => {
                         document.getElementById("preScan").style.display = "flex";
                         document.getElementById("scanFrame").style.display = "none";
                         showToast("Kamera Fehler: Zugriff verweigert oder Gerät nicht gefunden.", 'error', 4000);
                         console.error("Scanner Start Fehler:", err);
                     });
+                } catch(err) {
+                    console.error("Fehler beim html5QrCode.start Aufruf:", err);
+                    document.getElementById("preScan").style.display = "flex";
+                    document.getElementById("scanFrame").style.display = "none";
+                    showToast("Kamera Fehler: Zugriff konnte nicht gestartet werden.", 'error', 4000);
+                }
             }
 
             async function stopScanner() {
@@ -1321,7 +1424,6 @@
                 }
             }
 
-
             function onScanError(errorMessage) {
                 // Nur anzeigen, wenn kein Code erkannt wird.
                 // console.log("Scan Fehler:", errorMessage);
@@ -1331,12 +1433,12 @@
                 if (decodedText === lastCode) {
                     return; // Code wurde bereits verarbeitet, um Doppelerkennung zu verhindern
                 }
-                
                 lastCode = decodedText;
                 triggerScanFeedback();
                 currentScannedBarcode = decodedText;
-                
-                await html5QrCode.pause(); 
+
+                // Pausiere den Scanner, bis das Ergebnis verarbeitet ist
+                await html5QrCode.pause();
                 document.getElementById("scanFrame").style.display = "none";
 
                 await searchArticle(decodedText);
@@ -1346,7 +1448,7 @@
                 let data = null;
                 let error = null;
                 let isOffline = false;
-
+                
                 try {
                     // 1. Online-Versuch
                     const response = await window.appSupabaseClient
@@ -1354,14 +1456,14 @@
                         .select('*')
                         .eq('barcode', code)
                         .single();
+                    
                     data = response.data;
                     error = response.error;
-                    
+
                     if (data) {
                         // Bei Erfolg: Lokale Kopie aktualisieren (upsert)
                         await window.offlineDB.upsertData('artikel', data);
                     }
-
                 } catch (e) {
                     // 2. Offline-Fallback
                     isOffline = true;
@@ -1369,64 +1471,65 @@
                     try {
                         data = await window.offlineDB.getArticleByBarcode(code);
                         error = null;
-                        if (!data) error = { code: 'PGRST116', message: "Artikel nicht lokal gefunden." };
-                    } catch (e) {
-                        console.error("IndexedDB Abruffehler:", e);
-                        error = { message: "Lokaler Datenbankfehler." };
+                        if (!data) {
+                            error = { message: "Lokaler Artikel nicht gefunden." };
+                        }
+                    } catch (e2) {
+                        console.error("Lokale Suche fehlgeschlagen:", e2);
+                        error = { message: "Lokale Datenbank nicht verfügbar." };
                     }
                 }
-
-                if (error && error.code !== 'PGRST116' && !isOffline) { 
-                    console.error("Datenbank Fehler beim Suchen:", error);
-                    showResultCard("Fehler", "Fehler beim Suchen.", '❌');
-                    html5QrCode.resume();
-                    lastCode = "";
-                    return;
-                }
-
+                
                 if (data) {
-                    const lagertyp = data.blocklager ? 'Blocklager' : 'Regal/Fach';
+                    // Artikel gefunden
                     const content = `
+                        <p><strong>Name:</strong> ${data.name}</p>
                         <p><strong>Stellplatz:</strong> ${data.stellplatz}</p>
-                        <p><strong>Typ:</strong> ${lagertyp}</p>
-                        <p><strong>Erster Scan:</strong> ${data.created_at ? new Date(data.created_at).toLocaleDateString() : 'Unbekannt'}</p>
-                        <p><strong>Barcode:</strong> ${data.barcode}</p>
-                        ${isOffline ? '<p style="color:var(--color-warning-yellow);">**OFFLINE DATEN**</p>' : ''}
+                        <p><strong>Lagertyp:</strong> ${data.blocklager ? 'Blocklager' : 'Regal/Fach'}</p>
+                        <p><strong>Scans:</strong> ${data.scans}</p>
+                        <p><strong>Erstellt:</strong> ${new Date(data.created_at).toLocaleDateString('de-DE')}</p>
                     `;
-                    showResultCard(data.name, content, '✅');
+                    showResultCard("Artikel gefunden!", content, '✅');
+                    
                     document.getElementById("registerButton").style.display = "none";
-
-                    // Zähler nur aktualisieren, wenn wir online sind oder wenn der Artikel nur lokal existiert (späterer Sync)
-                    if (!isOffline) {
+                    
+                    // Scan-Zähler aktualisieren und Loggen
+                    if (window.currentUserRole === 'admin') {
+                         logAdminAction('ARTICLE_SCAN', `Admin hat Artikel "${data.name}" (${code}) gescannt. Stellplatz: ${data.stellplatz}`);
+                    }
+                    
+                    // Offline- oder Online-Zähler-Update
+                    if (!isOffline && navigator.onLine) {
+                        // Online: Zähler im Backend erhöhen
                         const { error: updateError } = await window.appSupabaseClient
-                            .from("artikel")
-                            .update({ scans: (data.scans || 0) + 1 })
-                            .eq("barcode", code);
+                            .rpc('increment_scans', { barcode_val: code });
                             
-                        if(updateError) console.error("Update Fehler:", updateError);
-                    } else {
-                        // Wenn offline, erstellen wir eine OUTBOX-Aktion für den Scan-Zähler
-                        await window.offlineDB.addToOutbox({
-                            type: 'SCAN_INCREMENT',
-                            table: 'artikel',
-                            key: code,
-                            payload: { barcode: code, scans: (data.scans || 0) + 1 }, 
-                            timestamp: new Date().toISOString()
-                        });
+                        if (updateError) {
+                             // Fallback bei Update-Fehler: Offline-Log
+                             isOffline = true;
+                             console.warn("Scan-Zähler Online-Update fehlgeschlagen. Offline-Log erstellt.", updateError);
+                        }
+                    }
+
+                    if (isOffline || !navigator.onLine) {
+                        // Offline: Zähler lokal aktualisieren und Outbox-Eintrag erstellen
+                        const newScans = (data.scans || 0) + 1;
+                        await window.offlineDB.updateArticleScans(code, newScans);
+                        await window.offlineDB.addToOutbox({ type: 'INCREMENT_SCAN', table: 'artikel', key: code, payload: { scans: newScans }, timestamp: new Date().toISOString() });
                         showToast("Scan gespeichert. Wird synchronisiert, sobald online.", 'info');
                     }
-
+                    
                 } else {
                     const content = `<p>Der Barcode <strong>${code}</strong> wurde noch nicht registriert.</p>`;
                     showResultCard("Unbekannter Artikel", content, '❓');
-                    
                     if (window.currentUserRole === 'admin') {
                         document.getElementById("registerButton").style.display = "block";
                     } else {
                         document.getElementById("registerButton").style.display = "none";
                     }
+                    
                     if (isOffline) {
-                         showToast("Artikel nicht einmal lokal gefunden.", 'error');
+                        showToast("Artikel nicht einmal lokal gefunden.", 'error');
                     }
                 }
             }
@@ -1439,15 +1542,19 @@
                     return;
                 }
                 document.getElementById('popupBarcode').value = currentScannedBarcode;
-                document.getElementById('popupOverlay').classList.add('show');
+                document.getElementById('popupBaseName').value = ''; 
+                document.getElementById('popupSize').value = ''; 
+                document.getElementById('popupPlatz').value = ''; 
+                document.getElementById('popupBlocklager').value = 'false';
+                document.getElementById('popupOverlay').style.display = 'flex';
+                setTimeout(() => document.getElementById('popupOverlay').classList.add('show'), 10);
             }
 
             function hidePopup() {
                 document.getElementById('popupOverlay').classList.remove('show');
-                document.getElementById('popupBaseName').value = '';
-                document.getElementById('popupSize').value = '';
-                document.getElementById('popupPlatz').value = '';
-                document.getElementById('popupBlocklager').value = 'false';
+                setTimeout(() => {
+                    document.getElementById('popupOverlay').style.display = 'none';
+                }, 300);
             }
 
             async function saveArticle() {
@@ -1456,26 +1563,24 @@
                 const sizeValue = document.getElementById('popupSize').value.trim();
                 const platz = document.getElementById('popupPlatz').value.trim();
                 const block = document.getElementById('popupBlocklager').value === 'true';
-
+                
                 let name = baseName;
                 if (sizeValue) {
                     const sizeDisplay = sizeValue.replace('.', ',');
                     name += ` (${sizeDisplay} L)`;
                 }
 
-                const lagertyp = block ? 'Blocklager' : 'Regal/Fach';
-
                 if (!baseName || !platz) {
                     showToast("Bitte Basis-Name und Stellplatz ausfüllen.", "error");
                     return;
                 }
 
-                const newArticle = { 
-                    barcode: barcode, 
-                    name: name, 
-                    stellplatz: platz, 
-                    blocklager: block, 
-                    scans: 1,
+                const newArticle = {
+                    barcode: barcode,
+                    name: name,
+                    stellplatz: platz,
+                    blocklager: block,
+                    scans: 1, // Erster Scan beim Registrieren
                     created_at: new Date().toISOString()
                 };
 
@@ -1486,12 +1591,12 @@
                     const { error } = await window.appSupabaseClient
                         .from("artikel")
                         .insert([newArticle]);
-
+                        
                     if (error) {
-                         if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
-                            throw new Error("Offline"); 
+                        if (error.message.includes('Failed to fetch')) {
+                             throw new Error("Offline");
                         }
-                        showToast(`FEHLER beim Speichern.`, "error");
+                        showToast(`FEHLER beim Speichern des Artikels.`, "error");
                         console.error("Speicherfehler:", error);
                     } else {
                         success = true;
@@ -1499,49 +1604,35 @@
                 } catch (e) {
                     if (e.message === "Offline" || !navigator.onLine) {
                         isOffline = true;
-                        // Speichern in IndexedDB und Outbox
+                        // Artikel lokal speichern und Outbox-Eintrag erstellen
                         await window.offlineDB.upsertData('artikel', newArticle);
-                        await window.offlineDB.addToOutbox({
-                            type: 'INSERT',
-                            table: 'artikel',
-                            key: barcode,
-                            payload: newArticle,
-                            timestamp: new Date().toISOString()
-                        });
-                        success = true; // Lokal erfolgreich
+                        await window.offlineDB.addToOutbox({ type: 'INSERT', table: 'artikel', key: barcode, payload: newArticle, timestamp: new Date().toISOString() });
+                        success = true;
                     } else {
                         console.error("Speicherfehler:", e);
                     }
                 }
 
                 if (success) {
-                    hidePopup();
-                    const statusMessage = isOffline ? 
-                        `Artikel lokal gespeichert. Wird bei Verbindung synchronisiert.` : 
-                        `Artikel "${name}" erfolgreich gespeichert.`;
-                    
+                    const statusMessage = isOffline ? `Artikel lokal registriert. Wird synchronisiert, sobald online.` : `Artikel "${name}" erfolgreich registriert!`;
                     showToast(statusMessage, isOffline ? "info" : "success");
-                    logAdminAction('ARTICLE_ADDED', `Neuer Artikel "${name}" registriert (Barcode: ${barcode}). Stellplatz: ${platz}.`);
-                    
-                    showResultCard(
-                        name,
-                        `<p><strong>Stellplatz:</strong> ${platz}</p> <p><strong>Typ:</strong> ${lagertyp}</p> ${isOffline ? '<p style="color:var(--color-warning-yellow);">**OFFLINE DATEN**</p>' : ''}`,
-                        '✅'
-                    );
+                    logAdminAction('ARTICLE_REGISTERED', `Neuer Artikel "${name}" (Barcode: ${barcode}) an Stellplatz ${platz} registriert.`);
+                    hidePopup();
+                    hideResultCard();
                 }
             }
 
-            /* --- ADMIN EDIT LOGIK --- */
+
+            /* --- ARTIKEL BEARBEITEN/LÖSCHEN LOGIK (ADMIN) --- */
             function showAdminEditPopup(article) {
-                 if (window.currentUserRole !== 'admin') {
-                    showToast("Keine Berechtigung zum Bearbeiten.", 'error');
+                if (window.currentUserRole !== 'admin') {
+                    showToast("Nur Administratoren dürfen Artikel bearbeiten.", 'error');
                     return;
                 }
                 window.articleToEdit = article;
                 document.getElementById('adminEditName').value = article.name;
                 document.getElementById('adminEditBarcode').value = article.barcode;
                 document.getElementById('adminEditPlatz').value = article.stellplatz;
-                
                 document.getElementById('adminEditPopupOverlay').style.display = "flex";
                 setTimeout(() => document.getElementById('adminEditPopupOverlay').classList.add('show'), 10);
             }
@@ -1560,6 +1651,7 @@
                 const oldPlatz = window.articleToEdit.stellplatz;
                 const newPlatz = document.getElementById('adminEditPlatz').value.trim();
                 const barcode = window.articleToEdit.barcode;
+                const articleName = window.articleToEdit.name;
 
                 if (!newPlatz) {
                     showToast("Der Stellplatz darf nicht leer sein.", "error");
@@ -1572,7 +1664,10 @@
                     return;
                 }
 
-                const updatePayload = { stellplatz: newPlatz };
+                const updatePayload = {
+                    stellplatz: newPlatz
+                };
+                
                 let success = false;
                 let isOffline = !navigator.onLine;
 
@@ -1583,79 +1678,60 @@
                         .eq("barcode", barcode);
 
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) { 
-                            throw new Error("Offline"); 
+                        if (error.message.includes('Failed to fetch')) {
+                             throw new Error("Offline");
                         }
                         showToast(`FEHLER beim Speichern des Stellplatzes.`, "error");
                         console.error("Speicherfehler:", error);
                     } else {
                         success = true;
                     }
+
                 } catch (e) {
                     if (e.message === "Offline" || !navigator.onLine) {
                         isOffline = true;
-                         // Lokale Daten aktualisieren und Outbox-Eintrag erstellen
+                        // Lokale Daten aktualisieren und Outbox-Eintrag erstellen
                         await window.offlineDB.updateArticleStellplatz(barcode, newPlatz);
-                        await window.offlineDB.addToOutbox({
-                            type: 'UPDATE',
-                            table: 'artikel',
-                            key: barcode,
-                            payload: updatePayload,
-                            timestamp: new Date().toISOString()
-                        });
+                        await window.offlineDB.addToOutbox({ type: 'UPDATE', table: 'artikel', key: barcode, payload: updatePayload, timestamp: new Date().toISOString() });
                         success = true;
                     } else {
                         console.error("Speicherfehler:", e);
                     }
                 }
-                
+
                 if (success) {
-                    logAdminAction('STELLPLATZ_UPDATED', `Stellplatz von Artikel "${window.articleToEdit.name}" (Barcode: ${barcode}) von ${oldPlatz} auf ${newPlatz} geändert.`);
-                    hideAdminEditPopup();
-                    const statusMessage = isOffline ? 
-                        `Stellplatz lokal aktualisiert. Wird bei Verbindung synchronisiert.` : 
-                        `Stellplatz für ${window.articleToEdit.name} erfolgreich aktualisiert.`;
+                    const statusMessage = isOffline ? `Stellplatz lokal geändert. Änderung wird bei Verbindung synchronisiert.` : `Stellplatz für "${articleName}" erfolgreich auf ${newPlatz} geändert.`;
                     showToast(statusMessage, isOffline ? "info" : "success");
-                    loadArticleList(document.getElementById('articleSearchInput').value); 
+                    logAdminAction('ARTICLE_UPDATED', `Stellplatz für Artikel "${articleName}" (Barcode: ${barcode}) von ${oldPlatz} auf ${newPlatz} geändert.`);
+                    hideAdminEditPopup();
+                    loadArticleList(document.getElementById('articleSearchInput').value); // Liste neu laden
                 }
             }
-
+            
             function deleteArticle() {
-                if (window.currentUserRole !== 'admin' || !window.articleToEdit) {
-                    showToast("Keine Berechtigung oder Artikel nicht ausgewählt.", 'error');
-                    return;
-                }
-                showDeleteConfirmPopup(window.articleToEdit);
-            }
+                if (!window.articleToEdit) return;
+                const articleName = window.articleToEdit.name;
 
-            function showDeleteConfirmPopup(article) {
-                window.articleToDelete = article;
-                document.getElementById('deleteConfirmMessage').innerHTML = `Sind Sie **SICHER**, dass Sie den Artikel<br><strong>"${article.name}"</strong><br>(Barcode: ${article.barcode}) unwiderruflich löschen möchten?`;
+                document.getElementById('deleteConfirmMessage').innerHTML = `Sind Sie sicher, dass Sie den Artikel <strong>"${articleName}"</strong> unwiderruflich löschen möchten?`;
+                hideAdminEditPopup(); // Schließe den Bearbeitungs-Popup
                 document.getElementById('deleteConfirmPopupOverlay').style.display = "flex";
                 setTimeout(() => document.getElementById('deleteConfirmPopupOverlay').classList.add('show'), 10);
             }
-
+            
             function hideDeleteConfirmPopup() {
                 document.getElementById('deleteConfirmPopupOverlay').classList.remove('show');
                 setTimeout(() => {
                     document.getElementById('deleteConfirmPopupOverlay').style.display = "none";
-                    if (window.articleToEdit) {
-                        document.getElementById('adminEditPopupOverlay').style.display = "flex";
-                        document.getElementById('adminEditPopupOverlay').classList.add('show');
-                    }
-                    window.articleToDelete = null;
+                    // articleToEdit bleibt gesetzt, falls man doch abbrechen und zurück will
                 }, 300);
             }
 
             async function confirmDeleteArticle() {
-                if (window.currentUserRole !== 'admin' || !window.articleToDelete) {
-                    hideDeleteConfirmPopup();
-                    return;
-                }
+                if (window.currentUserRole !== 'admin' || !window.articleToEdit) return;
 
-                const articleName = window.articleToDelete.name;
-                const barcode = window.articleToDelete.barcode;
-
+                const barcode = window.articleToEdit.barcode;
+                const articleName = window.articleToEdit.name;
+                
                 let success = false;
                 let isOffline = !navigator.onLine;
 
@@ -1666,8 +1742,8 @@
                         .eq("barcode", barcode);
                         
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) { 
-                            throw new Error("Offline"); 
+                        if (error.message.includes('Failed to fetch')) {
+                             throw new Error("Offline");
                         }
                         showToast(`FEHLER beim Löschen des Artikels.`, "error");
                         console.error("Löschfehler:", error);
@@ -1679,29 +1755,20 @@
                         isOffline = true;
                         // Lokale Daten löschen und Outbox-Eintrag erstellen
                         await window.offlineDB.deleteArticle(barcode);
-                        await window.offlineDB.addToOutbox({
-                            type: 'DELETE',
-                            table: 'artikel',
-                            key: barcode,
-                            payload: { barcode: barcode }, 
-                            timestamp: new Date().toISOString()
-                        });
+                        await window.offlineDB.addToOutbox({ type: 'DELETE', table: 'artikel', key: barcode, payload: { barcode: barcode }, timestamp: new Date().toISOString() });
                         success = true;
                     } else {
                         console.error("Löschfehler:", e);
                     }
                 }
-                
+
                 if (success) {
-                    const statusMessage = isOffline ? 
-                        `Artikel lokal gelöscht. Löschvorgang wird bei Verbindung synchronisiert.` : 
-                        `Artikel "${articleName}" wurde erfolgreich gelöscht.`;
+                    const statusMessage = isOffline ? `Artikel lokal gelöscht. Löschvorgang wird bei Verbindung synchronisiert.` : `Artikel "${articleName}" wurde erfolgreich gelöscht.`;
                     showToast(statusMessage, isOffline ? "info" : "success");
                     logAdminAction('ARTICLE_DELETED', `Artikel "${articleName}" (Barcode: ${barcode}) unwiderruflich gelöscht.`);
-                    
                     window.articleToEdit = null;
                     hideDeleteConfirmPopup();
-                    loadArticleList(document.getElementById('articleSearchInput').value); 
+                    loadArticleList(document.getElementById('articleSearchInput').value);
                 }
             }
 
@@ -1723,70 +1790,74 @@
                 }
             }
 
+
             /* --- ARTIKEL LISTE LOGIK --- */
             async function loadArticleList(searchTerm = '') {
                 const articleListContainer = document.getElementById('articleList');
-                articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Artikelliste...</li>';
-
-                let data = [];
+                let articles = [];
                 let isOffline = false;
+                
+                // Ladezustand anzeigen
+                articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px; text-align: center; opacity: 0.7;">Lade Artikelliste...</li>';
 
                 try {
                     // 1. Online-Versuch
                     let query = window.appSupabaseClient
                         .from('artikel')
-                        .select('*');
-
+                        .select('name, barcode, stellplatz, blocklager');
+                        
                     if (searchTerm) {
                         const search = `%${searchTerm.toLowerCase()}%`;
                         query = query.or(`name.ilike.${search},barcode.ilike.${search},stellplatz.ilike.${search}`);
                     }
-
-                    const { data: articles, error } = await query
-                        .order('name', { ascending: true });
-
+                    
+                    const { data, error } = await query.order('name', { ascending: true });
+                    
                     if (error) {
-                         if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
-                            throw new Error("Offline"); 
-                        }
-                        throw error;
+                         if (error.message.includes('Failed to fetch')) {
+                             // Supabase Netzwerkfehler
+                             throw new Error("Offline");
+                         }
+                         throw error;
                     }
                     
-                    data = articles;
-                    // Bei Erfolg: Lokale Datenbank initialisieren/vollständig aktualisieren
-                    if (data.length > 0) {
+                    articles = data;
+                    
+                    // Bei Erfolg: Lokalen Cache aktualisieren
+                    if (articles.length > 0) {
                         await window.offlineDB.clearData('artikel');
-                        await window.offlineDB.bulkInsertData('artikel', data);
+                        await window.offlineDB.bulkInsertData('artikel', articles);
                     }
 
                 } catch (error) {
                     isOffline = true;
-                    showToast("Netzwerkfehler. Zeige lokale Daten...", 'info');
-                    console.warn("Offline Fallback aktiviert.", error);
+                    showToast("Netzwerkfehler. Zeige lokale Artikeldaten...", 'info');
                     // 2. Offline-Fallback (IndexedDB)
                     try {
                         const localData = await window.offlineDB.getAllArticles();
-                        data = localData.filter(item => {
+                        articles = localData.filter(item => {
                             if (!searchTerm) return true;
                             const term = searchTerm.toLowerCase();
-                            return item.name.toLowerCase().includes(term) || 
-                                   item.barcode.toLowerCase().includes(term) || 
+                            return item.name.toLowerCase().includes(term) ||
+                                   item.barcode.toLowerCase().includes(term) ||
                                    item.stellplatz.toLowerCase().includes(term);
                         }).sort((a, b) => a.name.localeCompare(b.name));
+
                     } catch (e) {
-                        showToast("Fehler beim Laden der lokalen Artikelliste.", 'error');
-                        console.error("IndexedDB Fehler:", e);
+                         showToast("Fehler beim Laden der lokalen Artikelliste.", 'error');
+                         console.error("IndexedDB Fehler:", e);
                     }
                 }
-
-                if (data.length === 0) {
+                
+                if (articles.length === 0) {
                     articleListContainer.innerHTML = `<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">${searchTerm ? 'Keine Artikel gefunden, die der Suche entsprechen.' : 'Noch keine Artikel vorhanden.'}</li>`;
                     return;
                 }
 
                 articleListContainer.innerHTML = '';
-                data.forEach(item => {
+                articles.forEach(item => {
                     const listItem = document.createElement('li');
+
                     if (window.currentUserRole === 'admin') {
                         listItem.onclick = () => showAdminEditPopup(item);
                         listItem.style.cursor = 'pointer';
@@ -1825,67 +1896,56 @@
                     return;
                 }
 
-                const logEntry = { action_type: actionType, description: description, user_role: window.currentUserRole, created_at: new Date().toISOString() };
+                const logEntry = {
+                    action_type: actionType,
+                    description: description,
+                    user_role: window.currentUserRole,
+                    created_at: new Date().toISOString()
+                };
+                
                 let isOffline = !navigator.onLine;
 
                 try {
                     const { error } = await window.appSupabaseClient
                         .from('audit_log')
                         .insert([logEntry]);
-
+                        
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
-                            throw new Error("Offline"); 
+                        if (error.message.includes('Failed to fetch')) {
+                             // Supabase Netzwerkfehler
+                             throw new Error("Offline");
                         }
-                        throw error;
+                        console.error("Log-Speicherfehler:", error);
                     }
-                    // Online: Lokalen Cache aktualisieren
-                    await window.offlineDB.upsertData('audit_log', logEntry);
 
                 } catch (e) {
-                     if (e.message === "Offline" || !navigator.onLine) {
+                    if (e.message === "Offline" || !navigator.onLine) {
                         isOffline = true;
-                        // Offline: Lokal speichern und Outbox hinzufügen
-                        await window.offlineDB.upsertData('audit_log', logEntry, 'created_at'); // created_at als Key
-                        await window.offlineDB.addToOutbox({
-                            type: 'INSERT',
-                            table: 'audit_log',
-                            key: logEntry.created_at, // Verwende created_at als temporären Key für die Outbox
-                            payload: logEntry,
-                            timestamp: new Date().toISOString()
-                        });
+                        // Log lokal speichern und Outbox-Eintrag erstellen
+                        await window.offlineDB.upsertData('audit_log', logEntry, 'created_at'); 
+                        // Log-Einträge müssen nicht in die Outbox, da sie nicht von anderen Geräten abhängen. 
+                        // Sie werden beim nächsten Online-Laden gesynct.
                     } else {
-                        console.error("FEHLER beim Protokollieren der Admin-Aktion:", e);
-                        showToast("FEHLER: Konnte Aktion nicht im Log speichern.", 'error');
+                        console.error("Log-Speicherfehler:", e);
                     }
                 }
-                
-                if (isOffline) {
-                    showToast("Log-Eintrag lokal gespeichert. Wird bei Verbindung synchronisiert.", 'info');
-                }
             }
+            
+            async function loadAdminLog(searchTerm = '') {
+                if (window.currentUserRole !== 'admin') return;
 
-
-            /* --- ADMIN LOG LISTE LOGIK --- */
-            // NEU: Nimmt optional einen Suchbegriff entgegen
-            async function loadAdminLog(searchTerm = '') { 
                 const logListContainer = document.getElementById('logList');
-
-                if (window.currentUserRole !== 'admin') {
-                    logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
-                    return;
-                }
-
-                logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Logbuch-Einträge...</li>';
-                
                 let logData = [];
                 let isOffline = false;
-                
+
+                // Ladezustand anzeigen
+                logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px; text-align: center; opacity: 0.7;">Lade Logbuch...</li>';
+
                 try {
                     // 1. Online-Versuch
                     let query = window.appSupabaseClient
                         .from('audit_log')
-                        .select('*');
+                        .select('action_type, description, created_at');
 
                     if (searchTerm) {
                         const search = `%${searchTerm.toLowerCase()}%`;
@@ -1896,30 +1956,31 @@
                         .order('created_at', { ascending: false });
 
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
-                            throw new Error("Offline"); 
-                        }
-                        throw error;
+                         if (error.message.includes('Failed to fetch')) {
+                             // Supabase Netzwerkfehler
+                             throw new Error("Offline");
+                         }
+                         throw error;
                     }
-                    
+
                     logData = logs;
+                    
                     // Bei Erfolg: Lokalen Cache aktualisieren
                     if (logData.length > 0) {
                         await window.offlineDB.clearData('audit_log');
-                        await window.offlineDB.bulkInsertData('audit_log', logData);
+                        await window.offlineDB.bulkInsertData('audit_log', logData, 'created_at');
                     }
-                    
+
                 } catch (error) {
                     isOffline = true;
                     showToast("Netzwerkfehler. Zeige lokale Log-Einträge...", 'info');
                     // 2. Offline-Fallback (IndexedDB)
                     try {
                         const localData = await window.offlineDB.getAllLogs();
-                         logData = localData.filter(item => {
+                        logData = localData.filter(item => {
                             if (!searchTerm) return true;
                             const term = searchTerm.toLowerCase();
-                            return item.action_type.toLowerCase().includes(term) || 
-                                   item.description.toLowerCase().includes(term);
+                            return item.action_type.toLowerCase().includes(term) || item.description.toLowerCase().includes(term);
                         }).sort((a, b) => b.created_at.localeCompare(a.created_at));
                     } catch (e) {
                         showToast("Fehler beim Laden der lokalen Log-Einträge.", 'error');
@@ -1927,7 +1988,6 @@
                     }
                 }
 
-                
                 logListContainer.innerHTML = '';
                 if (logData.length === 0) {
                     logListContainer.innerHTML = `<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">${searchTerm ? 'Keine Logbuch-Einträge gefunden, die der Suche entsprechen.' : 'Keine Logbuch-Einträge vorhanden.'}</li>`;
@@ -1937,73 +1997,81 @@
                 logData.forEach(item => {
                     const dateSource = item.created_at;
                     const timestamp = new Date(dateSource).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
-                    
+
                     let color = 'var(--color-accent-blue)';
-                    if (item.action_type.includes('ADDED') || item.action_type.includes('INSERT')) color = 'var(--color-accent-green)';
-                    if (item.action_type.includes('DELETED')) color = 'var(--color-error-red)';
-                    if (item.action_type.includes('DATA_')) color = 'var(--color-warning-yellow)';
+                    let icon = 'ℹ️';
+
+                    if (item.action_type.includes('DELETED')) {
+                        color = 'var(--color-error-red)';
+                        icon = '🗑️';
+                    } else if (item.action_type.includes('REGISTERED')) {
+                        color = 'var(--color-accent-green)';
+                        icon = '➕';
+                    } else if (item.action_type.includes('UPDATED')) {
+                         color = 'var(--color-warning-yellow)';
+                         icon = '✏️';
+                    } else if (item.action_type.includes('USER_')) {
+                        color = '#8e44ad';
+                        icon = '👤';
+                    }
 
                     const listItem = document.createElement('li');
-                    listItem.style.borderLeft = `5px solid ${color}`;
-
-                    const details = `
+                    listItem.style.borderLeftColor = color;
+                    listItem.innerHTML = `
                         <div class="item-details">
-                            <strong style="font-size: 0.95rem; font-weight: 600;">${item.action_type.replace(/_/g, ' ')}</strong>
-                            <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 5px; line-height: 1.3;">${item.description}</span>
-                            <span style="display: block; font-size: 0.75rem; opacity: 0.6; margin-top: 5px;">${timestamp} (Rolle: ${item.user_role || 'N/A'})</span>
+                            <strong>${item.description}</strong>
+                            <span>${timestamp} | Aktion: ${item.action_type}</span>
+                        </div>
+                        <div class="item-count" style="color: ${color};">
+                            ${icon}
                         </div>
                     `;
-
-                    listItem.innerHTML = details;
                     logListContainer.appendChild(listItem);
                 });
                 
-                 if (isOffline) {
-                    logListContainer.innerHTML += '<li style="margin-top: 15px; text-align: center; color: var(--color-warning-yellow); border: none; background: transparent; padding: 5px;">Offline-Modus aktiv. (Lokale Einträge)</li>';
+                if (isOffline) {
+                    logListContainer.innerHTML += '<li style="margin-top: 15px; text-align: center; color: var(--color-warning-yellow); border: none; background: transparent; padding: 5px;">Offline-Modus aktiv. (Logbuch kann unvollständig sein)</li>';
                 }
             }
 
 
-            /* --- PERSONAL / BENUTZERVERWALTUNG LOGIK --- */
-            // NEU: Nimmt optional einen Suchbegriff entgegen
+            /* --- BENUTZERVERWALTUNG LOGIK (ADMIN) --- */
             async function loadUserList(searchTerm = '') {
+                if (window.currentUserRole !== 'admin') return;
+
                 const userListContainer = document.getElementById('userList');
-                userListContainer.innerHTML = '';
-
-                if (window.currentUserRole !== 'admin') {
-                    userListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen Benutzer verwalten.</li>';
-                    return;
-                }
-
-                userListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Benutzerliste...</li>';
-                
                 let users = [];
                 let isOffline = false;
+
+                // Ladezustand anzeigen
+                userListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px; text-align: center; opacity: 0.7;">Lade Benutzerliste...</li>';
 
                 try {
                     // 1. Online-Versuch
                     let query = window.appSupabaseClient
                         .from('user_roles')
-                        .select('*'); 
-                    
+                        .select('*');
+
                     if (searchTerm) {
                         const search = `%${searchTerm.toLowerCase()}%`;
                         query = query.or(`email.ilike.${search},role.ilike.${search},notes.ilike.${search}`);
                     }
-                    
+
                     const { data: userData, error } = await query
                         .order('email', { ascending: true });
 
                     if (error) {
-                        if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
-                            throw new Error("Offline"); 
-                        }
-                        throw error;
+                         if (error.message.includes('Failed to fetch')) {
+                             // Supabase Netzwerkfehler
+                             throw new Error("Offline");
+                         }
+                         throw error;
                     }
-                    
+
                     users = userData;
+                    
                     // Bei Erfolg: Lokalen Cache aktualisieren
-                     if (users.length > 0) {
+                    if (users.length > 0) {
                         await window.offlineDB.clearData('user_roles');
                         await window.offlineDB.bulkInsertData('user_roles', users);
                     }
@@ -2014,12 +2082,10 @@
                     // 2. Offline-Fallback (IndexedDB)
                     try {
                         const localData = await window.offlineDB.getAllUsers();
-                         users = localData.filter(item => {
+                        users = localData.filter(item => {
                             if (!searchTerm) return true;
                             const term = searchTerm.toLowerCase();
-                            return item.email.toLowerCase().includes(term) || 
-                                   (item.notes || '').toLowerCase().includes(term) || 
-                                   (item.role || '').toLowerCase().includes(term);
+                            return item.email.toLowerCase().includes(term) || (item.notes || '').toLowerCase().includes(term) || (item.role || '').toLowerCase().includes(term);
                         }).sort((a, b) => a.email.localeCompare(b.email));
                     } catch (e) {
                         showToast("Fehler beim Laden der lokalen Benutzerliste.", 'error');
@@ -2028,37 +2094,30 @@
                 }
 
                 userListContainer.innerHTML = '';
-
                 if (users.length === 0) {
-                     userListContainer.innerHTML = `<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">${searchTerm ? 'Keine Benutzer gefunden, die der Suche entsprechen.' : 'Keine Benutzerkonten vorhanden.'}</li>`;
+                    userListContainer.innerHTML = `<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">${searchTerm ? 'Keine Benutzer gefunden, die der Suche entsprechen.' : 'Keine Benutzerkonten vorhanden.'}</li>`;
                     return;
                 }
-
 
                 users.forEach(user => {
                     const listItem = document.createElement('li');
                     listItem.onclick = () => showUserEditPopup(user);
                     listItem.style.cursor = 'pointer';
                     listItem.setAttribute('data-role', 'admin-editable');
-
-                    const userRole = user.role || 'user';
-                    const isBlocked = user.is_blocked;
                     
-                    let listClass = '';
-                    if (userRole === 'admin') listClass += ' user-role-admin';
-                    if (isBlocked) listClass += ' user-is-blocked';
+                    let roleDisplay = user.role === 'admin' ? 'Administrator' : 'Benutzer';
+                    let statusDisplay = user.is_blocked ? ' (GESPERRT)' : '';
+                    let roleClass = user.role === 'admin' ? ' user-role-admin' : '';
+                    let blockClass = user.is_blocked ? ' user-is-blocked' : '';
 
-                    listItem.className = listClass;
+                    listItem.className = roleClass + blockClass;
 
                     const details = `
-                        <div class="item-details" style="flex-grow: 1;">
-                            <strong>${user.email}</strong>
-                            <span>Rolle: ${userRole.toUpperCase()} | ${isBlocked ? 'Gesperrt' : 'Aktiv'}</span>
-                            ${user.notes ? `<span style="font-style: italic; opacity: 0.6; margin-top: 5px;">Anm.: ${user.notes}</span>` : ''}
+                        <div class="item-details">
+                            <strong>${user.email} ${statusDisplay}</strong>
+                            <span>Rolle: ${roleDisplay} | ID: ${user.id.substring(0, 8)}...</span>
                         </div>
-                        <div class="item-count" style="width: 70px;">
-                            <button class="user-edit-button">Bearbeiten</button>
-                        </div>
+                        <button class="user-edit-button">Bearbeiten</button>
                     `;
 
                     listItem.innerHTML = details;
@@ -2066,19 +2125,22 @@
                 });
                 
                 if (isOffline) {
-                    userListContainer.innerHTML += '<li style="margin-top: 15px; text-align: center; color: var(--color-warning-yellow); border: none; background: transparent; padding: 5px;">Offline-Modus aktiv. (Lokale Einträge)</li>';
+                    userListContainer.innerHTML += '<li style="margin-top: 15px; text-align: center; color: var(--color-warning-yellow); border: none; background: transparent; padding: 5px;">Offline-Modus aktiv. (Liste kann unvollständig sein)</li>';
                 }
             }
 
-            function showUserEditPopup(user) {
-                if (window.currentUserRole !== 'admin') return;
 
+            function showUserEditPopup(user) {
+                if (window.currentUserRole !== 'admin') {
+                    showToast("Nur Administratoren dürfen Benutzer bearbeiten.", 'error');
+                    return;
+                }
                 window.userToEdit = user;
                 document.getElementById('userEditEmail').value = user.email;
                 document.getElementById('userEditRole').value = user.role || 'user';
                 document.getElementById('userEditBlocked').value = user.is_blocked ? 'true' : 'false';
                 document.getElementById('userEditNotes').value = user.notes || '';
-
+                
                 document.getElementById('userEditPopupOverlay').style.display = "flex";
                 setTimeout(() => document.getElementById('userEditPopupOverlay').classList.add('show'), 10);
             }
@@ -2092,10 +2154,7 @@
             }
 
             async function saveUserEdit() {
-                if (!window.userToEdit || window.currentUserRole !== 'admin') {
-                    showToast("Keine Berechtigung oder Benutzer nicht ausgewählt.", 'error');
-                    return;
-                }
+                if (window.currentUserRole !== 'admin' || !window.userToEdit) return;
 
                 const email = window.userToEdit.email;
                 const newRole = document.getElementById('userEditRole').value;
@@ -2129,8 +2188,9 @@
                         .eq("id", userId);
 
                     if (error) {
-                         if (error.message.includes('Failed to fetch')) { // Supabase Netzwerkfehler
-                            throw new Error("Offline"); 
+                        if (error.message.includes('Failed to fetch')) {
+                             // Supabase Netzwerkfehler
+                             throw new Error("Offline");
                         }
                         showToast(`FEHLER beim Speichern der Benutzerdaten.`, "error");
                         console.error("Speicherfehler Benutzer:", error);
@@ -2139,109 +2199,56 @@
                     }
 
                 } catch (e) {
-                     if (e.message === "Offline" || !navigator.onLine) {
+                    if (e.message === "Offline" || !navigator.onLine) {
                         isOffline = true;
                         // Lokale Daten aktualisieren und Outbox-Eintrag erstellen
                         await window.offlineDB.upsertData('user_roles', {...window.userToEdit, ...updatePayload});
-                        await window.offlineDB.addToOutbox({
-                            type: 'UPDATE',
-                            table: 'user_roles',
-                            key: userId,
-                            payload: updatePayload,
-                            timestamp: new Date().toISOString()
-                        });
+                        await window.offlineDB.addToOutbox({ type: 'UPDATE', table: 'user_roles', key: userId, payload: updatePayload, timestamp: new Date().toISOString() });
                         success = true;
-                     } else {
+                    } else {
                         console.error("Speicherfehler Benutzer:", e);
-                     }
-                }
-                
-                if (success) {
-                    let logMessage = `Benutzer ${email} aktualisiert.`;
-                    if (newRole !== oldRole) logMessage += ` Rolle: ${oldRole} -> ${newRole}.`;
-                    if (newBlockedStatus !== oldBlockedStatus) logMessage += ` Status: ${oldBlockedStatus ? 'Gesperrt' : 'Aktiv'} -> ${newBlockedStatus ? 'Gesperrt' : 'Aktiv'}.`;
-                    logAdminAction('USER_UPDATED', logMessage);
-
-                    hideUserEditPopup();
-                    const statusMessage = isOffline ? 
-                        `Benutzer ${email} lokal aktualisiert. Wird bei Verbindung synchronisiert.` : 
-                        `Benutzer ${email} erfolgreich aktualisiert.`;
-                    showToast(statusMessage, isOffline ? "info" : "success");
-                    loadUserList(document.getElementById('userSearchInput').value); 
-                }
-            }
-
-
-            /* --- TAB NAVIGATION LOGIK --- */
-            function changeTab(targetTabId) {
-                if (currentTabId === targetTabId) return;
-
-                const tabContents = document.querySelectorAll('.tab-content');
-                tabContents.forEach(tab => tab.classList.remove('active'));
-
-                const navItems = document.querySelectorAll('.nav-item');
-                navItems.forEach(item => item.classList.remove('active'));
-
-                document.getElementById(targetTabId).classList.add('active');
-                document.querySelector(`.nav-item[data-tab="${targetTabId}"]`).classList.add('active');
-                currentTabId = targetTabId;
-
-                // Kamera nur stoppen, wenn wir den Scanner-Tab verlassen
-                if (targetTabId !== 'scannerTab') {
-                    stopScanner();
-                }
-
-                // Daten für den neuen Tab laden
-                if (window.currentUserRole === 'admin' || targetTabId === 'listTab') {
-                    if (targetTabId === 'listTab') { 
-                        loadArticleList(document.getElementById('articleSearchInput').value); 
-                    } else if (targetTabId === 'logTab') { 
-                        // Direkter Aufruf der Ladefunktion mit dem aktuellen Suchbegriff
-                        loadAdminLog(document.getElementById('logSearchInput').value);
-                    } else if (targetTabId === 'usersTab') { 
-                        // Direkter Aufruf der Ladefunktion mit dem aktuellen Suchbegriff
-                        loadUserList(document.getElementById('userSearchInput').value); 
                     }
                 }
-            }
-            
-            async function logout() {
-                stopScanner();
-                
-                const { error } = await window.appSupabaseClient.auth.signOut();
-                
-                if (error) {
-                    showToast("Fehler beim Abmelden.", 'error');
-                    console.error("Logout Fehler:", error);
+
+                if (success) {
+                    let logMessage = `Benutzer ${email} aktualisiert.`;
+                    if (newRole !== oldRole) {
+                        logMessage += ` Rolle: ${oldRole} -> ${newRole}.`;
+                    }
+                    if (newBlockedStatus !== oldBlockedStatus) {
+                        logMessage += ` Status: ${oldBlockedStatus ? 'Gesperrt' : 'Aktiv'} -> ${newBlockedStatus ? 'Gesperrt' : 'Aktiv'}.`;
+                    }
+                    
+                    const statusMessage = isOffline ? `Benutzer lokal aktualisiert. Änderung wird bei Verbindung synchronisiert.` : `Benutzer ${email} erfolgreich aktualisiert.`;
+                    showToast(statusMessage, isOffline ? "info" : "success");
+                    logAdminAction('USER_UPDATED', logMessage);
+                    hideUserEditPopup();
+                    loadUserList(document.getElementById('userSearchInput').value); // Liste neu laden
                 }
-                
-                switchView('loginView');
-                window.currentUserRole = null; 
-                showToast("Erfolgreich abgemeldet.", 'info');
-                lastCode = "";
-                
-                document.getElementById("userDisplay").innerText = ""; 
-                document.getElementById("authEmail").value = "";
-                document.getElementById("authPassword").value = "";
-                document.getElementById("authError").innerText = "";
             }
+
 
             /* --- DATEN IMPORT/EXPORT LOGIK (Admin) --- */
 
             // Hilfsfunktion zum Konvertieren von JSON in CSV
             function convertToCSV(data) {
                 if (data.length === 0) return '';
+                
                 // Wir verwenden eine statische Liste der Spalten, um die Reihenfolge beizubehalten
-                const keys = ['barcode', 'name', 'stellplatz', 'blocklager', 'scans', 'created_at']; 
+                const keys = ['barcode', 'name', 'stellplatz', 'blocklager', 'scans', 'created_at'];
+
                 const header = keys.join(';');
+                
                 const rows = data.map(row => keys.map(k => {
                     let value = row[k] === null || row[k] === undefined ? '' : String(row[k]);
+                    
                     // Anführungszeichen escapen und umrahmen, falls Semikolons oder Zeilenumbrüche enthalten sind
                     if (value.includes(';') || value.includes('\n') || value.includes('"')) {
                         value = `"${value.replace(/"/g, '""')}"`;
                     }
                     return value;
                 }).join(';'));
+                
                 return [header, ...rows].join('\n');
             }
 
@@ -2259,58 +2266,97 @@
 
             async function exportData(format) {
                 if (window.currentUserRole !== 'admin') {
-                    showToast("Nur Administratoren dürfen Daten exportieren.", 'error');
+                    showToast("Keine Berechtigung zum Exportieren.", 'error');
                     return;
                 }
                 
                 if (!navigator.onLine) {
-                    showToast("Export im Offline-Modus nicht möglich. Bitte stellen Sie eine Verbindung her.", 'error');
-                    return;
-                }
-
-                showToast("Export wird vorbereitet...", 'info');
-                
-                const { data: articles, error } = await window.appSupabaseClient
-                    .from('artikel')
-                    .select('*');
-
-                if (error) {
-                    showToast("Fehler beim Export: Konnte Artikel nicht laden.", 'error');
-                    console.error("Export Fehler:", error);
-                    return;
-                }
-
-                if (articles.length === 0) {
-                     showToast("Keine Artikel zum Exportieren gefunden.", 'info');
+                     showToast("Export im Offline-Modus nicht möglich. Bitte stellen Sie eine Verbindung her.", 'error');
                      return;
                 }
+                
+                showToast("Export wird vorbereitet...", 'info');
+                
+                try {
+                    const { data, error } = await window.appSupabaseClient
+                        .from('artikel')
+                        .select('barcode, name, stellplatz, blocklager, scans, created_at')
+                        .order('name', { ascending: true });
+                        
+                    if (error) throw error;
+                    
+                    let content;
+                    let filename;
+                    let mimeType;
 
-                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                let content, filename, mimeType;
+                    if (format === 'json') {
+                        content = JSON.stringify(data, null, 2);
+                        filename = `inventar_export_${new Date().toISOString().substring(0, 10)}.json`;
+                        mimeType = 'application/json';
+                    } else if (format === 'csv') {
+                        content = convertToCSV(data);
+                        filename = `inventar_export_${new Date().toISOString().substring(0, 10)}.csv`;
+                        mimeType = 'text/csv;charset=utf-8';
+                    } else {
+                        return;
+                    }
 
-                if (format === 'json') {
-                    // Filtern: created_at entfernen, um Konflikte beim Import zu vermeiden, aber für Export behalten wir es.
-                    content = JSON.stringify(articles, null, 2);
-                    filename = `inventar_artikel_export_${timestamp}.json`;
-                    mimeType = 'application/json';
-                } else if (format === 'csv') {
-                    content = convertToCSV(articles);
-                    filename = `inventar_artikel_export_${timestamp}.csv`;
-                    mimeType = 'text/csv;charset=utf-8';
+                    downloadFile(filename, content, mimeType);
+                    showToast("Daten erfolgreich exportiert.", 'success');
+                    logAdminAction('DATA_EXPORT', `Inventardaten als ${format.toUpperCase()} exportiert.`);
+
+                } catch (error) {
+                    showToast("Fehler beim Exportieren der Daten.", 'error');
+                    console.error("Export Fehler:", error);
                 }
+            }
+            
+            // Hilfsfunktion zum Parsen von CSV (einfache Implementierung)
+            function parseCSV(csvContent) {
+                const lines = csvContent.split('\n').filter(line => line.trim() !== '');
+                if (lines.length < 1) return [];
 
-                downloadFile(filename, content, mimeType);
-                logAdminAction('DATA_EXPORTED', `Datenbank-Artikel im Format ${format.toUpperCase()} exportiert (${articles.length} Einträge).`);
-                showToast(`Export von ${articles.length} Artikeln als ${format.toUpperCase()} erfolgreich.`, 'success', 5000);
+                // Headerzeile parsen
+                const header = lines[0].split(';').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+                const data = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].match(/(".*?"|[^;]+)/g).map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"').trim());
+                    const item = {};
+                    let isValid = true;
+                    
+                    header.forEach((key, index) => {
+                        let value = values[index];
+                        if (key === 'blocklager') {
+                            item[key] = (value === 'true' || value === '1' || value.toLowerCase() === 'wahr');
+                        } else if (key === 'scans') {
+                            item[key] = parseInt(value) || 0;
+                        } else if (key === 'barcode' && !value) {
+                            isValid = false;
+                        } else {
+                            item[key] = value;
+                        }
+                    });
+
+                    // Nur Artikel mit Barcode importieren
+                    if (isValid && item.barcode) {
+                        // created_at setzen, falls nicht vorhanden (optional)
+                        if (!item.created_at) {
+                            item.created_at = new Date().toISOString();
+                        }
+                        data.push(item);
+                    }
+                }
+                return data;
             }
 
 
-            async function prepareImport() {
+            function prepareImport() {
                 if (window.currentUserRole !== 'admin') {
-                    showToast("Nur Administratoren dürfen Daten importieren.", 'error');
+                    showToast("Keine Berechtigung zum Importieren.", 'error');
                     return;
                 }
-                
+
                 if (!navigator.onLine) {
                     showToast("Import im Offline-Modus nicht möglich. Bitte stellen Sie eine Verbindung her.", 'error');
                     return;
@@ -2318,6 +2364,7 @@
 
                 const fileInput = document.getElementById('importFile');
                 const file = fileInput.files[0];
+
                 if (!file) {
                     showToast("Bitte wählen Sie eine Datei aus.", 'error');
                     return;
@@ -2327,6 +2374,7 @@
                 document.getElementById('importButton').disabled = true;
 
                 const reader = new FileReader();
+
                 reader.onload = async (e) => {
                     try {
                         let parsedData;
@@ -2349,137 +2397,71 @@
                             return;
                         }
                         
-                        await importArticles(parsedData, file.name);
+                        showToast(`Starte Import von ${parsedData.length} Artikeln (Upsert)...`, 'info', 10000);
 
+                        await performUpsertImport(parsedData);
+                        
                     } catch (error) {
-                        showToast("Fehler beim Verarbeiten der Datei. (Falsches Format?)", 'error', 7000);
-                        console.error("Dateiverarbeitungsfehler:", error);
-                    } finally {
+                        showToast("Fehler beim Verarbeiten der Importdatei.", 'error');
+                        console.error("Import Fehler:", error);
                         document.getElementById('importButton').disabled = false;
                     }
                 };
-                reader.onerror = () => {
+
+                reader.onerror = (e) => {
                     showToast("Fehler beim Lesen der Datei.", 'error');
                     document.getElementById('importButton').disabled = false;
+                    console.error("FileReader Error:", e);
                 };
+
                 reader.readAsText(file);
             }
-
-            // Hilfsfunktion zum Parsen von CSV (einfaches Semikolon-Trennzeichen erwartet)
-            function parseCSV(csvText) {
-                const lines = csvText.trim().split('\n');
-                if (lines.length < 2) return [];
-
-                // Header mit Semikolon als Trennzeichen
-                const headers = lines[0].split(';').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''));
-                const requiredKeys = ['barcode', 'name', 'stellplatz']; 
-                
-                // Prüfen, ob die kritischen Spalten vorhanden sind
-                if (!requiredKeys.every(key => headers.includes(key))) {
-                    throw new Error("CSV-Spalten fehlen: barcode, name, stellplatz.");
-                }
-
-                const data = [];
-                for (let i = 1; i < lines.length; i++) {
-                    const values = lines[i].split(';');
-                    if (values.length < requiredKeys.length) continue; // Zeile überspringen, wenn zu wenig Spalten
-
-                    const item = {};
-                    let isValidRow = true;
-
-                    for (let j = 0; j < headers.length; j++) {
-                        if (!values[j]) continue; // Leere Spalte überspringen
-
-                        let val = values[j].trim().replace(/^"|"$/g, '').replace(/""/g, '"');
-                        
-                        if (headers[j] === 'blocklager') {
-                             item[headers[j]] = (val.toLowerCase() === 'true' || val === '1');
-                        } else if (headers[j] === 'scans') {
-                             item[headers[j]] = parseInt(val) || 0;
-                        } else if (headers[j] === 'barcode' || headers[j] === 'name' || headers[j] === 'stellplatz') {
-                             // Prüfen, ob die Pflichtfelder gefüllt sind
-                             if (!val) { isValidRow = false; break; } 
-                             item[headers[j]] = val;
-                        } else {
-                             item[headers[j]] = val;
-                        }
-                    }
-                    if (isValidRow && item.barcode && item.name && item.stellplatz) {
-                        data.push(item);
-                    }
-                }
-                return data;
-            }
-
-            async function importArticles(articles, filename) {
-                if (articles.length === 0) {
-                    showToast("Keine gültigen Artikel zum Importieren gefunden.", 'info');
-                    return;
-                }
-                
-                // Daten für Supabase vorbereiten (nur notwendige Felder)
-                const allowedFields = ['barcode', 'name', 'stellplatz', 'blocklager', 'scans'];
-                const upsertData = articles.map(article => {
-                    const item = {};
-                    allowedFields.forEach(field => {
-                        // Wir erlauben nur definierte Felder. created_at/id/user_id etc. muss entfernt werden.
-                        if (article.hasOwnProperty(field)) {
-                            item[field] = article[field];
-                        }
-                    });
-                    // Sicherstellen, dass Pflichtfelder vorhanden und Typen korrekt sind
-                    if (typeof item.blocklager !== 'boolean') item.blocklager = item.blocklager === true || item.blocklager === 'true'; // JSON kann boolsche Werte haben
-                    if (typeof item.scans !== 'number') item.scans = parseInt(item.scans) || 0;
-                    
-                    return item;
-                }).filter(item => item.barcode && item.name && item.stellplatz); // Nur Artikel mit allen Pflichtfeldern importieren
-
-                if (upsertData.length === 0) {
-                    showToast("Keine Artikel mit gültigem Barcode, Name und Stellplatz zum Importieren gefunden.", 'error', 7000);
-                    return;
-                }
-
-                showToast(`Starte Import von ${upsertData.length} gültigen Artikeln...`, 'info', 10000);
-                
-                // Supabase upsert (batch insert/update)
-                // Wichtig: 'onConflict: 'barcode'' für UPSERT
-                const { error } = await window.appSupabaseClient
-                    .from('artikel')
-                    .upsert(upsertData, { onConflict: 'barcode' }); 
-
-                if (error) {
-                    showToast("FEHLER beim Import. Überprüfen Sie die Daten und RLS-Policies.", 'error', 10000);
-                    console.error("Import Fehler:", error);
-                } else {
-                    logAdminAction('DATA_IMPORTED', `${upsertData.length} Artikel erfolgreich aus Datei ${filename} importiert/aktualisiert.`);
-                    showToast(`Import von ${upsertData.length} Artikeln erfolgreich!`, 'success', 5000);
-                    
-                    // Lokale Datenbank vollständig neu laden/aktualisieren (Offline-Cache)
-                    await window.offlineDB.clearData('artikel');
-                    await window.offlineDB.bulkInsertData('artikel', upsertData);
-                    
-                    // Liste neu laden, falls wir uns im List-Tab befinden
-                    if (currentTabId === 'listTab') {
-                        loadArticleList(document.getElementById('articleSearchInput').value); 
-                    }
-                }
-            }
-
-
-            /* --- OFFLINE/SYNCHRONISATIONS LOGIK --- */
             
-            // IndexedDB Wrapper Klasse
+            async function performUpsertImport(data) {
+                try {
+                    const { data: upsertData, error } = await window.appSupabaseClient
+                        .from('artikel')
+                        .upsert(data, { onConflict: 'barcode' }) // upsert bei Konflikt auf Barcode
+                        .select('barcode'); // Optional: Nur Barcodes der verarbeiteten Zeilen zurückgeben
+
+                    if (error) throw error;
+                    
+                    const importedCount = data.length;
+                    const updatedCount = importedData.length - importedCount; // Dies ist eine Schätzung und nicht direkt von upsert-Funktion in Supabase zurückgegeben, aber wir verwenden die Anzahl der hochgeladenen Elemente.
+
+                    showToast(`${importedCount} Artikel erfolgreich importiert/aktualisiert.`, 'success', 7000);
+                    logAdminAction('DATA_IMPORT', `${importedCount} Artikel (CSV/JSON) per Upsert importiert/aktualisiert.`);
+                    
+                    // Lokale Liste aktualisieren
+                    loadArticleList(document.getElementById('articleSearchInput').value); 
+
+                } catch (e) {
+                    showToast("FEHLER beim Hochladen der Daten in die Datenbank.", 'error', 7000);
+                    console.error("Supabase Upsert Fehler:", e);
+                } finally {
+                    document.getElementById('importButton').disabled = false;
+                }
+            }
+
+
+            /* --- INDEXEDDB / OFFLINE LOGIK --- */
+
+            // ---------------------------------------------------------
+            // IndexedDB Wrapper Klasse (OfflineDB)
+            // ---------------------------------------------------------
             class OfflineDB {
-                constructor(dbName = 'InventoryAppDB', version = 1) {
-                    this.dbName = dbName;
-                    this.version = version;
+                constructor() {
+                    this.dbName = 'InventarScannerDB';
+                    this.version = 2; // Erhöht auf 2, um user_roles und audit_log Stores hinzuzufügen
                     this.db = null;
                 }
 
-                open() {
+                async open() {
+                    if (this.db) return;
+
                     return new Promise((resolve, reject) => {
-                        if (this.db) {
-                            resolve(this.db);
+                        if (!('indexedDB' in window)) {
+                            reject('IndexedDB wird von diesem Browser nicht unterstützt.');
                             return;
                         }
 
@@ -2487,26 +2469,32 @@
 
                         request.onupgradeneeded = (event) => {
                             this.db = event.target.result;
-                            // Primärschlüssel werden festgelegt
+                            
+                            // Store für Artikel (Barcode ist der Primärschlüssel)
                             if (!this.db.objectStoreNames.contains('artikel')) {
-                                this.db.createObjectStore('artikel', { keyPath: 'barcode' });
+                                const artikelStore = this.db.createObjectStore('artikel', { keyPath: 'barcode' });
+                                artikelStore.createIndex('barcode', 'barcode', { unique: true });
                             }
-                            if (!this.db.objectStoreNames.contains('audit_log')) {
-                                // audit_log hat keinen eindeutigen Key, wir verwenden created_at (oder autoincrement)
-                                this.db.createObjectStore('audit_log', { keyPath: 'created_at' });
+                            
+                            // Store für Outbox-Operationen (id ist der Primärschlüssel)
+                            if (!this.db.objectStoreNames.contains('outbox')) {
+                                this.db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true });
                             }
+                            
+                            // Store für Benutzerrollen (id ist der Primärschlüssel)
                             if (!this.db.objectStoreNames.contains('user_roles')) {
                                 this.db.createObjectStore('user_roles', { keyPath: 'id' });
                             }
-                            // Outbox für ausstehende Schreiboperationen
-                            if (!this.db.objectStoreNames.contains('outbox')) {
-                                this.db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true });
+                            
+                            // Store für Audit Log (created_at ist der Primärschlüssel, da es eindeutige Zeitstempel sind)
+                            if (!this.db.objectStoreNames.contains('audit_log')) {
+                                this.db.createObjectStore('audit_log', { keyPath: 'created_at' });
                             }
                         };
 
                         request.onsuccess = (event) => {
                             this.db = event.target.result;
-                            resolve(this.db);
+                            resolve();
                         };
 
                         request.onerror = (event) => {
@@ -2515,7 +2503,7 @@
                         };
                     });
                 }
-                
+
                 // CRUD Helfer
                 async putData(storeName, data, keyPath = null) {
                     await this.open();
@@ -2535,19 +2523,19 @@
                         request.onerror = (event) => reject(event.target.error);
                     });
                 }
-                
+
                 async getData(storeName, key) {
                     await this.open();
                     return new Promise((resolve, reject) => {
                         const transaction = this.db.transaction(storeName, 'readonly');
                         const store = transaction.objectStore(storeName);
                         const request = store.get(key);
-                        
+
                         request.onsuccess = () => resolve(request.result);
                         request.onerror = (event) => reject(event.target.error);
                     });
                 }
-                
+
                 async getAllData(storeName) {
                     await this.open();
                     return new Promise((resolve, reject) => {
@@ -2584,26 +2572,30 @@
                     });
                 }
                 
-                // --- Spezifische Datenbank-Funktionen ---
-
+                // Spezialisierte Helfer für Artikel
                 async upsertData(storeName, data, keyPath = null) {
                     return this.putData(storeName, data, keyPath);
                 }
 
-                async bulkInsertData(storeName, dataArray) {
+                async bulkInsertData(storeName, dataArray, keyPath = null) {
                     await this.open();
                     return new Promise((resolve, reject) => {
                         const transaction = this.db.transaction(storeName, 'readwrite');
                         const store = transaction.objectStore(storeName);
                         
-                        dataArray.forEach(item => store.put(item));
+                        dataArray.forEach(data => {
+                            if (keyPath) {
+                                store.put(data, data[keyPath]);
+                            } else {
+                                store.put(data);
+                            }
+                        });
 
                         transaction.oncomplete = () => resolve();
                         transaction.onerror = (event) => reject(event.target.error);
                     });
                 }
                 
-                // Artikel-Spezifisch
                 async getArticleByBarcode(barcode) {
                     return this.getData('artikel', barcode);
                 }
@@ -2612,44 +2604,56 @@
                     return this.getAllData('artikel');
                 }
                 
+                async updateArticleStellplatz(barcode, newPlatz) {
+                    const article = await this.getArticleByBarcode(barcode);
+                    if (article) {
+                        article.stellplatz = newPlatz;
+                        return this.putData('artikel', article);
+                    }
+                    return Promise.resolve();
+                }
+
+                async updateArticleScans(barcode, newScans) {
+                    const article = await this.getArticleByBarcode(barcode);
+                    if (article) {
+                        article.scans = newScans;
+                        return this.putData('artikel', article);
+                    }
+                    return Promise.resolve();
+                }
+                
                 async deleteArticle(barcode) {
                     return this.deleteData('artikel', barcode);
                 }
                 
-                async updateArticleStellplatz(barcode, newStellplatz) {
-                    const article = await this.getArticleByBarcode(barcode);
-                    if (article) {
-                        article.stellplatz = newStellplatz;
-                        await this.upsertData('artikel', article);
-                    }
-                }
-                
-                // Log-Spezifisch
-                async getAllLogs() {
-                    return this.getAllData('audit_log');
-                }
-                
-                // User-Spezifisch
-                 async getAllUsers() {
-                    return this.getAllData('user_roles');
-                }
-
-                // Outbox-Spezifisch
+                // Spezialisierte Helfer für Outbox
                 async addToOutbox(operation) {
                     return this.putData('outbox', operation);
                 }
-
+                
                 async getOutboxOperations() {
+                    // Outbox-Operationen nach ID aufsteigend abrufen (FIFO-Prinzip)
                     return this.getAllData('outbox');
+                }
+
+                // Spezialisierte Helfer für User Roles
+                async getAllUsers() {
+                    return this.getAllData('user_roles');
+                }
+                
+                // Spezialisierte Helfer für Audit Log
+                async getAllLogs() {
+                    // Logs absteigend sortiert nach created_at zurückgeben (neueste zuerst)
+                    const logs = await this.getAllData('audit_log');
+                    return logs.sort((a, b) => b.created_at.localeCompare(a.created_at));
                 }
             }
 
 
+            // ---------------------------------------------------------
+            // Offline-Synchronisations-Logik
+            // ---------------------------------------------------------
             function initOfflineSync() {
-                if (!window.indexedDB) {
-                    showToast("Ihr Browser unterstützt IndexedDB (Offline-Speicher) nicht.", 'error');
-                    return;
-                }
                 window.offlineDB = new OfflineDB();
                 window.offlineDB.open()
                     .then(() => {
@@ -2659,76 +2663,97 @@
                     })
                     .catch(e => console.error("IndexedDB konnte nicht geöffnet werden.", e));
             }
-            
+
             // Funktion, die regelmäßig oder bei Wiederverbindung aufgerufen wird
             async function syncData(initialLoad = false) {
-                 if (!navigator.onLine || window.isSyncing || !window.offlineDB) return;
-                 
-                 window.isSyncing = true;
-                 console.log("Starte Offline-Synchronisation...");
-                 
-                 try {
-                     const outboxOps = await window.offlineDB.getOutboxOperations();
-                     const pendingCount = outboxOps.length;
-                     
-                     if (pendingCount > 0) {
-                         showToast(`Synchronisiere ${pendingCount} ausstehende Aktionen...`, 'info', 10000);
-                         await processOutbox(outboxOps);
-                     } else if (!initialLoad) {
-                         showToast("Online. Keine ausstehenden Aktionen.", 'success', 3000);
-                     }
-                     
-                     // Jetzt vollständige Datenbank-Listen synchronisieren (Pull)
-                     await loadArticleList(document.getElementById('articleSearchInput').value); 
-                     
-                     if (window.currentUserRole === 'admin') {
-                         await loadAdminLog(document.getElementById('logSearchInput').value);
-                         await loadUserList(document.getElementById('userSearchInput').value);
-                     }
-                     
-                     console.log("Offline-Synchronisation abgeschlossen.");
+                if (!navigator.onLine || window.isSyncing || !window.offlineDB) return;
 
-                 } catch (e) {
-                     console.error("Fehler während der Synchronisation:", e);
-                     showToast("Synchronisationsfehler. Versuche es später erneut.", 'error', 5000);
-                 } finally {
-                     window.isSyncing = false;
-                 }
+                window.isSyncing = true;
+                console.log("Starte Offline-Synchronisation...");
+                
+                try {
+                    const outboxOps = await window.offlineDB.getOutboxOperations();
+                    const pendingCount = outboxOps.length;
+
+                    if (pendingCount > 0) {
+                        showToast(`Synchronisiere ${pendingCount} ausstehende Aktionen...`, 'info', 10000);
+                        await processOutbox(outboxOps);
+                    } else if (!initialLoad) {
+                        showToast("Offline-Aktionen abgeschlossen. Daten aktuell.", 'success', 3000);
+                    }
+                    
+                    // NEU: Logbuch-Daten synchronisieren (Pull)
+                    if (window.currentUserRole === 'admin') {
+                         await loadAdminLog(document.getElementById('logSearchInput').value);
+                    }
+
+                } catch (e) {
+                    console.error("Fehler bei der Synchronisation:", e);
+                    showToast("Fehler bei der Offline-Synchronisation.", 'error', 5000);
+                } finally {
+                    window.isSyncing = false;
+                    console.log("Offline-Synchronisation beendet.");
+                }
             }
-            
-            async function processOutbox(operations) {
-                for (const op of operations) {
+
+            async function processOutbox(outboxOps) {
+                for (const op of outboxOps) {
                     try {
                         let error = null;
-                        
-                        // 1. Operation an Supabase senden (Push)
-                        if (op.type === 'INSERT') {
-                            const response = await window.appSupabaseClient
+
+                        // 1. Operation im Backend ausführen
+                        if (op.type === 'INSERT' && op.table === 'artikel') {
+                            const { error: insertError } = await window.appSupabaseClient
                                 .from(op.table)
                                 .insert([op.payload]);
-                            error = response.error;
-                            
-                        } else if (op.type === 'UPDATE' || op.type === 'SCAN_INCREMENT') {
-                             // Scan-Increment wird als einfaches Update behandelt, da die Logik in searchArticle den Zähler erhöht
-                             // Wir verwenden den key (z.B. barcode) für die Filterung
-                            const response = await window.appSupabaseClient
+                            error = insertError;
+
+                        } else if (op.type === 'UPDATE' && op.table === 'artikel') {
+                            const { error: updateError } = await window.appSupabaseClient
                                 .from(op.table)
                                 .update(op.payload)
-                                .eq(op.table === 'artikel' ? 'barcode' : 'id', op.key); 
-                            error = response.error;
+                                .eq("barcode", op.key);
+                            error = updateError;
+
+                        } else if (op.type === 'INCREMENT_SCAN' && op.table === 'artikel') {
+                            // RPC-Aufruf für Increment verwenden
+                            const { error: rpcError } = await window.appSupabaseClient
+                                .rpc('increment_scans', { barcode_val: op.key });
+                            error = rpcError;
                             
-                        } else if (op.type === 'DELETE') {
-                            const response = await window.appSupabaseClient
+                            if (!error) {
+                                // Auch den lokalen Zähler auf den Wert setzen, den wir hochgeladen haben, um Konsistenz zu gewährleisten.
+                                // Annahme: Der lokale Payload-Scan-Wert ist der endgültige Wert.
+                                await window.offlineDB.updateArticleScans(op.key, op.payload.scans);
+                            }
+
+                        } else if (op.type === 'DELETE' && op.table === 'artikel') {
+                            const { error: deleteError } = await window.appSupabaseClient
                                 .from(op.table)
                                 .delete()
-                                .eq(op.table === 'artikel' ? 'barcode' : 'id', op.key);
-                            error = response.error;
+                                .eq("barcode", op.key);
+                            error = deleteError;
+
+                        } else if (op.type === 'UPDATE' && op.table === 'user_roles') {
+                            const { error: updateError } = await window.appSupabaseClient
+                                .from(op.table)
+                                .update(op.payload)
+                                .eq("id", op.key);
+                            error = updateError;
+
+                        } else {
+                            console.warn(`Unbekannter Outbox-Typ: ${op.type} ${op.table}. Überspringe.`);
+                            await window.offlineDB.deleteData('outbox', op.id); 
+                            continue;
                         }
-                        
+
                         if (error) {
-                            // Wenn der Fehler kein Netzwerkfehler ist (z.B. RLS-Verletzung), dann überspringen wir die Aktion
-                            if (error.code && error.code !== 'PGRST116') {
-                                console.error(`Outbox Fehler (${op.type} auf ${op.table} für Key ${op.key}):`, error);
+                            if (error.code === '23505') { // Duplikatfehler (z.B. Barcode existiert schon, wenn es ein INSERT war)
+                                console.warn(`Duplikatfehler beim Sync von ${op.type} (${op.table}). Aktion gelöscht.`, error);
+                                showToast(`Duplikatfehler beim Synchronisieren von ${op.type} (${op.table}). Aktion übersprungen.`, 'warning', 5000);
+                            } else if (error.message.includes('Foreign key violation') || error.message.includes('not found')) {
+                                // Wenn ein Update oder Delete fehlschlägt, weil der Datensatz fehlt, überspringen
+                                console.warn(`Fehler beim Sync von ${op.type} (${op.table}): Datensatz nicht gefunden. Aktion gelöscht.`, error);
                                 showToast(`Fehler beim Synchronisieren von ${op.type} (${op.table}). Aktion übersprungen.`, 'error', 7000);
                             } else {
                                 // Netzwerkfehler oder Timeout: Abbrechen und warten auf nächste Sync
