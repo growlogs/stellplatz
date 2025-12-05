@@ -80,14 +80,35 @@
          * Sicherheits-Modal: hier kann ein Admin/Operator einmalig URL + KEY
          * eintragen. Empfehlung: auf Produktionssystemen die Config serverseitig
          * in window.__APP_CONFIG__ einbetten (z. B. per Template).
+         *
+         * WICHTIG: showConfigModal ist jetzt null-sicher (prüft, ob das Element existiert).
          */
         function showConfigModal() {
-            document.getElementById('configOverlay').style.display = 'flex';
-            setTimeout(() => document.getElementById('configOverlay').classList.add('show'), 10);
+            const overlay = document.getElementById('configOverlay');
+            if (!overlay) {
+                // Falls das Element noch nicht existiert (sehr frühe Aufrufe),
+                // verzögern wir den Aufruf, bis DOMContentLoaded gefeuert ist.
+                // (Normalerweise brauchen wir das nicht, weil die Init jetzt
+                // nur noch nach DOMContentLoaded läuft — trotzdem defensiv.)
+                document.addEventListener('DOMContentLoaded', () => {
+                    const overlay2 = document.getElementById('configOverlay');
+                    if (overlay2) {
+                        overlay2.style.display = 'flex';
+                        setTimeout(() => overlay2.classList.add('show'), 10);
+                    } else {
+                        console.error("configOverlay nicht im DOM vorhanden.");
+                    }
+                }, { once: true });
+                return;
+            }
+            overlay.style.display = 'flex';
+            setTimeout(() => overlay.classList.add('show'), 10);
         }
         function hideConfigModal() {
-            document.getElementById('configOverlay').classList.remove('show');
-            setTimeout(() => document.getElementById('configOverlay').style.display = 'none', 300);
+            const overlay = document.getElementById('configOverlay');
+            if (!overlay) return;
+            overlay.classList.remove('show');
+            setTimeout(() => overlay.style.display = 'none', 300);
         }
         async function saveConfigFromModal() {
             const url = (document.getElementById('configSupabaseUrl').value || "").trim();
@@ -124,7 +145,8 @@
                     const user = sessionData.session.user;
                     // Setze Rolle falls in user.app_metadata/role hinterlegt (Empfehlung)
                     window.currentUserRole = (user?.app_metadata?.role) || window.currentUserRole;
-                    document.getElementById("userDisplay").innerText = (window.currentUserRole === 'admin' ? 'ADMIN' : 'USER') || user?.email || '';
+                    const ud = document.getElementById("userDisplay");
+                    if (ud) ud.innerText = (window.currentUserRole === 'admin' ? 'ADMIN' : 'USER') || user?.email || '';
                 }
             } catch (err) {
                 console.warn("Session-Check fehlgeschlagen:", err);
@@ -135,9 +157,11 @@
 
             // Markiere Auth-UI als bereit
             window.isAuthReady = true;
-            // UI: zeige Login-View
-            document.getElementById("loadingAuth").style.display = "none";
-            document.getElementById("authContent").style.display = "flex";
+            // UI: zeige Login-View (nur, wenn die Elemente existieren)
+            const la = document.getElementById("loadingAuth");
+            const ac = document.getElementById("authContent");
+            if (la) la.style.display = "none";
+            if (ac) ac.style.display = "flex";
         }
 
         /**
@@ -188,12 +212,14 @@
         // Initialisierung beim Laden: versuche sofort config zu initialisieren,
         // falls window.__APP_CONFIG__ gesetzt ist (Server-Injection).
         // ---------------------------------------------------------
-        (async function tryInitOnLoad() {
-            // Zeige Ladeanzeige im Login-Bereich
-            document.addEventListener('DOMContentLoaded', () => {
-                document.getElementById("loadingAuth").style.display = "block";
-                document.getElementById("authContent").style.display = "none";
-            });
+        // WICHTIG: die Init wird jetzt erst nach DOMContentLoaded ausgeführt,
+        // damit DOM-Elemente existieren, wenn sie vom Script manipuliert werden.
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Zeige Ladeanzeige im Login-Bereich (falls vorhanden)
+            const loadingEl = document.getElementById("loadingAuth");
+            const authContentEl = document.getElementById("authContent");
+            if (loadingEl) loadingEl.style.display = "block";
+            if (authContentEl) authContentEl.style.display = "none";
 
             // Falls serverseitig injiziert, initialisiere
             const ok = await initSupabaseClientFromConfig();
@@ -202,10 +228,10 @@
             } else {
                 // Client wird initialisiert, nachdem der Benutzer Modal ausfüllt
                 // oder der Server die Config injiziert.
-                document.getElementById("loadingAuth").style.display = "none";
-                document.getElementById("authContent").style.display = "none"; // bleibt verborgen bis config da ist
+                if (loadingEl) loadingEl.style.display = "none";
+                if (authContentEl) authContentEl.style.display = "none"; // bleibt verborgen bis config da ist
             }
-        })();
+        });
     </script>
 
     <style>
@@ -1158,7 +1184,8 @@
         async function handlePinEntry(pin) {
             // PIN-Verifikation gegen geladene SHA-256-Hashes in window.devicePinHashes
             if (!window.devicePinHashes || Object.keys(window.devicePinHashes).length === 0) {
-                document.getElementById("authError").innerText = "PIN-Login nicht verfügbar. Bitte via E-Mail anmelden oder Admin kontaktieren.";
+                const ae = document.getElementById("authError");
+                if (ae) ae.innerText = "PIN-Login nicht verfügbar. Bitte via E-Mail anmelden oder Admin kontaktieren.";
                 showToast("PIN-Login nicht verfügbar.", 'error');
                 return;
             }
@@ -1175,14 +1202,17 @@
                 }
 
                 if (window.currentUserRole) {
-                    document.getElementById("authError").innerText = "";
+                    const ae = document.getElementById("authError");
+                    if (ae) ae.innerText = "";
                     const roleDisplay = (window.currentUserRole === 'admin' ? "ADMIN" : "USER");
-                    document.getElementById("userDisplay").innerText = `${roleDisplay}`;
+                    const ud = document.getElementById("userDisplay");
+                    if (ud) ud.innerText = `${roleDisplay}`;
                     switchView('appView');
                     changeTab('scannerTab');
                     showToast(`Angemeldet als ${roleDisplay}`, 'success');
                 } else {
-                    document.getElementById("authError").innerText = "Falscher Code. Bitte versuchen Sie es erneut.";
+                    const ae = document.getElementById("authError");
+                    if (ae) ae.innerText = "Falscher Code. Bitte versuchen Sie es erneut.";
                     showToast("Falscher Code.", 'error');
                 }
             } catch (err) {
@@ -1221,13 +1251,13 @@
             const loadingIndicator = document.getElementById("loadingAuth");
 
             if (window.isAuthReady) {
-                authContent.style.display = "flex";
-                loadingIndicator.style.display = "none";
+                if (authContent) authContent.style.display = "flex";
+                if (loadingIndicator) loadingIndicator.style.display = "none";
                 return;
             }
 
-            loadingIndicator.style.display = "block";
-            authContent.style.display = "none";
+            if (loadingIndicator) loadingIndicator.style.display = "block";
+            if (authContent) authContent.style.display = "none";
 
             // Falls der Supabase-Client bereits vorhanden ist, prüfen wir Session & PIN-Hashes.
             if (window.appSupabaseClient) {
@@ -1235,8 +1265,8 @@
                 return;
             }
 
-            // Wenn noch keine Config: das Modal wird angezeigt (initSupabaseClientFromConfig)
-            loadingIndicator.style.display = "none";
+            // Wenn noch keine Config: das Modal wird initial angezeigt (initSupabaseClientFromConfig)
+            if (loadingIndicator) loadingIndicator.style.display = "none";
             // authContent bleibt verborgen bis Config verfügbar ist.
         }
 
@@ -1253,8 +1283,10 @@
         }
 
         async function startScanner() {
-            document.getElementById("preScan").style.display = "none";
-            document.getElementById("scanFrame").style.display = "block";
+            const preScan = document.getElementById("preScan");
+            const scanFrame = document.getElementById("scanFrame");
+            if (preScan) preScan.style.display = "none";
+            if (scanFrame) scanFrame.style.display = "block";
 
             const config = {
                 fps: 10,
@@ -1264,8 +1296,8 @@
 
             html5QrCode.start({ facingMode: { exact: "environment"} }, config, onScanSuccess, onScanError)
             .catch(err => {
-                document.getElementById("preScan").style.display = "flex";
-                document.getElementById("scanFrame").style.display = "none";
+                if (preScan) preScan.style.display = "flex";
+                if (scanFrame) scanFrame.style.display = "none";
                 showToast("Kamera Fehler: Zugriff verweigert oder Gerät nicht gefunden.", 'error', 4000);
                 console.error("Scanner Start Fehler:", err);
             });
@@ -1275,8 +1307,10 @@
             if (html5QrCode && html5QrCode.isScanning) {
                 try {
                     await html5QrCode.stop();
-                    document.getElementById("preScan").style.display = "flex";
-                    document.getElementById("scanFrame").style.display = "none";
+                    const preScan = document.getElementById("preScan");
+                    const scanFrame = document.getElementById("scanFrame");
+                    if (preScan) preScan.style.display = "flex";
+                    if (scanFrame) scanFrame.style.display = "none";
                 } catch (err) {
                     console.warn("Kamera Stoppen fehlgeschlagen:", err);
                 }
@@ -1296,7 +1330,7 @@
 
             if (!window.appSupabaseClient) {
                 showResultCard("Fehler", "Keine Backend-Verbindung. Bitte Konfiguration eintragen.", '❌');
-                html5QrCode.resume();
+                if (html5QrCode) html5QrCode.resume();
                 lastCode = "";
                 return;
             }
@@ -1311,7 +1345,7 @@
                 showToast("Fehler bei der Datenbankabfrage.", 'error');
                 console.error(error);
                 showResultCard("Fehler", "Datenbankfehler beim Suchen.", '❌');
-                html5QrCode.resume();
+                if (html5QrCode) html5QrCode.resume();
                 lastCode = "";
                 return;
             }
@@ -1325,7 +1359,8 @@
                     <p><strong>Barcode:</strong> ${data.barcode}</p>
                 `;
                 showResultCard(data.name, content, '✅');
-                document.getElementById("registerButton").style.display = "none";
+                const regBtn = document.getElementById("registerButton");
+                if (regBtn) regBtn.style.display = "none";
 
                 const { error: updateError } = await window.appSupabaseClient
                     .from("artikel")
@@ -1337,10 +1372,11 @@
             } else {
                 const content = `<p>Der Barcode <strong>${code}</strong> wurde noch nicht registriert.</p>`;
                 showResultCard("Unbekannter Artikel", content, '❓');
+                const regBtn = document.getElementById("registerButton");
                 if (window.currentUserRole === 'admin') {
-                    document.getElementById("registerButton").style.display = "block";
+                    if (regBtn) regBtn.style.display = "block";
                 } else {
-                    document.getElementById("registerButton").style.display = "none";
+                    if (regBtn) regBtn.style.display = "none";
                 }
             }
         }
@@ -1353,24 +1389,37 @@
                 return;
             }
 
-            document.getElementById('popupBarcode').value = currentScannedBarcode;
-            document.getElementById('popupOverlay').classList.add('show');
+            const pb = document.getElementById('popupBarcode');
+            if (pb) pb.value = currentScannedBarcode;
+            const overlay = document.getElementById('popupOverlay');
+            if (overlay) overlay.classList.add('show');
         }
 
         function hidePopup() {
-            document.getElementById('popupOverlay').classList.remove('show');
-            document.getElementById('popupBaseName').value = '';
-            document.getElementById('popupSize').value = '';
-            document.getElementById('popupPlatz').value = '';
-            document.getElementById('popupBlocklager').value = 'false';
+            const overlay = document.getElementById('popupOverlay');
+            if (overlay) overlay.classList.remove('show');
+            const base = document.getElementById('popupBaseName');
+            const size = document.getElementById('popupSize');
+            const platz = document.getElementById('popupPlatz');
+            const block = document.getElementById('popupBlocklager');
+            if (base) base.value = '';
+            if (size) size.value = '';
+            if (platz) platz.value = '';
+            if (block) block.value = 'false';
         }
 
         async function saveArticle() {
-            const barcode = document.getElementById('popupBarcode').value.trim();
-            const baseName = document.getElementById('popupBaseName').value.trim();
-            const sizeValue = document.getElementById('popupSize').value.trim();
-            const platz = document.getElementById('popupPlatz').value.trim();
-            const block = document.getElementById('popupBlocklager').value === 'true';
+            const barcodeEl = document.getElementById('popupBarcode');
+            const baseEl = document.getElementById('popupBaseName');
+            const sizeEl = document.getElementById('popupSize');
+            const platzEl = document.getElementById('popupPlatz');
+            const blockEl = document.getElementById('popupBlocklager');
+
+            const barcode = barcodeEl ? barcodeEl.value.trim() : '';
+            const baseName = baseEl ? baseEl.value.trim() : '';
+            const sizeValue = sizeEl ? sizeEl.value.trim() : '';
+            const platz = platzEl ? platzEl.value.trim() : '';
+            const block = (blockEl ? blockEl.value === 'true' : false);
 
             let name = baseName;
             if (sizeValue) {
@@ -1421,19 +1470,26 @@
 
             window.articleToEdit = article;
 
-            document.getElementById('adminEditName').value = article.name;
-            document.getElementById('adminEditBarcode').value = article.barcode;
-            document.getElementById('adminEditPlatz').value = article.stellplatz;
+            const nameEl = document.getElementById('adminEditName');
+            const barcodeEl = document.getElementById('adminEditBarcode');
+            const platzEl = document.getElementById('adminEditPlatz');
+            if (nameEl) nameEl.value = article.name;
+            if (barcodeEl) barcodeEl.value = article.barcode;
+            if (platzEl) platzEl.value = article.stellplatz;
 
-            document.getElementById('adminEditPopupOverlay').style.display = "flex";
-            setTimeout(() => document.getElementById('adminEditPopupOverlay').classList.add('show'), 10);
+            const overlay = document.getElementById('adminEditPopupOverlay');
+            if (overlay) {
+                overlay.style.display = "flex";
+                setTimeout(() => overlay.classList.add('show'), 10);
+            }
         }
 
         function hideAdminEditPopup() {
-            document.getElementById('adminEditPopupOverlay').classList.remove('show');
+            const overlay = document.getElementById('adminEditPopupOverlay');
+            if (overlay) overlay.classList.remove('show');
 
             setTimeout(() => {
-                document.getElementById('adminEditPopupOverlay').style.display = "none";
+                if (overlay) overlay.style.display = "none";
                 if (!window.articleToDelete) {
                     window.articleToEdit = null;
                 }
@@ -1443,7 +1499,8 @@
         async function saveAdminEdit() {
             if (!window.articleToEdit) return;
 
-            const newPlatz = document.getElementById('adminEditPlatz').value.trim();
+            const newPlatzEl = document.getElementById('adminEditPlatz');
+            const newPlatz = newPlatzEl ? newPlatzEl.value.trim() : '';
             const oldPlatz = window.articleToEdit.stellplatz;
 
             if (!newPlatz) {
@@ -1488,21 +1545,29 @@
         function showDeleteConfirmPopup(article) {
             window.articleToDelete = article;
 
-            document.getElementById('deleteConfirmMessage').innerHTML = `Sind Sie **SICHER**, dass Sie den Artikel<br><strong>"${article.name}"</strong><br>(Barcode: ${article.barcode}) unwiderruflich löschen möchten?`;
+            const msgEl = document.getElementById('deleteConfirmMessage');
+            if (msgEl) msgEl.innerHTML = `Sind Sie **SICHER**, dass Sie den Artikel<br><strong>"${article.name}"</strong><br>(Barcode: ${article.barcode}) unwiderruflich löschen möchten?`;
 
-            document.getElementById('deleteConfirmPopupOverlay').style.display = "flex";
-            setTimeout(() => document.getElementById('deleteConfirmPopupOverlay').classList.add('show'), 10);
+            const overlay = document.getElementById('deleteConfirmPopupOverlay');
+            if (overlay) {
+                overlay.style.display = "flex";
+                setTimeout(() => overlay.classList.add('show'), 10);
+            }
         }
 
         function hideDeleteConfirmPopup() {
-            document.getElementById('deleteConfirmPopupOverlay').classList.remove('show');
+            const overlay = document.getElementById('deleteConfirmPopupOverlay');
+            if (overlay) overlay.classList.remove('show');
 
             setTimeout(() => {
-                document.getElementById('deleteConfirmPopupOverlay').style.display = "none";
+                if (overlay) overlay.style.display = "none";
 
                 if (window.articleToEdit) {
-                    document.getElementById('adminEditPopupOverlay').style.display = "flex";
-                    document.getElementById('adminEditPopupOverlay').classList.add('show');
+                    const adminOverlay = document.getElementById('adminEditPopupOverlay');
+                    if (adminOverlay) {
+                        adminOverlay.style.display = "flex";
+                        adminOverlay.classList.add('show');
+                    }
                 }
 
                 window.articleToDelete = null;
@@ -1538,14 +1603,19 @@
         }
 
         function showResultCard(title, contentHTML, icon) {
-            document.getElementById('cardTitleText').innerText = title;
-            document.getElementById('cardContent').innerHTML = contentHTML;
-            document.getElementById('cardStatusIcon').innerText = icon;
-            document.getElementById('result-card').classList.add('active');
+            const titleEl = document.getElementById('cardTitleText');
+            const contentEl = document.getElementById('cardContent');
+            const iconEl = document.getElementById('cardStatusIcon');
+            const resultCard = document.getElementById('result-card');
+            if (titleEl) titleEl.innerText = title;
+            if (contentEl) contentEl.innerHTML = contentHTML;
+            if (iconEl) iconEl.innerText = icon;
+            if (resultCard) resultCard.classList.add('active');
         }
 
         function hideResultCard() {
-            document.getElementById('result-card').classList.remove('active');
+            const resultCard = document.getElementById('result-card');
+            if (resultCard) resultCard.classList.remove('active');
             lastCode = "";
 
             if (html5QrCode && currentTabId === 'scannerTab') {
@@ -1555,10 +1625,10 @@
 
         async function loadArticleList() {
             const articleListContainer = document.getElementById('articleList');
-            articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Artikel...</li>';
+            if (articleListContainer) articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Artikel...</li>';
 
             if (!window.appSupabaseClient) {
-                articleListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Backend nicht konfiguriert.</li>';
+                if (articleListContainer) articleListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Backend nicht konfiguriert.</li>';
                 return;
             }
 
@@ -1570,13 +1640,14 @@
             if (error) {
                 showToast("Fehler beim Laden der Artikelliste.", 'error');
                 console.error("Fehler beim Laden der Artikel (Prüfen Sie RLS-Policies!):", error);
-                articleListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Die Liste konnte nicht von der Datenbank geladen werden. BITTE RLS-POLICIES PRÜFEN!</li>';
+                if (articleListContainer) articleListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Die Liste konnte nicht von der Datenbank geladen werden. BITTE RLS-POLICIES PRÜFEN!</li>';
                 return;
             }
 
+            if (!articleListContainer) return;
             articleListContainer.innerHTML = '';
 
-            if (data.length === 0) {
+            if (!data || data.length === 0) {
                 articleListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Noch keine Artikel vorhanden. Scannen Sie einen Barcode, um zu starten.</li>';
                 return;
             }
@@ -1638,14 +1709,14 @@
             const logListContainer = document.getElementById('logList');
 
             if (window.currentUserRole !== 'admin') {
-                logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
+                if (logListContainer) logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Zugriff verweigert. Nur Administratoren dürfen das Protokoll einsehen.</li>';
                 return;
             }
 
-            logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>';
+            if (logListContainer) logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Lade Admin-Protokoll...</li>';
 
             if (!window.appSupabaseClient) {
-                logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Backend nicht konfiguriert.</li>';
+                if (logListContainer) logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Backend nicht konfiguriert.</li>';
                 return;
             }
 
@@ -1658,13 +1729,14 @@
             if (error) {
                 showToast("Fehler beim Laden des Admin-Protokolls.", 'error');
                 console.error("Fehler beim Laden des Logs:", error);
-                logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle und Spaltennamen prüfen.</li>';
+                if (logListContainer) logListContainer.innerHTML = '<li style="color: var(--color-error-red); border-left: 5px solid var(--color-error-red); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">FEHLER: Das Protokoll konnte nicht geladen werden. Bitte die `audit_log` Tabelle und Spaltennamen prüfen.</li>';
                 return;
             }
 
+            if (!logListContainer) return;
             logListContainer.innerHTML = '';
 
-            if (data.length === 0) {
+            if (!data || data.length === 0) {
                 logListContainer.innerHTML = '<li style="border-left: 5px solid rgba(255, 255, 255, 0.2); padding: 15px; background: var(--color-bg-card); border-radius: 10px;">Keine Protokolleinträge vorhanden.</li>';
                 return;
             }
@@ -1697,7 +1769,8 @@
                 content.classList.remove('active');
             });
 
-            document.getElementById(targetTabId).classList.add('active');
+            const targetEl = document.getElementById(targetTabId);
+            if (targetEl) targetEl.classList.add('active');
 
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.classList.remove('active');
@@ -1741,7 +1814,8 @@
             showToast("Erfolgreich abgemeldet.", 'info');
             lastCode = "";
 
-            document.getElementById("userDisplay").innerText = "";
+            const ud = document.getElementById("userDisplay");
+            if (ud) ud.innerText = "";
         }
 
         window.onload = function() {
