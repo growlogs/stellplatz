@@ -483,53 +483,70 @@
         }
 
         // Logik zur Aktualisierung des dynamischen Login-Formulars
-        function updateAuthForm() {
-            const isEmployee = window.currentAuthMode === 'employee';
-            const isRegister = window.isRegisterMode; 
-            
-            // Toggle Button Text
-            document.getElementById('authModeToggle').innerText = isEmployee ? "Als Admin anmelden" : "Als Mitarbeiter anmelden";
-            
-            // NEU: Felder dynamisch anzeigen/ausblenden
-            const companyEmailGroup = document.getElementById('companyEmailGroup');
-            const personnelNumberGroup = document.getElementById('personnelNumberGroup');
-            const adminEmailGroup = document.getElementById('adminEmailGroup');
-            const authPasswordGroup = document.getElementById('authPasswordGroup');
-            const registerToggle = document.getElementById('registerToggle');
-            const authTitle = document.getElementById('authTitle');
+// Logik zur Aktualisierung des dynamischen Login-Formulars
+function updateAuthForm() {
+    const isEmployee = window.currentAuthMode === 'employee';
+    const isRegister = window.isRegisterMode; 
+    
+    // Toggle Button Text
+    document.getElementById('authModeToggle').innerText = isEmployee ? "Als Admin anmelden" : "Als Mitarbeiter anmelden";
+    
+    // NEU: Felder dynamisch anzeigen/ausblenden
+    const companyEmailGroup = document.getElementById('companyEmailGroup');
+    const personnelNumberGroup = document.getElementById('personnelNumberGroup');
+    const adminEmailGroup = document.getElementById('adminEmailGroup');
+    const authPasswordGroup = document.getElementById('authPasswordGroup');
+    const registerToggle = document.getElementById('registerToggle');
+    const authTitle = document.getElementById('authTitle');
 
-            // Admin-Modus
-            if (!isEmployee) {
-                companyEmailGroup.style.display = 'none';
-                personnelNumberGroup.style.display = 'none';
-                adminEmailGroup.style.display = 'block';
-                authPasswordGroup.style.display = 'block';
-            } 
-            // Mitarbeiter-Modus
-            else {
-                personnelNumberGroup.style.display = 'block';
-                adminEmailGroup.style.display = 'none';
-                authPasswordGroup.style.display = 'block';
+    // FIX: Input-Elemente für die Deaktivierung holen
+    const personnelNumberInput = document.getElementById('authPersonnelNumber');
+    const companyEmailInput = document.getElementById('authCompanyEmail');
 
-                // Firmen-E-Mail-Basis anzeigen, falls noch nicht gespeichert
-                if (window.companyEmailBase) {
-                    companyEmailGroup.style.display = 'none';
-                } else {
-                    companyEmailGroup.style.display = 'block';
-                }
-            }
+    // Admin-Modus
+    if (!isEmployee) {
+        companyEmailGroup.style.display = 'none';
+        personnelNumberGroup.style.display = 'none';
+        adminEmailGroup.style.display = 'block';
+        authPasswordGroup.style.display = 'block';
+        
+        // FIX: Deaktiviere Employee-Felder, wenn Admin-Modus aktiv
+        if (personnelNumberInput) personnelNumberInput.disabled = true;
+        if (companyEmailInput) companyEmailInput.disabled = true;
+        
+    } 
+    // Mitarbeiter-Modus
+    else {
+        personnelNumberGroup.style.display = 'block';
+        adminEmailGroup.style.display = 'none';
+        authPasswordGroup.style.display = 'block';
 
-            // Registrierungs-Logik
-            if (isRegister) {
-                authTitle.innerText = isEmployee ? "Mitarbeiter registrieren" : "Admin registrieren";
-                document.querySelector('#authForm button[type="submit"]').innerText = "Registrieren";
-                registerToggle.innerText = "Ich habe bereits ein Konto";
-            } else {
-                authTitle.innerText = "Anmelden";
-                document.querySelector('#authForm button[type="submit"]').innerText = "Anmelden";
-                registerToggle.innerText = "Ich benötige ein neues Konto";
-            }
+        // FIX: Aktiviere personnelNumberInput im Mitarbeiter-Modus
+        if (personnelNumberInput) personnelNumberInput.disabled = false;
+
+        // Firmen-E-Mail-Basis anzeigen, falls noch nicht gespeichert
+        if (window.companyEmailBase) {
+            companyEmailGroup.style.display = 'none';
+            // FIX: Deaktiviere companyEmailInput, da es versteckt ist
+            if (companyEmailInput) companyEmailInput.disabled = true;
+        } else {
+            companyEmailGroup.style.display = 'block';
+            // FIX: Aktiviere companyEmailInput, da es sichtbar und benötigt wird
+            if (companyEmailInput) companyEmailInput.disabled = false;
         }
+    }
+
+    // Registrierungs-Logik
+    if (isRegister) {
+        authTitle.innerText = isEmployee ? "Mitarbeiter registrieren" : "Admin registrieren";
+        document.querySelector('#authForm button[type="submit"]').innerText = "Registrieren";
+        registerToggle.innerText = "Ich habe bereits ein Konto";
+    } else {
+        authTitle.innerText = "Anmelden";
+        document.querySelector('#authForm button[type="submit"]').innerText = "Anmelden";
+        registerToggle.innerText = "Ich benötige ein neues Konto";
+    }
+}
         
         // Umschalten zwischen Admin- und Mitarbeiter-Modus
         function toggleAuthMode() {
@@ -2861,9 +2878,14 @@
         <input type="password" id="authPassword" placeholder="Ihr Passwort" required>
     </div>
     <div class="input-group" id="companyEmailGroup">
-        <label for="authCompanyEmail">Firmen E-Mail Basis (z.B. firma.de)</label>
-        <input type="text" id="authCompanyEmail" name="company_email_base" placeholder="firma.de" required>
-    </div>
+    <label for="authCompanyEmail">Firmen E-Mail Basis (z.B. firma.de)</label>
+    <input type="text" id="authCompanyEmail" name="company_email_base" placeholder="firma.de" required>
+</div>
+<div class="action-button-group">
+    <button type="submit" class="primary-button">Anmelden</button>
+</div>
+<button type="button" class="link-button" id="registerToggle" onclick="toggleRegisterMode()">Ich benötige ein neues Konto</button>
+<div id="loadingAuth" style="text-align: center; margin-top: 20px; display: none;">Lade...</div>
     </form>
             <button type="submit" form="authForm">Anmelden</button>
             <button type="button" id="registerToggle" onclick="toggleRegisterMode()">Neues Konto erstellen</button>
