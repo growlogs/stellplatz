@@ -421,7 +421,7 @@
 
 
                 /* --- POPUPS --- */
-                #popupOverlay, #adminEditPopupOverlay, #deleteConfirmPopupOverlay, #userEditPopupOverlay, #settingsPopupOverlay {
+                #popupOverlay, #adminEditPopupOverlay, #deleteConfirmPopupOverlay, #userEditPopupOverlay, #settingsPopupOverlay, #employeeRegisterPopupOverlay {
                     position: fixed;
                     top: 0;
                     left: 0;
@@ -437,7 +437,7 @@
                     transition: opacity 0.2s ease-in-out;
                 }
 
-                #popupOverlay.show, #adminEditPopupOverlay.show, #deleteConfirmPopupOverlay.show, #userEditPopupOverlay.show, #settingsPopupOverlay.show {
+                #popupOverlay.show, #adminEditPopupOverlay.show, #deleteConfirmPopupOverlay.show, #userEditPopupOverlay.show, #settingsPopupOverlay.show, #employeeRegisterPopupOverlay.show {
                     opacity: 1;
                     display: flex; 
                 }
@@ -452,7 +452,7 @@
                     transition: transform 0.3s ease-in-out;
                 }
 
-                #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card, #deleteConfirmPopupOverlay.show .popup-card, #userEditPopupOverlay.show .popup-card, #settingsPopupOverlay.show .popup-card {
+                #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card, #deleteConfirmPopupOverlay.show .popup-card, #userEditPopupOverlay.show .popup-card, #settingsPopupOverlay.show .popup-card, #employeeRegisterPopupOverlay.show .popup-card {
                     transform: translateY(0);
                 }
 
@@ -855,6 +855,28 @@
                 </form>
             </div>
 
+            <div id="employeeRegisterPopupOverlay">
+                <form class="popup-card" onsubmit="event.preventDefault(); saveEmployee();">
+                    <h3>Mitarbeiter anlegen (Admin)</h3>
+                    <div class="input-group">
+                        <label for="employeeName">Name</label>
+                        <input type="text" id="employeeName" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="employeePersonnelNumber">Personalnummer</label>
+                        <input type="text" id="employeePersonnelNumber" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="employeeClientId">Mandant/Client ID</label>
+                        <input type="text" id="employeeClientId" readonly value="">
+                        <p style="font-size: 0.75rem; opacity: 0.7; margin-top: 5px;">Wird automatisch von Ihrem Profil übernommen.</p>
+                    </div>
+                    <div class="action-button-group">
+                        <button type="button" class="action-button cancel" onclick="hideEmployeeRegisterPopup()">Abbrechen</button>
+                        <button type="submit" class="action-button register">Speichern</button>
+                    </div>
+                </form>
+            </div>
             <div id="settingsPopupOverlay">
                 <div class="popup-card">
                     <h3>Einstellungen</h3>
@@ -997,6 +1019,9 @@
                             <input type="text" id="userSearchInput" placeholder="Suche nach E-Mail, Rolle oder Anmerkungen..." oninput="loadUserList(this.value)">
                         </div>
                         <div class="list-content-container">
+                            <button class="primary-button" style="width: 100%; margin-bottom: 15px;" onclick="showEmployeeRegisterPopup()">
+                                Mitarbeiter anlegen
+                            </button>
                             <ul id="userList"></ul>
                         </div>
                     </div>
@@ -1413,13 +1438,14 @@
 
                     if (data) {
                         // Artikel gefunden
-                        let newScans = (data.scans || 0) + 1;
+                        // NEUE LOGIK: Wir zeigen den Bestand (scans) nur an, aber inkrementieren nicht.
+                        const bestand = data.scans || 0;
                         const content = `
                             <p><strong>Name:</strong> ${data.name}</p>
                             <p><strong>Barcode:</strong> ${data.barcode}</p>
                             <p><strong>Stellplatz:</strong> <span style="font-weight: 600; color: var(--color-accent-blue);">${data.stellplatz}</span></p>
                             <p><strong>Lagertyp:</strong> ${data.blocklager ? 'Blocklager' : 'Regal/Fach'}</p>
-                            <p><strong>Gesamte Scans:</strong> ${newScans}</p>
+                            <p><strong>Aktueller Bestand:</strong> ${bestand}</p>
                         `;
 
                         showResultCard("Artikel gefunden!", content, '✅');
@@ -1452,48 +1478,8 @@
                             const adminEditButton = document.getElementById('result-card').querySelector('#adminEditButton');
                             if(adminEditButton) adminEditButton.style.display = 'none';
                         }
-
-
-                        // Zählung aktualisieren
-                        const updatePayload = { scans: newScans };
-                        try {
-                            // 1. Online-Update
-                            const { error } = await window.appSupabaseClient
-                                .from('artikel')
-                                .update(updatePayload)
-                                .eq('barcode', code)
-                                .eq('client_id', window.currentClientId); // <-- NEUE FILTERUNG HINZUGEFÜGT
-                            
-                            if (error) {
-                                if (error.message.includes('Failed to fetch')) {
-                                    throw new Error("Offline");
-                                }
-                                console.error("Fehler beim Zähler-Update:", error);
-                                showToast(`FEHLER beim Aktualisieren des Zählers.`, "error");
-                            } else if (!isOffline) {
-                                showToast(`Scan erfolgreich! Neues Zählwerk: ${newScans}`, 'success');
-                                // Lokale DB direkt aktualisieren (falls online erfolgreich)
-                                await window.offlineDB.updateArticleScans(code, newScans);
-                                loadArticleList(document.getElementById('articleSearchInput').value); // Liste aktualisieren
-                            }
-
-                        } catch (e) {
-                            if (e.message === "Offline" || !navigator.onLine) {
-                                isOffline = true;
-                                showToast(`Scan lokal gespeichert. Wird bei Verbindung synchronisiert.`, 'info');
-                                // Lokale Daten aktualisieren und Outbox-Eintrag erstellen
-                                await window.offlineDB.updateArticleScans(code, newScans);
-                                await window.offlineDB.addToOutbox({
-                                    type: 'UPDATE',
-                                    table: 'artikel',
-                                    key: code,
-                                    payload: { scans: newScans, client_id: window.currentClientId }, // <-- client_id in Payload
-                                    timestamp: new Date().toISOString()
-                                });
-                            } else {
-                                console.error("Zähler-Update Fehler:", e);
-                            }
-                        }
+                        
+                        // KEINE ZÄHLUNG MEHR HIER. Der Scan dient nur der Anzeige.
 
                     } else {
                         // Artikel nicht gefunden
@@ -1578,7 +1564,7 @@
                         name: name,
                         stellplatz: platz,
                         blocklager: block,
-                        scans: 1,
+                        scans: 1, // Wir setzen scans auf 1 als initialen Bestand
                         created_at: new Date().toISOString(),
                         client_id: window.currentClientId // <-- NEUE CLIENT-ID HINZUGEFÜGT
                     };
@@ -1799,6 +1785,102 @@
                     }
                 }
 
+                // --- MITARBEITER REGISTRIERUNG LOGIK (NEU) ---
+                
+                function showEmployeeRegisterPopup() {
+                    if (window.currentUserRole !== 'admin') {
+                        showToast("Keine Berechtigung zum Anlegen von Mitarbeitern.", 'error');
+                        return;
+                    }
+                    document.getElementById('employeeName').value = '';
+                    document.getElementById('employeePersonnelNumber').value = '';
+                    document.getElementById('employeeClientId').value = window.currentClientId;
+
+                    document.getElementById('employeeRegisterPopupOverlay').style.display = 'flex';
+                    setTimeout(() => document.getElementById('employeeRegisterPopupOverlay').classList.add('show'), 10);
+                }
+
+                function hideEmployeeRegisterPopup() {
+                    document.getElementById('employeeRegisterPopupOverlay').classList.remove('show');
+                    setTimeout(() => document.getElementById('employeeRegisterPopupOverlay').style.display = 'none', 300);
+                }
+
+                async function saveEmployee() {
+                    if (window.currentUserRole !== 'admin' || !window.currentClientId) {
+                        showToast("Fehler: Nicht als Admin angemeldet oder Mandantenzuweisung fehlt.", 'error');
+                        return;
+                    }
+                    
+                    const name = document.getElementById('employeeName').value.trim();
+                    const personalnummer = document.getElementById('employeePersonnelNumber').value.trim();
+                    const clientId = window.currentClientId;
+
+                    if (!name || !personalnummer) {
+                        showToast("Name und Personalnummer müssen ausgefüllt werden.", "error");
+                        return;
+                    }
+
+                    const newEmployee = {
+                        personalnummer: personalnummer,
+                        name: name,
+                        client_id: clientId,
+                        created_at: new Date().toISOString()
+                    };
+
+                    let success = false;
+                    let isOffline = !navigator.onLine;
+
+                    try {
+                        // 1. Online-Insert (ANNAHME: Tabelle 'employees' existiert)
+                        const { error } = await window.appSupabaseClient
+                            .from('employees') 
+                            .insert([newEmployee]);
+
+                        if (error) {
+                            if (error.message.includes('Failed to fetch')) {
+                                throw new Error("Offline");
+                            }
+                            if (error.code === '23505') { // Duplikat Key Error (personalnummer)
+                                showToast(`FEHLER: Personalnummer ${personalnummer} existiert bereits.`, "error");
+                                return;
+                            }
+                            showToast(`FEHLER beim Speichern des Mitarbeiters.`, "error");
+                            console.error("Speicherfehler Mitarbeiter:", error);
+                        } else {
+                            success = true;
+                            // Lokale DB direkt aktualisieren (falls online erfolgreich)
+                            await window.offlineDB.upsertData('employees', newEmployee);
+                        }
+
+                    } catch (e) {
+                        if (e.message === "Offline" || !navigator.onLine) {
+                            isOffline = true;
+                            // Lokale Daten aktualisieren und Outbox-Eintrag erstellen
+                            await window.offlineDB.upsertData('employees', newEmployee);
+                            await window.offlineDB.addToOutbox({
+                                type: 'INSERT',
+                                table: 'employees',
+                                key: personalnummer,
+                                payload: newEmployee, 
+                                timestamp: new Date().toISOString()
+                            });
+                            success = true;
+                        } else {
+                            console.error("Speicherfehler:", e);
+                        }
+                    }
+
+                    if (success) {
+                        const statusMessage = isOffline ? 
+                            `Mitarbeiter ${name} lokal registriert. Wird bei Verbindung synchronisiert.` : 
+                            `Mitarbeiter ${name} wurde erfolgreich registriert.`;
+                        showToast(statusMessage, isOffline ? "info" : "success");
+                        logAdminAction('EMPLOYEE_REGISTERED', `Neuer Mitarbeiter ${name} (PNr: ${personalnummer}) registriert.`);
+                        hideEmployeeRegisterPopup();
+                    }
+                }
+
+
                 // --- TAB & NAVIGATION LOGIK ---
 
                 function changeTab(tabId) {
@@ -1920,15 +2002,16 @@
                             listItem.setAttribute('data-role', 'admin-editable');
                         }
 
+                        // ANPASSUNG: Anzeige von Bestand (aus scans) statt Scans
                         const details = `
                             <div class="item-details" style="flex-grow: 1;">
                                 <strong>${article.name}</strong>
                                 <span>Platz: ${article.stellplatz} | Barcode: ${article.barcode}</span>
                             </div>
                             <div class="item-count">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
                                 <span>${article.scans || 0}</span>
-                                <span class="item-label">Scans</span>
+                                <span class="item-label">Bestand</span>
                             </div>
                         `;
                         listItem.innerHTML = details;
@@ -1972,8 +2055,6 @@
                         }
 
                         // Online: Lokalen Cache aktualisieren
-                        // FIX: Entferne den dritten Parameter 'created_at', um den DataError zu vermeiden.
-                        // Der Store audit_log hat 'keyPath: created_at' und benötigt keinen separaten Schlüssel.
                         await window.offlineDB.upsertData('audit_log', logEntry); 
 
                     } catch (e) {
@@ -2073,7 +2154,7 @@
                             color = 'var(--color-error-red)';
                         } else if (item.action_type.includes('REGISTERED') || item.action_type.includes('IMPORTED')) {
                             color = 'var(--color-accent-green)';
-                        } else if (item.action_type.includes('USER') || item.action_type.includes('ADMIN')) {
+                        } else if (item.action_type.includes('USER') || item.action_type.includes('ADMIN') || item.action_type.includes('EMPLOYEE')) { // employee hinzugefügt
                             color = 'var(--color-warning-yellow)';
                         }
 
@@ -2564,6 +2645,11 @@
                                     db.createObjectStore('audit_log', { keyPath: 'created_at' });
                                 }
 
+                                // Mitarbeiter-Speicher (Schlüssel: personalnummer) - NEU
+                                if (!db.objectStoreNames.contains('employees')) {
+                                    db.createObjectStore('employees', { keyPath: 'personalnummer' });
+                                }
+
                                 // Outbox für Offline-Änderungen (Schlüssel: Inkrementeller Index)
                                 if (!db.objectStoreNames.contains('outbox')) {
                                     const outboxStore = db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true });
@@ -2653,7 +2739,6 @@
                             
                             for (const data of dataArray) {
                                 // Verwenden Sie 'put' für Upsert, um bei vorhandenen Keys zu aktualisieren (z.B. bei Artikel oder Userrollen).
-                                // Bei 'audit_log' mit 'created_at' als KeyPath ist dies ebenfalls korrekt.
                                 store.put(data); 
                             }
 
@@ -2739,18 +2824,19 @@
                     window.addEventListener('online', syncData);
                 }
 
+                // Helferfunktion zur Bestimmung des Key-Feldes für die Supabase-Tabelle
+                const getKeyColumn = (tableName) => {
+                    if (tableName === 'user_roles') return 'id';
+                    if (tableName === 'employees') return 'personalnummer'; // NEU
+                    return 'barcode'; // Für 'artikel' und andere
+                };
+
                 async function syncData(isInitialSync = false) {
                     if (window.isSyncing) return;
                     if (!navigator.onLine) return;
 
                     // Nur synchronisieren, wenn ein Benutzer eingeloggt ist (Client-ID ist gesetzt)
-                    if (!window.currentClientId) { 
-                        // Ausnahme: Admin-Aktionen (USER_EDITED, etc.) haben keine Client-ID, 
-                        // aber user_roles und audit_log dürfen trotzdem synchronisiert werden.
-                        // Wir synchronisieren nur, wenn wir sicher sind, dass wir eine Rolle haben.
-                        if (!window.currentUserRole) return;
-                    }
-
+                    if (!window.currentUserRole) return;
 
                     window.isSyncing = true;
                     if (!isInitialSync) {
@@ -2770,9 +2856,9 @@
                         let successfulOperations = 0;
 
                         for (const op of operations) {
-                            // Wenn der Eintrag eine client_id im Payload hat (artikel, audit_log), muss sie mit der 
+                            // Wenn der Eintrag eine client_id im Payload hat (artikel, employees, audit_log), muss sie mit der 
                             // aktuellen Client-ID übereinstimmen. Nur 'user_roles' kann null sein (Admin).
-                            if (op.payload.client_id !== window.currentClientId && op.table !== 'user_roles') {
+                            if (op.payload.client_id !== window.currentClientId && op.payload.client_id !== null && op.table !== 'user_roles') { 
                                 console.warn(`Überspringe Outbox-Aktion für falschen Mandanten (${op.payload.client_id} != ${window.currentClientId}).`);
                                 await window.offlineDB.deleteData('outbox', op.id);
                                 continue;
@@ -2781,6 +2867,7 @@
                             try {
                                 const { type, table, key, payload } = op;
                                 let error;
+                                const keyColumn = getKeyColumn(table);
 
                                 // 1. Supabase Operation durchführen
                                 switch (type) {
@@ -2788,10 +2875,12 @@
                                         ({ error } = await window.appSupabaseClient.from(table).insert([payload]));
                                         break;
                                     case 'UPDATE':
-                                        ({ error } = await window.appSupabaseClient.from(table).update(payload).eq(table === 'user_roles' ? 'id' : 'barcode', key).eq('client_id', payload.client_id));
+                                        // Update muss client_id berücksichtigen (falls vorhanden) und den richtigen Schlüssel verwenden
+                                        ({ error } = await window.appSupabaseClient.from(table).update(payload).eq(keyColumn, key).eq('client_id', payload.client_id));
                                         break;
                                     case 'DELETE':
-                                        ({ error } = await window.appSupabaseClient.from(table).delete().eq(table === 'user_roles' ? 'id' : 'barcode', key).eq('client_id', payload.client_id));
+                                        // Delete muss client_id berücksichtigen (falls vorhanden) und den richtigen Schlüssel verwenden
+                                        ({ error } = await window.appSupabaseClient.from(table).delete().eq(keyColumn, key).eq('client_id', payload.client_id));
                                         break;
                                     default:
                                         console.warn(`Unbekannter Outbox-Typ: ${type}`);
