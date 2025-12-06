@@ -201,9 +201,9 @@
                     if (!db.objectStoreNames.contains('audit_log')) {
                         db.createObjectStore('audit_log', { keyPath: 'created_at' });
                     }
-                    // employees sollte 'personalnummer' als Key verwenden
+                    // employees sollte 'personnel_number' als Key verwenden
                     if (!db.objectStoreNames.contains('employees')) {
-                        db.createObjectStore('employees', { keyPath: 'personalnummer' });
+                        db.createObjectStore('employees', { keyPath: 'personnel_number' });
                     }
                     if (!db.objectStoreNames.contains('outbox')) {
                         db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true });
@@ -326,7 +326,7 @@
                 request.onerror = (e) => rej(e.target.error);
             }),
             
-            getEmployeeByPN: (personalnummer) => offlineDB.getData('employees', personalnummer),
+            getEmployeeByPN: (personnel_number) => offlineDB.getData('employees', personnel_number),
 
             // Outbox Funktionen
             addToOutbox: (operation) => new Promise((res, rej) => {
@@ -408,7 +408,7 @@
                                 case 'UPDATE_EMPLOYEE':
                                     apiCall = await window.appSupabaseClient.from(table)
                                         .update(payload)
-                                        .eq('personalnummer', key)
+                                        .eq('personnel_number', key)
                                         .eq('client_id', window.currentClientId);
                                     error = apiCall.error;
                                     break;
@@ -645,7 +645,7 @@
             let isEmployee = window.currentAuthMode === 'employee'; 
 
             if (isEmployee && window.companyEmailBase && userEmail) {
-                // Versuche, die Personalnummer aus der E-Mail zu extrahieren
+                // Versuche, die personnel_number aus der E-Mail zu extrahieren
                 personalNumber = userEmail.substring(0, userEmail.indexOf('@'));
             }
 
@@ -658,9 +658,9 @@
                 // 1. Online-Versuch: Mitarbeiter- und Client-Daten laden
                 const { data, error } = await window.appSupabaseClient
                     .from('employees')
-                    .select('id, name, personalnummer, role, is_active, client_id')
-                    // Suche entweder nach der Personalnummer (für Mitarbeiter) ODER der vollständigen E-Mail (für Admin)
-                    .or(`personalnummer.eq.${personalNumber}, email.eq.${userEmail}`) 
+                    .select('id, name, personnel_number, role, is_active, client_id')
+                    // Suche entweder nach der personnel_number (für Mitarbeiter) ODER der vollständigen E-Mail (für Admin)
+                    .or(`personnel_number.eq.${personalNumber}, email.eq.${userEmail}`) 
                     .single();
 
                 if (data) {
@@ -756,12 +756,12 @@
                         return;
                     }
                     
-                    // Sicherstellen, dass die Personalnummer als Basis für die E-Mail verwendet wird
+                    // Sicherstellen, dass die personnel_number als Basis für die E-Mail verwendet wird
                     fullEmail = `${personalNumber}@${finalEmailBase}`;
                     password = document.getElementById('authPassword').value;
                     
                     if (!personalNumber || !password) {
-                         document.getElementById("authError").innerText = "Bitte Personalnummer und Passwort angeben.";
+                         document.getElementById("authError").innerText = "Bitte personnel_number und Passwort angeben.";
                         return;
                     }
                     
@@ -1382,7 +1382,7 @@
 
                 if (searchTerm) {
                     const search = `%${searchTerm.toLowerCase()}%`;
-                    query = query.or(`name.ilike.${search},personalnummer.ilike.${search}`); 
+                    query = query.or(`name.ilike.${search},personnel_number.ilike.${search}`); 
                 }
 
                 const { data: employees, error } = await query.order('name', { ascending: true });
@@ -1399,8 +1399,8 @@
                 // Lokalen Cache aktualisieren
                 if (data.length > 0) {
                     await window.offlineDB.clearData('employees');
-                    // Der KeyPath ist hier 'personalnummer'
-                    await window.offlineDB.bulkInsertData('employees', data, 'personalnummer'); 
+                    // Der KeyPath ist hier 'personnel_number'
+                    await window.offlineDB.bulkInsertData('employees', data, 'personnel_number'); 
                 } else {
                     await window.offlineDB.clearData('employees');
                 }
@@ -1416,7 +1416,7 @@
                         if (item.client_id !== window.currentClientId) return false;
                         if (!searchTerm) return true;
                         const search = searchTerm.toLowerCase();
-                        return item.name.toLowerCase().includes(search) || item.personalnummer.toLowerCase().includes(search);
+                        return item.name.toLowerCase().includes(search) || item.personnel_number.toLowerCase().includes(search);
                     });
                 } catch (e) {
                     console.error("Lokaler Mitarbeiter-Ladefehler:", e);
@@ -1433,7 +1433,7 @@
 
             data.forEach(employee => {
                 const listItem = document.createElement('li');
-                listItem.setAttribute('data-personalnummer', employee.personalnummer);
+                listItem.setAttribute('data-personnel_number', employee.personnel_number);
                 listItem.setAttribute('data-role', 'admin-editable');
                 
                 listItem.onclick = () => showEmployeeEditPopup(employee);
@@ -1457,7 +1457,7 @@
                 listItem.innerHTML = `
                     <div class="item-details" style="flex-grow: 1;">
                         <strong>${employee.name}</strong>
-                        <span>PN: ${employee.personalnummer} | Rolle: ${statusText}</span>
+                        <span>PN: ${employee.personnel_number} | Rolle: ${statusText}</span>
                     </div>
                     <div class="user-edit-button">Bearbeiten</div>
                 `;
@@ -1822,7 +1822,7 @@
         function showEmployeeEditPopup(employeeData) {
             if (window.currentUserRole !== 'admin') return;
             window.employeeToEdit = employeeData;
-            document.getElementById('employeeEditPersonnelNumber').value = employeeData.personalnummer;
+            document.getElementById('employeeEditPersonnelNumber').value = employeeData.personnel_number;
             document.getElementById('employeeEditName').value = employeeData.name;
             document.getElementById('employeeEditRole').value = employeeData.role;
             document.getElementById('employeeEditActive').value = employeeData.is_active.toString();
@@ -1837,7 +1837,7 @@
         async function saveEmployeeEdit() {
             if (window.currentUserRole !== 'admin' || !window.employeeToEdit) return;
 
-            const personalnummer = window.employeeToEdit.personalnummer;
+            const personnel_number = window.employeeToEdit.personnel_number;
             const newName = document.getElementById('employeeEditName').value.trim();
             const newRole = document.getElementById('employeeEditRole').value;
             const newIsActive = document.getElementById('employeeEditActive').value === 'true';
@@ -1851,7 +1851,7 @@
                 const { error } = await window.appSupabaseClient
                     .from('employees')
                     .update(updatePayload)
-                    .eq('personalnummer', personalnummer)
+                    .eq('personnel_number', personnel_number)
                     .eq('client_id', window.currentClientId);
 
                 if (error) {
@@ -1873,7 +1873,7 @@
                     await window.offlineDB.addToOutbox({
                         type: 'UPDATE_EMPLOYEE',
                         table: 'employees',
-                        key: personalnummer,
+                        key: personnel_number,
                         payload: { ...updatePayload, client_id: window.currentClientId },
                         timestamp: new Date().toISOString()
                     });
@@ -1886,7 +1886,7 @@
             if (success) {
                 const statusMessage = isOffline ? `Mitarbeiter lokal geändert. Wird bei Verbindung synchronisiert.` : `Mitarbeiter erfolgreich geändert.`;
                 showToast(statusMessage, isOffline ? "info" : "success");
-                logAdminAction('EMPLOYEE_EDITED', `Mitarbeiter ${personalnummer} (${newName}) bearbeitet. Aktiv: ${newIsActive}.`);
+                logAdminAction('EMPLOYEE_EDITED', `Mitarbeiter ${personnel_number} (${newName}) bearbeitet. Aktiv: ${newIsActive}.`);
                 hideEmployeeEditPopup();
                 loadEmployeeList(document.getElementById('employeeSearchInput').value); // Liste aktualisieren
             }
@@ -2722,7 +2722,7 @@
         <form class="popup-card" onsubmit="event.preventDefault(); saveEmployeeEdit();">
             <h3>Mitarbeiter bearbeiten (Admin)</h3>
             <div class="input-group">
-                <label for="employeeEditPersonnelNumber">Personalnummer</label>
+                <label for="employeeEditPersonnelNumber">personnel_number</label>
                 <input type="text" id="employeeEditPersonnelNumber" readonly>
             </div>
             <div class="input-group">
@@ -2814,8 +2814,8 @@
             <button type="button" id="authModeToggle" onclick="toggleAuthMode()">Als Admin anmelden</button>
             
             <div class="input-group" id="personnelNumberGroup">
-                <label for="authPersonnelNumber">Personalnummer</label>
-                <input type="text" id="authPersonnelNumber" placeholder="Ihre Personalnummer" required>
+                <label for="authPersonnelNumber">personnel_number</label>
+                <input type="text" id="authPersonnelNumber" placeholder="Ihre personnel_number" required>
             </div>
 
             <div class="input-group" id="adminEmailGroup" style="display:none;">
@@ -2893,7 +2893,7 @@
             
             <div id="usersTab" class="tab-content">
                 <div class="search-container">
-                    <input type="text" id="employeeSearchInput" placeholder="Name oder Personalnummer suchen..." oninput="loadEmployeeList(this.value)">
+                    <input type="text" id="employeeSearchInput" placeholder="Name oder personnel_number suchen..." oninput="loadEmployeeList(this.value)">
                 </div>
                 <div class="list-content-container">
                     <ul id="userList">
