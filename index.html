@@ -671,14 +671,14 @@
                     .from('employees') 
                     .select('id, name, personnel_number, role, is_active') // client_id entfernt
                     .eq('id', user.id) 
-                    .single();
+                    .maybeSingle();
                 
                 // 2. Hole die client_id separat aus user_profiles
                 const { data: profileData, error: profileError } = await window.appSupabaseClient
                     .from('user_profiles')
                     .select('client_id')
                     .eq('user_id', user.id)
-                    .single();
+                    .maybeSingle();
 
                 let data = employeeData;
                 let error = employeeError;
