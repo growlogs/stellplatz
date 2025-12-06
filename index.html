@@ -189,7 +189,7 @@
         var offlineDB = {
             db: null,
             DB_NAME: 'InventarScannerDB',
-            DB_VERSION: 2,
+            DB_VERSION: 1,
             STORE_NAMES: ['inventar', 'audit_log', 'employees', 'outbox'],
 
             open: () => new Promise((res, rej) => {
@@ -643,7 +643,16 @@
 
         // KORRIGIERTE loadUserData: Lädt die Benutzerrolle und Client-ID nach erfolgreicher Auth
         async function loadUserData(authData) {
-            let user = authData.user || authData.session.user; // Session oder Response-Data
+            // FIX: Sicherstellen, dass auf authData.session nur zugegriffen wird, wenn es existiert, um den TypeError zu vermeiden
+            let user = authData.user || (authData.session ? authData.session.user : undefined); 
+            
+            if (!user) {
+                 console.error("loadUserData: Kein Benutzerobjekt in der Auth-Antwort gefunden.");
+                 showToast("Fehler: Benutzerdaten konnten nicht geladen werden.", 'error');
+                 await logout(true);
+                 throw new Error("Benutzerdaten fehlen.");
+            }
+            
             const userEmail = user.email;
             let personalNumber = null;
             let isEmployee = window.currentAuthMode === 'employee'; // Verwende den aktuellen Auth-Modus
@@ -799,7 +808,8 @@
                 }
                 
                 // 2. Benutzerdaten laden und globale Variablen setzen
-                await loadUserData(authResponse);
+                // authResponse.data enthält { user, session }
+                await loadUserData(authResponse.data); 
 
                 // 3. Ansicht wechseln und Sync starten
                 switchView('appView');
