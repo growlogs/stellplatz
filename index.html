@@ -87,7 +87,7 @@
                 navigator.vibrate(success ? 100 : [100, 50, 100]);
             }
             if (window.appSettings.sound) {
-                const audio = new Audio(success ? 'success.mp3' : 'error.mp3'); 
+                const audio = new Audio('success.mp3'); // Annahme: Existierende Sounddateien
                 audio.volume = window.appSettings.volume; 
                 audio.play().catch(e => console.log("Sound-Fehler:", e));
             }
@@ -189,7 +189,7 @@
         var offlineDB = {
             db: null,
             DB_NAME: 'InventarScannerDB',
-            DB_VERSION: 2,
+            DB_VERSION: 1,
             STORE_NAMES: ['inventar', 'audit_log', 'employees', 'outbox'],
 
             open: () => new Promise((res, rej) => {
@@ -471,11 +471,9 @@
             if (window.companyEmailBase) {
                 // E-Mail-Basis ist bekannt, Feld ausblenden
                 emailGroup.style.display = 'none';
-                document.getElementById('authCompanyEmail').removeAttribute('required');
                 document.getElementById('authCompanyEmail').value = window.companyEmailBase;
             } else {
                 // E-Mail-Basis ist unbekannt, Feld anzeigen
-                document.getElementById('authCompanyEmail').setAttribute('required', 'required');
                 document.getElementById('authCompanyEmail').value = '';
             }
 
@@ -498,12 +496,27 @@
             const registerToggle = document.getElementById('registerToggle');
             const authTitle = document.getElementById('authTitle');
 
+            // FIX: Input-Elemente für 'required'-Attribut-Management abrufen
+            const authPersonnelNumberInput = document.getElementById('authPersonnelNumber');
+            const authCompanyEmailInput = document.getElementById('authCompanyEmail');
+            const authAdminEmailInput = document.getElementById('authAdminEmail');
+            const authPasswordInput = document.getElementById('authPassword');
+
+
             // Admin-Modus
             if (!isEmployee) {
                 companyEmailGroup.style.display = 'none';
                 personnelNumberGroup.style.display = 'none';
                 adminEmailGroup.style.display = 'block';
                 authPasswordGroup.style.display = 'block';
+                
+                // FIX: 'required' für versteckte Felder entfernen (behebt "not focusable" Fehler)
+                if (authPersonnelNumberInput) authPersonnelNumberInput.removeAttribute('required');
+                if (authCompanyEmailInput) authCompanyEmailInput.removeAttribute('required');
+                
+                // Setze 'required' für sichtbare Felder
+                if (authAdminEmailInput) authAdminEmailInput.setAttribute('required', 'required');
+                if (authPasswordInput) authPasswordInput.setAttribute('required', 'required');
             } 
             // Mitarbeiter-Modus
             else {
@@ -511,11 +524,21 @@
                 adminEmailGroup.style.display = 'none';
                 authPasswordGroup.style.display = 'block';
 
+                // Setze 'required' für sichtbare Felder
+                if (authPersonnelNumberInput) authPersonnelNumberInput.setAttribute('required', 'required');
+                if (authAdminEmailInput) authAdminEmailInput.removeAttribute('required');
+                if (authPasswordInput) authPasswordInput.setAttribute('required', 'required');
+
+
                 // Firmen-E-Mail-Basis anzeigen, falls noch nicht gespeichert
                 if (window.companyEmailBase) {
                     companyEmailGroup.style.display = 'none';
+                    // FIX: required entfernen, wenn hidden
+                    if (authCompanyEmailInput) authCompanyEmailInput.removeAttribute('required');
                 } else {
                     companyEmailGroup.style.display = 'block';
+                    // FIX: required setzen, wenn sichtbar
+                    if (authCompanyEmailInput) authCompanyEmailInput.setAttribute('required', 'required');
                 }
             }
 
@@ -658,7 +681,7 @@
                     employeeName = data.name;
                     
                     // Lokalen Cache aktualisieren
-                    await window.offlineDB.upsertData('employees', data); 
+                    await window.offlineDB.upsertData('employees', data, 'personnel_number'); 
                 } else if (error) {
                     if (error.message.includes('Failed to fetch')) {
                         throw new Error("Offline"); // Gehe zum Offline-Fallback
@@ -873,23 +896,17 @@
         async function onScanSuccess(decodedText, decodedResult) {
             if (decodedText === window.lastCode) return;
             window.lastCode = decodedText;
+            playFeedback(true); // Positives Feedback
+            await processBarcode(decodedText); 
 
-            // Stop scanner to prevent continuous scanning of the same code
-            await stopScanner();
-            
-            // Play sound/vibrate feedback
-            playFeedback(true); 
-
-            // Process the scanned code
-            await processBarcode(decodedText);
-
-            // Re-start scanner after a delay (e.g., 2 seconds) to allow user to react
-            setTimeout(activateCamera, 2000);
+            // Timeout, um nicht jeden Frame erneut zu verarbeiten
+            setTimeout(() => {
+                window.lastCode = "";
+            }, 1500);
         }
 
         function onScanError(errorMessage) {
-            // Hier können Sie Fehlerbehandlung implementieren, z.B. wenn kein Code gefunden wird
-            // console.warn(`Code scan error: ${errorMessage}`);
+            // console.warn(`Scanner Error: ${errorMessage}`);
         }
 
         async function stopScanner() {
@@ -898,36 +915,36 @@
                     await html5QrCode.stop();
                     document.getElementById("preScan").style.display = "flex";
                     document.getElementById("scanFrame").style.display = "none";
-                    window.lastCode = ""; // Reset last scanned code
-                    return true;
-                } catch (err) {
-                    console.error("Scanner Stop Fehler:", err);
-                    return false;
+                    html5QrCode = null;
+                    window.lastCode = ""; // Code-Caching zurücksetzen
+                } catch (e) {
+                    // Scanner war vielleicht schon gestoppt
+                    console.warn("Scanner Stop Fehler:", e);
                 }
             }
-            return false;
         }
 
+
+        /* --- INVENTAR LOGIK --- */
+
+        // Verarbeitet den gescannten Barcode
         async function processBarcode(code) {
-            if (!code || !window.currentClientId) return;
-            
-            // UI Reset
-            document.getElementById('result-card').classList.remove('active');
-            
-            // Status-Icon und Text
+            const resultCard = document.getElementById('result-card');
             const titleText = document.getElementById('result-title');
             const statusIcon = document.getElementById('result-status-icon');
-            const detailText = document.getElementById('result-details');
-            const resultCard = document.getElementById('result-card');
-            const actionButtonGroup = resultCard.querySelector('.action-button-group');
+            const detailsList = document.getElementById('result-details');
+            
+            // Entferne alte Action Button Groups, falls vorhanden
+            resultCard.querySelectorAll('.action-button-group').forEach(el => el.remove());
 
-            titleText.innerText = "Suche läuft...";
+            // Ergebnis-Card vorbereiten
+            titleText.innerText = "Suche...";
             statusIcon.innerHTML = "⏳";
-            statusIcon.style.color = "var(--color-info-blue)";
-            detailText.innerHTML = `<p class="scan-code-display">Code: <strong>${code}</strong>...</p>`;
-            if (actionButtonGroup) actionButtonGroup.remove();
+            statusIcon.style.color = "var(--color-accent-blue)";
+            detailsList.innerHTML = `<p style="margin-top: 10px; opacity: 0.8;">Suche nach Artikel <strong>${code}</strong>...</p>`;
+            
             resultCard.classList.add('active');
-
+            
             let data = null;
             let isOffline = !navigator.onLine;
 
@@ -978,154 +995,70 @@
                 }
             }
 
-
             // --- DARSTELLUNG DER ERGEBNISSE ---
-
             if (data) {
                 // Artikel gefunden
                 window.articleToEdit = data; // Artikel für Admin-Edit speichern
-
                 titleText.innerText = data.name;
                 statusIcon.innerHTML = "✅";
                 statusIcon.style.color = "var(--color-accent-green)";
-                detailText.innerHTML = `
-                    <p class="scan-code-display">Code: <strong>${data.barcode}</strong></p>
-                    <p class="scan-location-display">Ort: <strong>${data.location || 'N/A'}</strong></p>
-                    <div class="result-quantity-box">
-                        <span>BESTAND:</span>
-                        <strong>${data.quantity || 0}</strong>
-                    </div>
+
+                let quantityDisplay = `<p>Verfügbarer Bestand: <strong>${data.quantity || 0}</strong></p>`;
+                
+                detailsList.innerHTML = `
+                    <p>Barcode: <strong>${data.barcode}</strong></p>
+                    <p>Lagerort: <strong>${data.location || 'N/A'}</strong></p>
+                    ${quantityDisplay}
                 `;
 
-                // Buttons (Mitarbeiter/Admin-Logik)
-                let buttons = '';
-                if (window.currentUserRole === 'user') {
-                    // Mitarbeiter: Zähler-Buttons (nur wenn Bestand > 0)
+                // Aktions-Buttons anzeigen, basierend auf der Rolle
+                let buttons = "";
+                if (window.currentUserRole === 'admin') {
+                    // Admin-Buttons
                     buttons = `
-                        <button class="action-button minus" onclick="updateQuantity('${data.barcode}', ${data.quantity || 0}, -1)">-1</button>
-                        <button class="action-button plus" onclick="updateQuantity('${data.barcode}', ${data.quantity || 0}, +1)">+1</button>
+                        <button class="action-button edit" onclick="showAdminEditPopup(window.articleToEdit)">Lagerort/Details</button>
+                        <button class="action-button plus" onclick="updateQuantity('${data.barcode}', ${data.quantity || 0}, 1)">+1 Bestand</button>
+                        <button class="action-button minus" onclick="updateQuantity('${data.barcode}', ${data.quantity || 0}, -1)">-1 Bestand</button>
                     `;
-                } else if (window.currentUserRole === 'admin') {
-                    // Admin: Edit-Button
-                    buttons = `<button class="action-button edit" onclick="showAdminEditPopup(window.articleToEdit)">Bearbeiten</button>`;
+                } else if (window.currentUserRole === 'user') {
+                    // Mitarbeiter-Buttons (falls nötig, z.B. nur Info)
+                    buttons = `
+                        <button class="action-button info">Info: OK</button>
+                    `;
                 }
                 
                 if (buttons) {
-                    resultCard.innerHTML += `<div class="action-button-group">${buttons}</div>`;
+                    // NEU: Füge Action-Buttons als separate Gruppe hinzu
+                    const actionButtonGroup = document.createElement('div');
+                    actionButtonGroup.classList.add('action-button-group');
+                    actionButtonGroup.innerHTML = buttons;
+                    resultCard.appendChild(actionButtonGroup);
                 }
-
+                
             } else {
                 // Artikel nicht gefunden
+                window.articleToEdit = null;
                 titleText.innerText = "Artikel nicht gefunden";
                 statusIcon.innerHTML = "❌";
                 statusIcon.style.color = "var(--color-error-red)";
-                detailText.innerHTML = `<p class="scan-code-display">Code: <strong>${code}</strong></p><p>Dieser Barcode existiert nicht im Inventar.</p>`;
+                detailsList.innerHTML = `<p style="margin-top: 10px; opacity: 0.8;">Kein Inventareintrag für <strong>${code}</strong> gefunden.</p>`;
+                playFeedback(false); // Negatives Feedback
 
-                // Admin: Registrieren-Button
+                // Registrieren Button für Admin
                 if (window.currentUserRole === 'admin') {
-                    const buttons = `<button class="action-button register" onclick="showPopup('${code}')">Neu registrieren</button>`;
-                    resultCard.innerHTML += `<div class="action-button-group">${buttons}</div>`;
-                } else {
-                    playFeedback(false);
+                    const actionButtonGroup = document.createElement('div');
+                    actionButtonGroup.classList.add('action-button-group');
+                    actionButtonGroup.innerHTML = `<button class="action-button register" onclick="showPopup('${code}')">Artikel registrieren</button>`;
+                    resultCard.appendChild(actionButtonGroup);
                 }
             }
         }
-
-
-        // Zeigt das Registrierungs-Popup
-        function showPopup(barcode = '') {
-            if (window.currentUserRole !== 'admin') return;
-            document.getElementById('popupBarcode').value = barcode;
-            document.getElementById('popupBaseName').value = '';
-            document.getElementById('popupLocation').value = '';
-            document.getElementById('popupOverlay').classList.add('show');
-        }
-
-        // Versteckt das Registrierungs-Popup
-        function hidePopup() {
-            document.getElementById('popupOverlay').classList.remove('show');
-        }
-
-        // Registriert einen neuen Artikel
-        async function saveArticle() {
-            if (window.currentUserRole !== 'admin') return;
-
-            const barcode = document.getElementById('popupBarcode').value.trim();
-            const name = document.getElementById('popupBaseName').value.trim();
-            const location = document.getElementById('popupLocation').value.trim();
-
-            if (!barcode || !name || !location) {
-                showToast("Bitte alle Felder ausfüllen.", 'error');
-                return;
-            }
-
-            const newArticle = {
-                barcode: barcode,
-                name: name,
-                location: location,
-                quantity: 0, // Startet mit 0
-                client_id: window.currentClientId
-            };
-
-            let success = false;
-            let isOffline = !navigator.onLine;
-
-            try {
-                // 1. Online-Versuch
-                const { error } = await window.appSupabaseClient
-                    .from('inventar')
-                    .insert([newArticle]);
-
-                if (error) {
-                    if (error.message.includes('Failed to fetch')) {
-                        throw new Error("Offline");
-                    }
-                    showToast(`FEHLER beim Registrieren: ${error.message.substring(0, 50)}...`, "error");
-                    console.error("Speicherfehler:", error);
-                } else {
-                    success = true;
-                    // Lokalen Cache aktualisieren
-                    await window.offlineDB.upsertData('inventar', newArticle);
-                }
-            } catch (e) {
-                if (e.message === "Offline" || !navigator.onLine) {
-                    isOffline = true;
-                    // 2. Offline-Fallback: Lokales Speichern und zur Outbox hinzufügen
-                    await window.offlineDB.upsertData('inventar', newArticle);
-                    await window.offlineDB.addToOutbox({
-                        type: 'INSERT',
-                        table: 'inventar',
-                        key: barcode,
-                        payload: newArticle,
-                        timestamp: new Date().toISOString()
-                    });
-                    success = true;
-                } else {
-                    console.error("Speicherfehler:", e);
-                }
-            }
-
-            if (success) {
-                const statusMessage = isOffline ? `Artikel lokal registriert. Wird bei Verbindung synchronisiert.` : `Artikel "${name}" wurde erfolgreich registriert.`;
-                showToast(statusMessage, isOffline ? "info" : "success");
-                logAdminAction('ARTICLE_REGISTERED', `Neuer Artikel "${name}" (Barcode: ${barcode}) registriert.`);
-                hidePopup();
-                hideResultCard();
-                loadArticleList(document.getElementById('articleSearchInput').value); // Liste aktualisieren
-            }
-        }
-
 
         function hideResultCard() {
             document.getElementById('result-card').classList.remove('active');
             // Alle dynamisch hinzugefügten Action Groups entfernen
             const card = document.getElementById('result-card');
-            card.querySelectorAll('.action-button-group').forEach((group, index) => {
-                // Nur Gruppen entfernen, die dynamisch nach der ersten (im HTML fest verdrahteten) hinzugefügt werden
-                if (index > 0) {
-                    group.remove();
-                }
-            });
+            card.querySelectorAll('.action-button-group').forEach(group => group.remove());
         }
 
         // Aktualisiert die Bestandsmenge
@@ -1168,130 +1101,52 @@
                         type: 'INCREMENT_QUANTITY',
                         table: 'inventar',
                         key: code,
-                        payload: updatePayload, // Enthält nur die neue Menge
+                        payload: updatePayload, // Enthält die neue Menge
                         timestamp: new Date().toISOString()
                     });
-                    // Lokalen Bestand sofort aktualisieren
+                    // Lokale DB direkt aktualisieren
                     await window.offlineDB.updateArticleQuantity(code, newQuantity);
-                    showToast(`Bestand lokal aktualisiert: ${newQuantity}. Wird bei Verbindung synchronisiert.`, 'info', 7000);
+                    showToast(`Bestand lokal auf ${newQuantity} gesetzt. Wird bei Verbindung synchronisiert.`, 'warning');
+                    logAdminAction('INVENTORY_UPDATE_OFFLINE', `Bestand von ${code} lokal auf ${newQuantity} geändert (${change > 0 ? '+' : ''}${change}).`);
+
                 } else {
-                    console.error("Fehler im Update-Prozess:", e);
-                    showToast(`FEHLER: Bestand konnte nicht aktualisiert werden.`, "error");
+                    console.error("Unbekannter Zähler-Fehler:", e);
+                    showToast(`FEHLER beim Aktualisieren des Bestands.`, "error");
                 }
             }
-
-            // UI auf Scanner-Tab aktualisieren
-            if (window.currentTabId === 'scannerTab' && window.lastCode === code) {
-                // Aktualisiere die Result-Card ohne erneute DB-Abfrage
-                document.querySelector('.result-quantity-box strong').innerText = newQuantity;
-                // Aktiviere ggf. den Minus-Button, wenn von 0 auf 1 gewechselt wird
-                const minusButton = document.querySelector('.action-button.minus');
-                if (minusButton) {
-                    minusButton.setAttribute('onclick', `updateQuantity('${code}', ${newQuantity}, -1)`);
-                }
-                const plusButton = document.querySelector('.action-button.plus');
-                if (plusButton) {
-                    plusButton.setAttribute('onclick', `updateQuantity('${code}', ${newQuantity}, +1)`);
-                }
+            
+            // UI aktualisieren: Result-Card und Artikelliste
+            if (window.currentTabId === 'scannerTab') {
+                // Aktuelle Result Card aktualisieren
+                await processBarcode(code); 
+            } else if (window.currentTabId === 'listTab') {
+                // Artikelliste aktualisieren
+                loadArticleList(document.getElementById('articleSearchInput').value);
             }
         }
 
-        // Manuelle Eingabe des Standorts speichern
-        async function saveManualLocation() {
-            const code = window.lastCode;
-            const newLocation = document.getElementById('manualLocationInput').value.trim();
+        /* --- UI & NAVIGATION --- */
 
-            if (!code || !newLocation) {
-                showToast("Bitte einen Code scannen und einen Standort eingeben.", 'error');
-                return;
-            }
-
-            // Annahme: Standortänderung erfordert Admin-Rolle ODER ist für alle erlaubt (hier Admin-Check weggelassen, aber Logik folgt der updateQuantity Logik)
-            
-            let isOffline = !navigator.onLine;
-            const updatePayload = { location: newLocation };
-            let oldLocation = window.articleToEdit ? window.articleToEdit.location : 'N/A';
-            
-            try {
-                // 1. Online-Update
-                const { error } = await window.appSupabaseClient
-                    .from('inventar') 
-                    .update(updatePayload)
-                    .eq('barcode', code)
-                    .eq('client_id', window.currentClientId);
-
-                if (error) {
-                    if (error.message.includes('Failed to fetch')) {
-                        throw new Error("Offline");
-                    }
-                    console.error("Fehler beim Standort-Update:", error);
-                    showToast(`FEHLER beim Aktualisieren des Standorts.`, "error");
-                } else if (!isOffline) {
-                    // Lokale DB direkt aktualisieren (falls online erfolgreich)
-                    await window.offlineDB.updateArticleLocation(code, newLocation);
-                }
-
-            } catch (e) {
-                if (e.message === "Offline" || !navigator.onLine) {
-                    isOffline = true;
-                    // Outbox-Eintrag erstellen: Update ist hier komplexer, da es ein Location-Update ist
-                    await window.offlineDB.addToOutbox({
-                        type: 'UPDATE', // Generisches Update
-                        table: 'inventar',
-                        key: code,
-                        payload: updatePayload, 
-                        timestamp: new Date().toISOString()
-                    });
-                    // Lokalen Standort sofort aktualisieren
-                    await window.offlineDB.updateArticleLocation(code, newLocation);
-                } else {
-                    console.error("Fehler im Update-Prozess:", e);
-                    showToast(`FEHLER: Standort konnte nicht aktualisiert werden.`, "error");
-                    return; // Abbruch bei unlösbarem Fehler
-                }
-            }
-            
-            // Erfolg
-            const statusMessage = isOffline ? `Standort lokal aktualisiert. Wird bei Verbindung synchronisiert.` : `Standort erfolgreich aktualisiert.`;
-            showToast(statusMessage, isOffline ? "info" : "success");
-            logAdminAction('LOCATION_UPDATE', `Standort von ${code} auf ${newLocation} geändert.`);
-
-            // UI auf Scanner-Tab aktualisieren (Artikel erneut laden, um alle Details zu aktualisieren)
-            await processBarcode(code);
-        }
-
-
-        /* --- NAVIGATION & LISTENANSICHTEN --- */
-
-        // Aktualisiert die Sichtbarkeit der Navigationsleiste und Tabs
+        // Aktualisiert die Sichtbarkeit der Navigationselemente
         function updateNavBar() {
-            const nav = document.querySelector('footer');
-            const adminTabs = document.querySelectorAll('.nav-item.admin-only');
-            const userTabs = document.querySelectorAll('.nav-item.user-only');
-            const allTabs = document.querySelectorAll('.nav-item');
+            const isAdmin = window.currentUserRole === 'admin';
             
-            // Zeige Footer nur in der App-Ansicht
-            if (document.getElementById('appView').classList.contains('active')) {
-                nav.style.display = 'flex';
-            } else {
-                nav.style.display = 'none';
-            }
+            // Alle Nav-Items
+            document.querySelectorAll('.nav-item').forEach(item => {
+                const tabId = item.dataset.tab;
+                
+                // Admin-spezifische Tabs ausblenden, falls kein Admin
+                if (['logTab', 'usersTab'].includes(tabId)) {
+                    item.style.display = isAdmin ? 'flex' : 'none';
+                } else {
+                    item.style.display = 'flex';
+                }
 
-            // Tabs anzeigen/ausblenden basierend auf der Rolle
-            adminTabs.forEach(item => {
-                item.style.display = (window.currentUserRole === 'admin') ? 'flex' : 'none';
-            });
-            
-            // Default ist 'flex' für alle, außer die Rolle ist bekannt und nicht 'user'
-            userTabs.forEach(item => {
-                item.style.display = (window.currentUserRole === 'user' || window.currentUserRole === 'admin') ? 'flex' : 'none';
-            });
-
-            // Aktiven Tab hervorheben
-            allTabs.forEach(item => {
-                item.classList.remove('active');
-                if (item.getAttribute('onclick').includes(window.currentTabId)) {
+                // Aktiven Zustand setzen
+                if (tabId === window.currentTabId) {
                     item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
                 }
             });
 
@@ -1334,7 +1189,7 @@
 
         // Lädt die Artikelliste für die Inventaransicht
         async function loadArticleList(searchTerm = '') {
-            if (!window.currentClientId) return;
+            if (!window.currentClientId) return; 
 
             const articleListContainer = document.getElementById('articleList');
             articleListContainer.innerHTML = '<li style="text-align: center; border: none; background: transparent; padding: 20px;">Lade Inventar...</li>';
@@ -1362,16 +1217,17 @@
                     }
                     throw error;
                 }
+                
                 data = articles;
 
                 // Bei Erfolg: Lokalen Cache aktualisieren
                 if (data.length > 0) {
-                    await window.offlineDB.clearData('inventar'); 
-                    await window.offlineDB.bulkInsertData('inventar', data);
+                     await window.offlineDB.clearData('inventar');
+                     await window.offlineDB.bulkInsertData('inventar', data);
                 } else {
                     await window.offlineDB.clearData('inventar');
                 }
-                
+
             } catch (error) {
                 isOffline = true;
                 showToast("Netzwerkfehler. Zeige lokales Inventar...", 'info');
@@ -1383,37 +1239,34 @@
                         if (item.client_id !== window.currentClientId) return false;
                         if (!searchTerm) return true;
                         const search = searchTerm.toLowerCase();
-                        return item.name.toLowerCase().includes(search) || 
-                               item.barcode.toLowerCase().includes(search) ||
-                               item.location.toLowerCase().includes(search);
+                        return item.name.toLowerCase().includes(search) || item.barcode.toLowerCase().includes(search) || (item.location && item.location.toLowerCase().includes(search));
                     });
                 } catch (e) {
-                    console.error("Lokaler Artikel-Ladefehler:", e);
+                    console.error("Lokaler Ladefehler:", e);
                     articleListContainer.innerHTML = '<li style="text-align: center; color: var(--color-error-red); border: none; background: transparent; padding: 20px;">Fehler beim Laden der lokalen Daten.</li>';
                     return;
                 }
             }
-            
-            // Darstellung der Artikelliste
-            articleListContainer.innerHTML = ''; // Leere den Container
+
+            articleListContainer.innerHTML = ''; // Container leeren
             
             if (data.length === 0) {
-                articleListContainer.innerHTML = '<li style="text-align: center; border: none; background: transparent; padding: 20px;">Keine Artikel gefunden.</li>';
+                articleListContainer.innerHTML = '<li style="text-align: center; border: none; background: transparent; padding: 20px;">Keine Artikel im Inventar gefunden.</li>';
                 return;
             }
 
             data.forEach(article => {
                 const listItem = document.createElement('li');
-                listItem.classList.add('list-item');
+                listItem.classList.add('article-item');
+                // Admin kann Artikel über Klick bearbeiten
                 if (window.currentUserRole === 'admin') {
-                     listItem.onclick = () => showAdminEditPopup(article); // Admin kann bearbeiten
+                    listItem.onclick = () => showAdminEditPopup(article); 
                 }
 
                 listItem.innerHTML = `
                     <div class="item-details">
                         <span class="item-name">${article.name}</span>
-                        <span class="item-barcode">Barcode: ${article.barcode}</span>
-                        <span class="item-location">Ort: ${article.location || 'N/A'}</span>
+                        <span class="item-meta">Barcode: ${article.barcode} | Ort: ${article.location || 'N/A'}</span>
                     </div>
                     <div class="item-count" style="border: 2px solid var(--color-accent-blue); border-radius: 8px;">
                         <span style="font-size: 1.4rem; font-weight: 700; color: var(--color-accent-blue); line-height: 1;">${article.quantity || 0}</span>
@@ -1426,11 +1279,11 @@
 
         // Lädt das Audit-Logbuch
         async function loadLogList(searchTerm = '') {
-            if (!window.currentClientId || window.currentUserRole !== 'admin') return;
+            if (!window.currentClientId || window.currentUserRole !== 'admin') return; 
 
             const logListContainer = document.getElementById('logList');
             logListContainer.innerHTML = '<li style="text-align: center; border: none; background: transparent; padding: 20px;">Lade Logbuch...</li>';
-
+            
             let logData = [];
             let isOffline = !navigator.onLine;
 
@@ -1454,44 +1307,31 @@
                     }
                     throw error;
                 }
+                
                 logData = log;
                 
                 // Lokalen Cache aktualisieren
                 if (logData.length > 0) {
-                    await window.offlineDB.clearData('audit_log'); 
-                    // Der KeyPath ist hier 'created_at'
+                    await window.offlineDB.clearData('audit_log'); // Der KeyPath ist hier 'created_at'
                     await window.offlineDB.bulkInsertData('audit_log', logData, 'created_at');
                 } else {
                     await window.offlineDB.clearData('audit_log');
                 }
-                
+
             } catch (error) {
                 isOffline = true;
                 showToast("Netzwerkfehler. Zeige lokales Logbuch...", 'info');
 
                 // 2. Offline-Fallback (IndexedDB)
                 try {
-                    const localData = await window.offlineDB.getAllArticles('audit_log'); // NOTE: getAllArticles ist falsch, sollte getAllData für 'audit_log' sein.
-                    // Annahme: getAllData(storeName) existiert oder die Logik wird innerhalb des DB-Wrappers behandelt.
-                    const transaction = window.offlineDB.db.transaction(['audit_log'], 'readonly');
-                    const store = transaction.objectStore('audit_log');
-                    const request = store.getAll();
-                    
-                    await new Promise((res, rej) => {
-                        request.onsuccess = (event) => {
-                            logData = event.target.result;
-                            logData = logData.filter(item => {
-                                if (item.client_id !== window.currentClientId) return false;
-                                if (!searchTerm) return true;
-                                const search = searchTerm.toLowerCase();
-                                return item.description.toLowerCase().includes(search) || 
-                                       item.action_type.toLowerCase().includes(search);
-                            });
-                            logData.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // Sortieren nach neuestem zuerst
-                            res();
-                        };
-                        request.onerror = (e) => rej(e.target.error);
-                    });
+                    // Lokales Logbuch (audit_log store) lesen
+                    const localLog = await window.offlineDB.getAllArticles('audit_log'); 
+                    logData = localLog.filter(item => {
+                        if (item.client_id !== window.currentClientId) return false;
+                        if (!searchTerm) return true;
+                        const search = searchTerm.toLowerCase();
+                        return item.description.toLowerCase().includes(search) || item.action_type.toLowerCase().includes(search);
+                    }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
                 } catch (e) {
                     console.error("Lokaler Log-Ladefehler:", e);
@@ -1500,25 +1340,26 @@
                 }
             }
             
-            // Darstellung der Log-Liste
-            logListContainer.innerHTML = '';
+            logListContainer.innerHTML = ''; // Container leeren
             
             if (logData.length === 0) {
                 logListContainer.innerHTML = '<li style="text-align: center; border: none; background: transparent; padding: 20px;">Keine Log-Einträge gefunden.</li>';
                 return;
             }
-            
+
             logData.forEach(log => {
                 const listItem = document.createElement('li');
-                listItem.classList.add('list-item', 'log-item');
-                
-                const date = new Date(log.created_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+                listItem.classList.add('log-item');
+
+                const date = new Date(log.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
                 
                 listItem.innerHTML = `
                     <div class="item-details">
-                        <span class="log-date">${date}</span>
-                        <span class="log-type">${log.action_type}</span>
-                        <span class="log-description">${log.description}</span>
+                        <span class="item-name">${log.action_type}</span>
+                        <span class="item-meta">${log.description}</span>
+                    </div>
+                    <div class="item-count" style="border: 2px solid var(--color-border); border-radius: 8px;">
+                        <span class="item-label">${date}</span>
                     </div>
                 `;
                 logListContainer.appendChild(listItem);
@@ -1531,7 +1372,7 @@
 
             const employeeListContainer = document.getElementById('employeeList');
             employeeListContainer.innerHTML = '<li style="text-align: center; border: none; background: transparent; padding: 20px;">Lade Mitarbeiter...</li>';
-
+            
             let data = [];
             let isOffline = !navigator.onLine;
 
@@ -1539,7 +1380,7 @@
                 // 1. Online-Versuch
                 let query = window.appSupabaseClient
                     .from('employees')
-                    .select('*')
+                    .select('id, name, personnel_number, role, is_active, client_id')
                     .eq('client_id', window.currentClientId);
 
                 if (searchTerm) {
@@ -1555,17 +1396,17 @@
                     }
                     throw error;
                 }
+                
                 data = employees;
-
+                
                 // Lokalen Cache aktualisieren
                 if (data.length > 0) {
-                    await window.offlineDB.clearData('employees'); 
-                    // Der KeyPath ist hier 'personnel_number'
+                    await window.offlineDB.clearData('employees'); // Der KeyPath ist hier 'personnel_number'
                     await window.offlineDB.bulkInsertData('employees', data, 'personnel_number');
                 } else {
                     await window.offlineDB.clearData('employees');
                 }
-                
+
             } catch (error) {
                 isOffline = true;
                 showToast("Netzwerkfehler. Zeige lokale Mitarbeiter...", 'info');
@@ -1585,9 +1426,8 @@
                     return;
                 }
             }
-            
-            // Darstellung der Mitarbeiterliste
-            employeeListContainer.innerHTML = '';
+
+            employeeListContainer.innerHTML = ''; // Container leeren
 
             if (data.length === 0) {
                 employeeListContainer.innerHTML = '<li style="text-align: center; border: none; background: transparent; padding: 20px;">Keine Mitarbeiter gefunden.</li>';
@@ -1596,173 +1436,113 @@
 
             data.forEach(employee => {
                 const listItem = document.createElement('li');
-                listItem.classList.add('list-item', 'employee-item');
-                listItem.onclick = () => showEmployeeEditPopup(employee); 
-
-                const isActiveClass = employee.is_active ? 'active' : 'inactive';
+                listItem.classList.add('employee-item');
+                // Admin kann Mitarbeiter über Klick bearbeiten
+                if (window.currentUserRole === 'admin') {
+                    listItem.onclick = () => showEmployeeEditPopup(employee); 
+                }
                 
+                const statusColor = employee.is_active ? 'var(--color-accent-green)' : 'var(--color-error-red)';
+                const statusText = employee.is_active ? 'Aktiv' : 'Gesperrt';
+
                 listItem.innerHTML = `
                     <div class="item-details">
                         <span class="item-name">${employee.name}</span>
-                        <span class="item-barcode">PN: ${employee.personnel_number}</span>
-                        <span class="item-location">Rolle: ${employee.role}</span>
+                        <span class="item-meta">PN: ${employee.personnel_number} | Rolle: ${employee.role}</span>
                     </div>
-                    <div class="employee-status ${isActiveClass}">
-                        <span>${employee.is_active ? 'AKTIV' : 'GESPERRT'}</span>
+                    <div class="item-count" style="border: 2px solid ${statusColor}; border-radius: 8px; margin-left: 10px;">
+                        <span class="item-label" style="color: ${statusColor}; font-weight: 700;">${statusText}</span>
                     </div>
                 `;
                 employeeListContainer.appendChild(listItem);
             });
         }
-
-        /* --- IMPORTER LOGIK --- */
         
-        // CSV-Parser (Einfach, nur für Barcode, Name, Location, Quantity)
-        function parseCSV(csvText) {
-            const lines = csvText.split('\n');
-            if (lines.length === 0) return [];
-            
-            const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''));
-            const requiredFields = ['barcode', 'name', 'location'];
-            
-            const headerMap = {};
-            requiredFields.forEach(field => {
-                const index = header.indexOf(field);
-                if (index !== -1) {
-                    headerMap[field] = index;
-                }
-            });
-            
-            // Stellen Sie sicher, dass alle benötigten Felder gefunden wurden
-            if (Object.keys(headerMap).length < requiredFields.length) {
-                showToast("CSV-Header fehlerhaft. Benötigt: barcode, name, location.", 'error', 5000);
-                return [];
-            }
+        /* --- POPUPS & ADMIN FUNKTIONEN --- */
 
-            const data = [];
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                
-                const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-                
-                if (values.length < header.length) continue; // Überspringe unvollständige Zeilen
-                
-                const obj = {};
-                obj.client_id = window.currentClientId; // Client ID hinzufügen
-                
-                // Mappe die Werte basierend auf dem Header
-                if (headerMap['barcode'] !== undefined) obj.barcode = values[headerMap['barcode']];
-                if (headerMap['name'] !== undefined) obj.name = values[headerMap['name']];
-                if (headerMap['location'] !== undefined) obj.location = values[headerMap['location']];
-                
-                // Optional: Quantity
-                const quantityIndex = header.indexOf('quantity');
-                if (quantityIndex !== -1) obj.quantity = values[quantityIndex];
-                
-                if (obj.quantity) {
-                    obj.quantity = parseInt(obj.quantity) || 0;
-                }
-                
-                if (obj.barcode && obj.name) {
-                    // Nur Artikel mit Barcode und Name importieren
-                    data.push(obj);
-                }
-            }
-            return data;
+        // --- Artikel Registrieren Popup ---
+        function showPopup(barcode) {
+            if (window.currentUserRole !== 'admin') return;
+            document.getElementById('popupBarcode').value = barcode;
+            document.getElementById('popupBaseName').value = '';
+            document.getElementById('popupLocation').value = '';
+            document.getElementById('popupOverlay').classList.add('show');
         }
 
+        function hidePopup() {
+            document.getElementById('popupOverlay').classList.remove('show');
+        }
 
-        async function handleImport() {
+        // Speichert einen neuen Artikel
+        async function saveArticle() {
             if (window.currentUserRole !== 'admin') return;
+            const barcode = document.getElementById('popupBarcode').value;
+            const name = document.getElementById('popupBaseName').value.trim();
+            const location = document.getElementById('popupLocation').value.trim();
 
-            const fileInput = document.getElementById('csvFileInput');
-            if (!fileInput.files.length) {
-                showToast("Bitte wählen Sie eine CSV-Datei aus.", 'error');
+            if (!name || !location) {
+                showToast("Bitte Name und Lagerort angeben.", 'error');
                 return;
             }
 
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-
-            reader.onload = async (e) => {
-                const csvText = e.target.result;
-                const articlesToImport = parseCSV(csvText);
-
-                if (articlesToImport.length === 0) {
-                    showToast("Keine gültigen Artikel zum Import gefunden. Prüfen Sie das Format.", 'error', 5000);
-                    return;
-                }
-
-                showToast(`Starte Import von ${articlesToImport.length} Artikeln...`, 'info', 5000);
-                
-                const chunkSize = 500;
-                let isOffline = !navigator.onLine;
-
-                try {
-                    // 1. Online-Versuch (Upsert)
-                    const { error } = await window.appSupabaseClient
-                        .from('inventar')
-                        .upsert(articlesToImport, { onConflict: 'barcode', ignoreDuplicates: false });
-
-                    if (error) {
-                        if (error.message.includes('Failed to fetch')) {
-                            throw new Error("Offline");
-                        }
-                        throw error;
-                    }
-
-                    showToast(`Import von ${articlesToImport.length} Artikeln erfolgreich!`, 'success');
-                    logAdminAction('BULK_IMPORT', `Erfolgreicher Import von ${articlesToImport.length} Artikeln.`);
-                    
-                } catch (e) {
-                    if (e.message === "Offline" || !navigator.onLine) {
-                        isOffline = true;
-                        // 2. Offline-Fallback: Alles in die Outbox und lokal speichern
-                        showToast(`Netzwerkfehler. Importiere ${articlesToImport.length} Artikel lokal. Synchronisation folgt.`, 'warning', 7000);
-
-                        // Lokalen Cache löschen und neu befüllen
-                        await window.offlineDB.clearData('inventar'); 
-                        await window.offlineDB.bulkInsertData('inventar', articlesToImport);
-                        
-                        // Log-Eintrag in die Outbox
-                        await window.offlineDB.addToOutbox({
-                            type: 'INSERT', // Da es ein Upsert ist, wird es als INSERT behandelt
-                            table: 'audit_log',
-                            key: new Date().toISOString(),
-                            payload: {
-                                action_type: 'BULK_IMPORT_OFFLINE',
-                                description: `Offline-Import von ${articlesToImport.length} Artikeln.`,
-                                user_role: window.currentUserRole,
-                                client_id: window.currentClientId,
-                                created_at: new Date().toISOString()
-                            },
-                            timestamp: new Date().toISOString()
-                        });
-                        
-                        // Achtung: Ein Bulk-Upsert ist komplexer als einzelne Aktionen. 
-                        // Für Offline-Betrieb wird hier nur der lokale Cache befüllt
-                        // und ein Log-Eintrag erstellt. Der eigentliche Upsert müsste
-                        // beim Sync manuell nachgebaut werden. Da dies ein komplexes 
-                        // Szenario ist, wird hier die Einfachheit bevorzugt.
-
-                    } else {
-                        console.error("Importfehler:", e);
-                        showToast(`FEHLER beim Import: ${e.message.substring(0, 50)}...`, 'error', 7000);
-                    }
-                } finally {
-                     // Liste aktualisieren, um die neuen Artikel anzuzeigen
-                    loadArticleList(document.getElementById('articleSearchInput').value); 
-                    fileInput.value = ''; // Reset file input
-                }
+            const newArticle = {
+                barcode: barcode,
+                name: name,
+                location: location,
+                quantity: 0, // Startet mit 0
+                client_id: window.currentClientId
             };
 
-            reader.readAsText(file);
+            let success = false;
+            let isOffline = !navigator.onLine;
+
+            try {
+                // 1. Online-Versuch
+                const { error } = await window.appSupabaseClient
+                    .from('inventar')
+                    .insert([newArticle]);
+
+                if (error) {
+                    if (error.message.includes('Failed to fetch')) {
+                        throw new Error("Offline");
+                    }
+                    showToast(`FEHLER beim Registrieren: ${error.message.substring(0, 50)}...`, "error");
+                    console.error("Speicherfehler:", error);
+                } else {
+                    success = true;
+                    // Lokalen Cache aktualisieren
+                    await window.offlineDB.upsertData('inventar', newArticle);
+                }
+
+            } catch (e) {
+                if (e.message === "Offline" || !navigator.onLine) {
+                    isOffline = true;
+                    // 2. Offline-Fallback: Lokales Speichern und zur Outbox hinzufügen
+                    await window.offlineDB.upsertData('inventar', newArticle);
+                    await window.offlineDB.addToOutbox({
+                        type: 'INSERT',
+                        table: 'inventar',
+                        key: barcode,
+                        payload: newArticle,
+                        timestamp: new Date().toISOString()
+                    });
+                    success = true;
+                } else {
+                    console.error("Speicherfehler:", e);
+                }
+            }
+
+            if (success) {
+                const statusMessage = isOffline ? `Artikel lokal registriert. Wird bei Verbindung synchronisiert.` : `Artikel "${name}" wurde erfolgreich registriert.`;
+                showToast(statusMessage, isOffline ? "info" : "success");
+                logAdminAction('ARTICLE_REGISTERED', `Neuer Artikel "${name}" (Barcode: ${barcode}) registriert.`);
+                hidePopup();
+                hideResultCard();
+                loadArticleList(document.getElementById('articleSearchInput').value); // Liste aktualisieren
+            }
         }
 
-
-        /* --- ADMIN EDIT POPUP LOGIK --- */
-
+        // --- Artikel Bearbeiten Popup (Admin) ---
         function showAdminEditPopup(articleData) {
             if (window.currentUserRole !== 'admin') return;
             window.articleToEdit = articleData;
@@ -1777,17 +1557,16 @@
             window.articleToEdit = null;
         }
 
-        // Speichert die Admin-Bearbeitung eines Artikels (nur Standort und ggf. Name)
+        // Speichert die Admin-Änderungen (aktuell nur Lagerort)
         async function saveAdminEdit() {
             if (window.currentUserRole !== 'admin' || !window.articleToEdit) return;
 
-            const barcode = window.articleToEdit.barcode;
-            // const newName = document.getElementById('adminEditName').value.trim(); // Name ist readonly
             const newLocation = document.getElementById('adminEditLocation').value.trim();
-            const oldLocation = window.articleToEdit.location || '';
-
+            const barcode = window.articleToEdit.barcode;
+            const oldLocation = window.articleToEdit.location;
+            
             if (newLocation === oldLocation) {
-                showToast("Keine Änderungen erkannt.", 'info', 1500);
+                showToast("Keine Änderung am Lagerort vorgenommen.", 'info');
                 hideAdminEditPopup();
                 return;
             }
@@ -1815,6 +1594,7 @@
                     // Lokalen Cache aktualisieren
                     await window.offlineDB.updateArticleLocation(barcode, newLocation);
                 }
+
             } catch (e) {
                 if (e.message === "Offline" || !navigator.onLine) {
                     isOffline = true;
@@ -1824,7 +1604,7 @@
                         type: 'UPDATE',
                         table: 'inventar',
                         key: barcode,
-                        payload: updatePayload,
+                        payload: { ...updatePayload, client_id: window.currentClientId }, // Payload benötigt client_id für RLS/Sync
                         timestamp: new Date().toISOString()
                     });
                     success = true;
@@ -1834,7 +1614,6 @@
             }
 
             if (success) {
-                window.articleToEdit.location = newLocation; // Lokale Variable aktualisieren
                 const statusMessage = isOffline ? `Lagerort lokal geändert. Wird bei Verbindung synchronisiert.` : `Lagerort erfolgreich geändert.`;
                 showToast(statusMessage, isOffline ? "info" : "success");
                 logAdminAction('ARTICLE_EDITED', `Lagerort für "${window.articleToEdit.name}" (Barcode: ${barcode}) von ${oldLocation} zu ${newLocation} geändert.`);
@@ -1846,7 +1625,6 @@
                 }
             }
         }
-
 
         function showDeleteConfirmPopup() {
             if (window.currentUserRole !== 'admin' || !window.articleToEdit) return;
@@ -1885,6 +1663,7 @@
                     // Lokale Daten löschen
                     await window.offlineDB.deleteData('inventar', barcode);
                 }
+
             } catch (e) {
                 if (e.message === "Offline" || !navigator.onLine) {
                     isOffline = true;
@@ -1894,7 +1673,7 @@
                         type: 'DELETE',
                         table: 'inventar',
                         key: barcode,
-                        payload: { barcode: barcode }, // Payload für DELETE ist minimal
+                        payload: { barcode: barcode, client_id: window.currentClientId }, // Payload für Sync-Prozess
                         timestamp: new Date().toISOString()
                     });
                     success = true;
@@ -1915,15 +1694,14 @@
         }
 
 
-        /* --- MITARBEITER EDIT POPUP LOGIK --- */
-
+        // --- Mitarbeiter Bearbeiten Popup (Admin) ---
         function showEmployeeEditPopup(employeeData) {
             if (window.currentUserRole !== 'admin') return;
             window.employeeToEdit = employeeData;
-            document.getElementById('employeeEditPN').value = employeeData.personnel_number;
             document.getElementById('employeeEditName').value = employeeData.name;
+            document.getElementById('employeeEditPN').value = employeeData.personnel_number;
             document.getElementById('employeeEditRole').value = employeeData.role;
-            document.getElementById('employeeEditIsActive').checked = employeeData.is_active;
+            document.getElementById('employeeEditActive').checked = employeeData.is_active;
             document.getElementById('employeeEditPopupOverlay').classList.add('show');
         }
 
@@ -1932,28 +1710,29 @@
             window.employeeToEdit = null;
         }
 
-        // Speichert die Admin-Bearbeitung eines Mitarbeiters
+        // Speichert die Mitarbeiter-Änderungen
         async function saveEmployeeEdit() {
             if (window.currentUserRole !== 'admin' || !window.employeeToEdit) return;
 
-            const personnel_number = window.employeeToEdit.personnel_number;
             const newName = document.getElementById('employeeEditName').value.trim();
             const newRole = document.getElementById('employeeEditRole').value;
-            const newIsActive = document.getElementById('employeeEditIsActive').checked;
-            const oldData = window.employeeToEdit;
-
-            if (newName === oldData.name && newRole === oldData.role && newIsActive === oldData.is_active) {
-                showToast("Keine Änderungen erkannt.", 'info', 1500);
-                hideEmployeeEditPopup();
-                return;
+            const newIsActive = document.getElementById('employeeEditActive').checked;
+            const personnel_number = window.employeeToEdit.personnel_number;
+            const employeeId = window.employeeToEdit.id;
+            
+            // Verhindere Sperrung des eigenen Admin-Kontos
+            if (personnel_number === window.currentClientId && !newIsActive && window.employeeToEdit.role === 'admin') {
+                 showToast("Sie können Ihr eigenes Admin-Konto nicht sperren.", 'error');
+                 return;
             }
-
+            
             const updatePayload = { 
-                name: newName, 
+                id: employeeId,
+                name: newName,
                 role: newRole, 
-                is_active: newIsActive 
+                is_active: newIsActive
             };
-
+            
             let success = false;
             let isOffline = !navigator.onLine;
 
@@ -1974,13 +1753,14 @@
                 } else {
                     success = true;
                     // Lokalen Cache aktualisieren
-                    await window.offlineDB.upsertData('employees', { ...window.employeeToEdit, ...updatePayload });
+                    await window.offlineDB.upsertData('employees', { ...window.employeeToEdit, ...updatePayload }, 'personnel_number');
                 }
+
             } catch (e) {
                 if (e.message === "Offline" || !navigator.onLine) {
                     isOffline = true;
                     // 2. Offline-Fallback: Lokales Speichern und zur Outbox hinzufügen
-                    await window.offlineDB.upsertData('employees', { ...window.employeeToEdit, ...updatePayload });
+                    await window.offlineDB.upsertData('employees', { ...window.employeeToEdit, ...updatePayload }, 'personnel_number');
                     await window.offlineDB.addToOutbox({
                         type: 'UPDATE_EMPLOYEE',
                         table: 'employees',
@@ -2005,7 +1785,6 @@
 
 
         // --- Settings Popup ---
-
         function showSettingsPopup() {
             // Zeige Admin-Import nur, wenn Admin eingeloggt ist
             if (window.currentUserRole === 'admin') {
@@ -2015,6 +1794,10 @@
                 document.getElementById('importHeader').style.display = 'none';
                 document.getElementById('importRow').style.display = 'none';
             }
+            
+            // Fülle die Einstellungen
+            initSettings();
+
             document.getElementById('settingsPopupOverlay').classList.add('show');
         }
 
@@ -2022,107 +1805,194 @@
             document.getElementById('settingsPopupOverlay').classList.remove('show');
         }
 
+        // CSV Parser für Import
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            if (lines.length === 0) return [];
+            
+            // Header-Zeile (erwartet: barcode,name,location,quantity)
+            const headers = lines[0].toLowerCase().split(',').map(h => h.trim()); 
+            const requiredHeaders = ['barcode', 'name', 'location'];
+            
+            if (!requiredHeaders.every(rh => headers.includes(rh))) {
+                 showToast("Fehlende Spalten im CSV. Erwartet: barcode, name, location. Optional: quantity.", 'error', 5000);
+                 return [];
+            }
+            
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim() === '') continue;
+                
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length !== headers.length) continue; 
 
-        // --- INIT ---
+                const obj = { client_id: window.currentClientId };
+                
+                // Mapping der Werte auf die Objektschlüssel
+                headers.forEach((header, index) => {
+                    if (header === 'barcode') obj.barcode = values[index];
+                    if (header === 'name') obj.name = values[index];
+                    if (header === 'location') obj.location = values[index];
+                    if (header === 'quantity') obj.quantity = values[index];
+                });
 
-        window.onload = async function() {
-            // 1. IndexedDB initialisieren
-            await initOfflineSync();
-            
-            // 2. Auth-Einstellungen laden
-            initSettings(); // Lade Lautstärke, Sound, Vibrate
-            initLoginSettings(); // Lade E-Mail-Basis
-            
-            // 3. Login-Status prüfen
-            checkLogin();
-            
-            // 4. Globalen Event-Listener für Go-Back-Button (nur für Android/iOS-PWA-Feeling)
-            document.getElementById('goBackBtn').addEventListener('click', () => {
-                // Logik: Vom Result-Card zurück zum Scanner-Frame
-                if (document.getElementById('result-card').classList.contains('active')) {
-                    hideResultCard();
-                    return;
-                }
-                // Logik: Von Listen/Log/User-Tabs zurück zum Scanner-Tab
-                if (window.currentTabId !== 'scannerTab') {
-                    navigate('scannerTab');
-                    return;
-                }
-                // Logik: Popups schließen
-                if (document.getElementById('popupOverlay').classList.contains('show')) {
-                    hidePopup();
-                    return;
-                }
-                if (document.getElementById('adminEditPopupOverlay').classList.contains('show')) {
-                    hideAdminEditPopup();
-                    return;
-                }
-                if (document.getElementById('deleteConfirmPopupOverlay').classList.contains('show')) {
-                    hideDeleteConfirmPopup();
-                    return;
-                }
-                if (document.getElementById('employeeEditPopupOverlay').classList.contains('show')) {
-                    hideEmployeeEditPopup();
-                    return;
-                }
-                if (document.getElementById('settingsPopupOverlay').classList.contains('show')) {
-                    hideSettingsPopup();
-                    return;
+                // Datenvalidierung und Konvertierung
+                if (obj.quantity) {
+                    obj.quantity = parseInt(obj.quantity) || 0;
+                } else {
+                    obj.quantity = 0;
                 }
                 
-                // Letzter Schritt: Abmelden
-                if (document.getElementById('appView').classList.contains('active')) {
-                    logout();
+                if (obj.barcode && obj.name) {
+                    // Nur Artikel mit Barcode und Name importieren
+                    data.push(obj);
                 }
-            });
+            }
+            return data;
+        }
 
-            // 5. Initiale Navigation setzen
-            updateNavBar();
+        async function handleImport() {
+            if (window.currentUserRole !== 'admin') return;
+
+            const fileInput = document.getElementById('csvFileInput');
+            if (!fileInput.files.length) {
+                showToast("Bitte wählen Sie eine CSV-Datei aus.", 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = async (e) => {
+                const csvText = e.target.result;
+                const articlesToImport = parseCSV(csvText);
+
+                if (articlesToImport.length === 0) {
+                    showToast("Keine gültigen Artikel zum Import gefunden. Prüfen Sie das Format.", 'error', 5000);
+                    return;
+                }
+
+                showToast(`Starte Import von ${articlesToImport.length} Artikeln...`, 'info', 5000);
+
+                const chunkSize = 500;
+                let isOffline = !navigator.onLine;
+
+                try {
+                    // 1. Online-Versuch (Upsert)
+                    const { error } = await window.appSupabaseClient
+                        .from('inventar')
+                        .upsert(articlesToImport, { onConflict: 'barcode', ignoreDuplicates: false });
+
+                    if (error) {
+                        if (error.message.includes('Failed to fetch')) {
+                            throw new Error("Offline");
+                        }
+                        throw error;
+                    }
+
+                    showToast(`Import von ${articlesToImport.length} Artikeln erfolgreich!`, 'success');
+                    logAdminAction('BULK_IMPORT', `Erfolgreicher Import von ${articlesToImport.length} Artikeln.`);
+                    
+                } catch (e) {
+                    if (e.message === "Offline" || !navigator.onLine) {
+                        isOffline = true;
+                        // 2. Offline-Fallback: Alles in die Outbox und lokal speichern
+                        showToast(`Netzwerkfehler. Importiere ${articlesToImport.length} Artikel lokal. Synchronisation folgt.`, 'warning', 7000);
+
+                        // Lokalen Cache löschen und neu befüllen
+                        await window.offlineDB.clearData('inventar');
+                        await window.offlineDB.bulkInsertData('inventar', articlesToImport);
+                        
+                        // Outbox-Eintrag für Bulk-Update (wird beim Sync zu einzelnen UPSERTs verarbeitet)
+                        await window.offlineDB.addToOutbox({
+                            type: 'BULK_UPSERT',
+                            table: 'inventar',
+                            key: 'bulk', 
+                            payload: articlesToImport,
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                    } else {
+                        console.error("Bulk-Import Fehler:", e);
+                        showToast(`FEHLER beim Import: ${e.message}`, 'error', 5000);
+                    }
+                }
+                
+                // UI aktualisieren
+                loadArticleList(document.getElementById('articleSearchInput').value);
+                hideSettingsPopup();
+            };
+
+            reader.onerror = () => {
+                showToast("Fehler beim Lesen der Datei.", 'error');
+            };
+
+            reader.readAsText(file);
+        }
+
+        // ---------------------------------------------------------
+        // *** INIT BEIM LADEN DER SEITE ***
+        // ---------------------------------------------------------
+        window.onload = async function() {
+            // Offline-DB initialisieren
+            await initOfflineSync();
+            // Login-Einstellungen laden und Formular initialisieren
+            initLoginSettings(); 
+            // Login-Status prüfen und ggf. zur App wechseln
+            await checkLogin();
+            // Event Listener für Formular-Submit setzen (wird durch inline onsubmit ersetzt, aber zur Sicherheit)
+            document.getElementById('authForm').addEventListener('submit', function(event) {
+                event.preventDefault();
+                handleAuthSubmit(this);
+            });
         };
     </script>
 
     <style>
+        /* --- GRUNDSTYLING --- */
         :root {
-            /* Color Palette */
-            --color-bg-dark: #1e1e28;
-            --color-bg-card: #282a36;
-            --color-text-primary: #f8f8f2;
-            --color-text-secondary: #aaaaaa;
-            --color-border: #3c3e4c;
-            --color-accent-blue: #6272a4; /* Subtler Blue for focus/primary action */
-            --color-accent-green: #50fa7b;
-            --color-error-red: #ff5555;
-            --color-warning-yellow: #f1fa8c;
-            --color-info-blue: #8be9fd;
-            
-            /* Layout */
-            --header-height: 60px;
-            --footer-height: 70px;
+            --color-bg-dark: #21212c;
+            --color-bg-card: #2c2c3a;
+            --color-text-light: #ffffff;
+            --color-border: #444455;
+            --color-accent-blue: #4a90e2;
+            --color-accent-green: #7ed321;
+            --color-error-red: #d0021b;
             --transition-duration: 0.3s;
         }
 
         * {
             box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
         }
 
-        body, html {
+        body {
             margin: 0;
             padding: 0;
-            height: 100%;
             background: var(--color-bg-dark);
-            color: var(--color-text-primary);
-            overflow: hidden; /* Verhindert Scrollen auf der Hauptebene */
-            -webkit-tap-highlight-color: transparent; /* Entfernt Tap-Highlight auf Mobilgeräten */
-        }
-
-        /* --- MAIN VIEWS --- */
-
-        #mainContainer {
+            color: var(--color-text-light);
             height: 100vh;
+            overflow: hidden; /* Verhindert das Scrollen des Haupt-Body */
             display: flex;
             flex-direction: column;
+            user-select: none;
+        }
+        
+        button, input[type="submit"] {
+            cursor: pointer;
+            transition: opacity 0.2s, background 0.2s;
+        }
+        
+        button:active {
+            opacity: 0.8;
+        }
+
+        /* --- VIEWS --- */
+        #mainContainer {
+            flex-grow: 1;
             position: relative;
+            width: 100%;
+            height: 100%;
         }
 
         .app-view-container {
@@ -2154,157 +2024,9 @@
         #loginView.active {
             transform: translateY(0);
         }
-
+        
         #appView.active {
             transform: translateY(0);
-        }
-
-
-        /* --- LOGIN VIEW STYLES --- */
-
-        #loginView {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            text-align: center;
-            background: linear-gradient(135deg, var(--color-bg-dark) 0%, #101015 100%);
-        }
-
-        .login-card {
-            background: var(--color-bg-card);
-            padding: 30px;
-            border-radius: 15px;
-            width: 100%;
-            max-width: 350px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-        }
-
-        .login-header .app-icon {
-            font-size: 3rem;
-            margin-bottom: 10px;
-            color: var(--color-accent-green);
-        }
-
-        .login-header h2 {
-            margin: 0 0 5px 0;
-            color: var(--color-text-primary);
-        }
-
-        #authError {
-            color: var(--color-error-red);
-            margin-bottom: 15px;
-            font-size: 0.9rem;
-            min-height: 20px;
-        }
-
-        #authForm {
-            display: flex;
-            flex-direction: column;
-        }
-
-        #authForm button[type="button"] { /* Auth Mode Toggle */
-            background: transparent;
-            border: 1px solid var(--color-accent-blue);
-            color: var(--color-accent-blue);
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s, color 0.2s;
-        }
-        
-        #authForm button[type="button"]:hover {
-            background: rgba(98, 114, 164, 0.1);
-        }
-
-        #authForm button[type="submit"] {
-            background: var(--color-accent-green);
-            color: var(--color-bg-dark);
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin-top: 10px;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        
-        #authForm button[type="submit"]:disabled {
-            opacity: 0.6;
-            cursor: default;
-        }
-
-        #registerToggle {
-            font-size: 0.9rem;
-            color: var(--color-text-secondary);
-            margin-top: 20px;
-            cursor: pointer;
-            text-decoration: underline;
-        }
-        
-        /* --- APP VIEW STYLES --- */
-
-        header {
-            height: var(--header-height);
-            background: rgba(30, 30, 40, 0.9);
-            backdrop-filter: blur(8px);
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 15px;
-            flex-shrink: 0;
-            z-index: 20;
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-        }
-
-        .header-left .icon-button {
-            margin-right: 15px;
-        }
-
-        .header-title-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        #headerTitle {
-            font-size: 1.1rem;
-            margin: 0;
-        }
-
-        #userRoleDisplay {
-            font-size: 0.75rem;
-            color: var(--color-text-secondary);
-            margin-top: 2px;
-        }
-
-        .icon-button {
-            background: none;
-            border: none;
-            color: var(--color-text-primary);
-            cursor: pointer;
-            padding: 5px;
-            transition: opacity 0.2s;
-        }
-
-        .icon-button:hover {
-            opacity: 0.7;
-        }
-
-        .icon-button svg {
-            width: 24px;
-            height: 24px;
-            stroke: currentColor;
-            fill: none;
-            stroke-width: 2;
         }
 
         #tabContentContainer {
@@ -2312,7 +2034,7 @@
             position: relative;
             overflow: hidden;
         }
-
+        
         .tab-content {
             position: absolute;
             top: 0;
@@ -2322,219 +2044,274 @@
             display: none !important;
             flex-direction: column;
             overflow-y: auto;
+            background: var(--color-bg-dark);
         }
-
+        
         .tab-content.active {
             display: flex !important;
         }
 
-        /* --- SCANNER TAB STYLES --- */
-
-        #scannerTab {
-            justify-content: center;
+        /* --- HEADER --- */
+        header {
+            height: 55px;
+            background: rgba(30, 30, 40, 0.9);
+            backdrop-filter: blur(8px);
+            display: flex;
             align-items: center;
-            padding-bottom: 140px; /* Platz für Result Card */
+            justify-content: space-between;
+            padding: 0 15px;
+            border-bottom: 1px solid var(--color-border);
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        header h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        #userRoleDisplay {
+            font-size: 0.7rem;
+            opacity: 0.7;
+            margin-left: 10px;
+        }
+
+        .header-button {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .header-button svg {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+        }
+
+        /* --- LOGIN VIEW --- */
+        #loginView {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .login-card {
+            background: var(--color-bg-card);
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 380px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .login-header {
+            margin-bottom: 30px;
+        }
+
+        .app-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        #authTitle {
+            margin-top: 0;
+            font-size: 1.8rem;
+            color: var(--color-accent-blue);
+        }
+
+        #authError {
+            color: var(--color-error-red);
+            font-size: 0.9rem;
+            height: 1.2rem;
+            margin-top: 5px;
+        }
+
+        #loadingAuth {
+            font-size: 0.9rem;
+            color: var(--color-accent-blue);
+            margin-bottom: 15px;
+            display: none;
+        }
+        
+        /* NEUE LOGIN STYLES */
+        #authModeToggle {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        /* --- APP VIEW / SCANNER --- */
+        #scannerTab {
+            position: relative;
+            overflow: hidden;
+        }
+
+        #reader-container {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
         }
 
         #reader {
             width: 100%;
-            max-width: 500px;
             height: 100%;
+            background: black;
+            object-fit: cover;
         }
 
-        #scanFrame {
+        #reader video {
             width: 100%;
             height: 100%;
-            max-width: 500px;
-            max-height: 500px;
-            display: none;
-            /* Zentrieren der Scanner-Fläche */
+            object-fit: cover;
+        }
+
+        .scan-frame {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            width: 70%;
+            max-width: 300px;
+            aspect-ratio: 1 / 1;
+            border: 3px solid var(--color-accent-green);
+            border-radius: 12px;
+            box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.7);
+            pointer-events: none;
         }
-        
+
         #preScan {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            max-height: 500px;
+            background: var(--color-bg-dark);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             text-align: center;
-            padding: 20px;
-            /* Zentrieren des Placeholders */
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            z-index: 5;
         }
-
-        #preScan p {
-            color: var(--color-text-secondary);
-            margin-bottom: 20px;
-        }
-
-        #preScan .action-button {
-            background: var(--color-accent-blue);
-            color: var(--color-text-primary);
+        
+        .primary-button {
             padding: 12px 25px;
-            border-radius: 8px;
+            background: var(--color-accent-blue);
+            color: white;
             border: none;
-            font-weight: 700;
-            cursor: pointer;
-            transition: background 0.2s;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-top: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
         }
 
+        /* Ergebnis-Card */
         #result-card {
             position: absolute;
             bottom: 0;
             left: 0;
             width: 100%;
-            background: var(--color-bg-card);
-            padding: 20px;
-            border-top-left-radius: 20px;
-            border-top-right-radius: 20px;
-            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
+            max-height: 50%;
+            background: rgba(30, 30, 40, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
+            color: white;
             transform: translateY(100%);
-            transition: transform var(--transition-duration) ease-in-out;
-            z-index: 30;
-            display: flex;
-            flex-direction: column;
+            transition: transform 0.3s ease-in-out;
+            z-index: 10;
+            overflow-y: auto;
+            border-top: 1px solid var(--color-border);
         }
 
         #result-card.active {
             transform: translateY(0);
         }
 
-        .result-header {
+        #result-header {
             display: flex;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         #result-status-icon {
             font-size: 2rem;
+            margin-right: 10px;
             line-height: 1;
-            margin-right: 15px;
         }
 
         #result-title {
             font-size: 1.2rem;
             margin: 0;
+            font-weight: 600;
+            flex-grow: 1;
         }
-        
+
         #result-details p {
             margin: 5px 0;
-            font-size: 0.9rem;
-            color: var(--color-text-secondary);
+            font-size: 0.95rem;
+            opacity: 0.9;
         }
         
-        #result-details strong {
-            color: var(--color-text-primary);
-            font-weight: 600;
-        }
-
-        .scan-code-display, .scan-location-display {
-            margin-left: 5px;
-        }
-
-        .result-quantity-box {
-            display: inline-block;
-            padding: 8px 15px;
-            background: var(--color-bg-dark);
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 1rem;
-        }
-        
-        .result-quantity-box strong {
-            font-size: 1.1rem;
-            color: var(--color-accent-green);
-            margin-left: 5px;
-        }
-
+        /* --- BUTTONS --- */
         .action-button-group {
             display: flex;
             gap: 10px;
-            margin-top: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
         }
 
         .action-button {
-            flex: 1;
-            padding: 12px;
-            border-radius: 8px;
+            padding: 10px 15px;
             border: none;
-            font-weight: 700;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .action-button.plus {
-            background: var(--color-accent-green);
-            color: var(--color-bg-dark);
-        }
-        
-        .action-button.minus {
-            background: var(--color-error-red);
-            color: var(--color-bg-dark);
+            border-radius: 8px;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 600;
+            flex-grow: 1;
+            min-width: 120px; /* Für bessere Darstellung */
         }
 
         .action-button.register {
+            background: var(--color-accent-green);
+        }
+
+        .action-button.plus, .action-button.edit {
             background: var(--color-accent-blue);
-            color: var(--color-text-primary);
         }
-        
-        .action-button.edit {
-            background: var(--color-warning-yellow);
-            color: var(--color-bg-dark);
-        }
-        
-        .action-button.cancel {
-            background: var(--color-border);
-            color: var(--color-text-primary);
-        }
-        
-        .action-button.delete {
+
+        .action-button.minus, .action-button.delete {
             background: var(--color-error-red);
-            color: var(--color-bg-dark);
-        }
-
-        .manual-input-container {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid var(--color-border);
-        }
-
-        .manual-input-group {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        #manualLocationInput {
-            flex-grow: 1;
-            padding: 10px 15px;
-            border-radius: 8px;
-            border: 1px solid var(--color-border);
-            background: var(--color-bg-dark);
-            color: white;
-            font-size: 1rem;
-        }
-
-        .manual-input-group button {
-            padding: 10px;
-            background: var(--color-accent-blue);
-            color: var(--color-text-primary);
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
         }
         
-        /* --- POPUP / OVERLAY STYLES --- */
-        #popupOverlay, #adminEditPopupOverlay, #deleteConfirmPopupOverlay, #employeeEditPopupOverlay, #settingsPopupOverlay {
+        .action-button.info, .action-button.cancel {
+            background: #555566;
+        }
+        
+        /* --- POPUPS & MODALS --- */
+        .popup-overlay {
             position: fixed;
             top: 0;
             left: 0;
@@ -2554,7 +2331,7 @@
             opacity: 1;
             display: flex;
         }
-
+        
         .popup-card {
             background: var(--color-bg-card);
             padding: 25px;
@@ -2564,11 +2341,11 @@
             transform: translateY(20px);
             transition: transform 0.3s ease-in-out;
         }
-        
+
         #popupOverlay.show .popup-card, #adminEditPopupOverlay.show .popup-card, #deleteConfirmPopupOverlay.show .popup-card, #employeeEditPopupOverlay.show .popup-card, #settingsPopupOverlay.show .popup-card {
             transform: translateY(0);
         }
-
+        
         .popup-card h3 {
             margin-top: 0;
             font-size: 1.3rem;
@@ -2576,16 +2353,16 @@
             padding-bottom: 10px;
             margin-bottom: 20px;
         }
-
+        
         .input-group {
             margin-bottom: 15px;
         }
-        
+
         .input-group textarea {
             resize: vertical;
             min-height: 80px;
         }
-        
+
         .input-group label {
             display: block;
             font-size: 0.9rem;
@@ -2599,88 +2376,90 @@
             border-radius: 8px;
             border: 1px solid var(--color-border);
             background: var(--color-bg-dark);
-            color: var(--color-text-primary);
+            color: white;
             font-size: 1rem;
+            outline: none;
         }
-
-        .input-group input[type="checkbox"] {
-            width: auto;
-            margin-right: 10px;
+        
+        .input-group input:focus, .input-group select:focus, .input-group textarea:focus {
+            border-color: var(--color-accent-blue);
         }
-
-        /* Anpassungen für Settings Popup */
-        .settings-row {
+        
+        .checkbox-group {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
             padding: 10px 0;
-            border-bottom: 1px dashed var(--color-border);
+            border-bottom: 1px solid var(--color-border);
         }
         
-        .settings-row:last-of-type {
+        .checkbox-group:last-of-type {
             border-bottom: none;
-            padding-bottom: 0;
         }
 
-        .settings-row input[type="range"] {
-            width: 60%;
-        }
-        
-        .settings-row span {
+        .checkbox-group label {
             font-size: 1rem;
-        }
-        
-        #importRow {
-            display: flex; /* wird im JS umgeschaltet */
-            flex-direction: column;
-            padding: 15px 0 0 0;
-            margin-top: 15px;
-            border-top: 1px solid var(--color-border);
-        }
-        
-        #importRow h4 {
-            margin-top: 0;
-            margin-bottom: 10px;
-            font-size: 1rem;
-        }
-        
-        #importRow button {
-            padding: 10px;
-            background: var(--color-accent-blue);
-            color: var(--color-text-primary);
-            border: none;
-            border-radius: 8px;
-            font-weight: 700;
+            margin-bottom: 0;
+            opacity: 1;
             cursor: pointer;
         }
 
-        /* --- TOAST MESSAGES --- */
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        #settingVolumeContainer {
+            margin-top: 15px;
+        }
+        
+        #volumeControls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        #settingVolume {
+            flex-grow: 1;
+        }
+        
+        #volValue {
+            width: 40px;
+            text-align: right;
+            font-weight: bold;
+            color: var(--color-accent-blue);
+        }
+
+        /* --- TOAST NOTIFICATIONS --- */
         #toastContainer {
             position: fixed;
-            top: 70px; /* Unterhalb des Headers */
-            right: 10px;
-            z-index: 50;
+            top: 15px;
+            right: 15px;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
             max-width: 90%;
+            pointer-events: none;
         }
 
         .toast {
             background: var(--color-bg-card);
-            color: var(--color-text-primary);
-            padding: 12px 15px;
+            color: white;
+            padding: 10px 15px;
             border-radius: 8px;
-            margin-bottom: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             opacity: 0;
             transform: translateX(100%);
             transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
             display: flex;
             align-items: center;
-            font-size: 0.9rem;
         }
 
         .toast.show {
             opacity: 1;
-            transform: translateX(0);
+            transform: translateY(0);
         }
 
         .toast-icon {
@@ -2703,7 +2482,7 @@
         /* --- FOOTER / NAVIGATION --- */
         footer {
             display: flex;
-            height: var(--footer-height);
+            height: 70px;
             background: rgba(30, 30, 40, 0.9);
             backdrop-filter: blur(8px);
             border-top: 1px solid var(--color-border);
@@ -2743,7 +2522,7 @@
             overflow-y: auto;
             padding: 15px 15px 80px 15px;
         }
-
+        
         /* NEU: Search Container Style */
         .search-container {
             padding: 15px;
@@ -2767,120 +2546,140 @@
             padding: 0; /* Wichtig: Padding hier entfernen */
         }
 
-        .list-container {
+        #articleList, #logList, #userList {
             list-style: none;
             padding: 0;
             margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
-        .list-item {
+        .article-item, .log-item, .employee-item {
+            background: var(--color-bg-card);
+            padding: 15px;
+            border-radius: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: var(--color-bg-card);
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 10px;
+            border: 1px solid var(--color-border);
             cursor: pointer;
             transition: background 0.2s;
         }
         
-        .list-item:hover {
-            background: #343642; /* Slightly lighter on hover */
+        .article-item:active, .employee-item:active {
+            background: #3a3a4c;
         }
 
         .item-details {
+            flex-grow: 1;
             display: flex;
             flex-direction: column;
-            flex-grow: 1;
             margin-right: 15px;
         }
 
         .item-name {
-            font-size: 1.1rem;
             font-weight: 600;
+            font-size: 1.1rem;
             margin-bottom: 3px;
-            line-height: 1.2;
         }
 
-        .item-barcode, .item-location {
-            font-size: 0.8rem;
-            color: var(--color-text-secondary);
-        }
-        
-        .item-location {
-            margin-top: 2px;
-        }
-
-        .item-count {
-            min-width: 70px;
-            text-align: center;
-            padding: 5px;
-        }
-        
-        .item-label {
-            font-size: 0.65rem;
-            font-weight: 500;
+        .item-meta {
+            font-size: 0.85rem;
             opacity: 0.7;
         }
 
-        /* Log & User spezifische Stile */
-        .log-item .log-type {
-             font-size: 0.9rem;
-             font-weight: 600;
-             color: var(--color-accent-blue);
-             margin-bottom: 3px;
-        }
-        
-        .log-item .log-date {
-            font-size: 0.8rem;
-            color: var(--color-text-secondary);
-        }
-        
-        .log-item .log-description {
-             font-size: 0.9rem;
-             color: var(--color-text-primary);
-             margin-top: 5px;
-        }
-        
-        .employee-item .employee-status {
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 0.75rem;
-            font-weight: 700;
+        .item-count {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 80px;
+            padding: 5px 8px;
             text-align: center;
         }
 
-        .employee-status.active {
-            background: rgba(80, 250, 123, 0.2);
+        .item-label {
+            font-size: 0.7rem;
+            opacity: 0.8;
+            line-height: 1;
+        }
+        
+        /* Logout Button Style */
+        .logout-button {
+            padding: 10px 15px;
+            background: var(--color-error-red);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            width: 100%;
+            margin-top: 20px;
+        }
+        
+        /* Settings View specific */
+        #importRow {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        #csvFileInput {
+            flex-grow: 1;
+            padding: 8px;
+            border-radius: 8px;
+            background: var(--color-bg-dark);
+            border: 1px solid var(--color-border);
+            color: white;
+        }
+        
+        #importHeader {
+            border-top: 1px solid var(--color-border);
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+        
+        #importHeader h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
             color: var(--color-accent-green);
         }
-
-        .employee-status.inactive {
-            background: rgba(255, 85, 85, 0.2);
-            color: var(--color-error-red);
+        
+        .toggle-register-mode {
+            background: none;
+            border: none;
+            color: var(--color-accent-blue);
+            font-size: 0.9rem;
+            margin-top: 15px;
+            cursor: pointer;
+            transition: opacity 0.2s;
         }
-    </style>
+        
+        .toggle-register-mode:active {
+            opacity: 0.7;
+        }
 
+    </style>
 </head>
 <body>
-
     <div id="toastContainer"></div>
 
-    <div id="popupOverlay">
+    <div id="popupOverlay" class="popup-overlay">
         <form class="popup-card" onsubmit="event.preventDefault(); saveArticle();">
             <h3>Artikel Registrieren</h3>
             <div class="input-group">
                 <label for="popupBarcode">Barcode</label>
-                <input type="text" id="popupBarcode" name="popupBarcode" readonly>
+                <input type="text" id="popupBarcode" readonly>
             </div>
             <div class="input-group">
                 <label for="popupBaseName">Basis-Name (z.B. T-Shirt, Wasserflasche)</label>
-                <input type="text" id="popupBaseName" name="popupBaseName" required>
+                <input type="text" id="popupBaseName" required>
             </div>
             <div class="input-group">
                 <label for="popupLocation">Lagerort (z.B. A-02-C)</label>
-                <input type="text" id="popupLocation" name="popupLocation" required>
+                <input type="text" id="popupLocation" required>
             </div>
             <div class="action-button-group">
                 <button type="button" class="action-button cancel" onclick="hidePopup()">Abbrechen</button>
@@ -2889,20 +2688,20 @@
         </form>
     </div>
 
-    <div id="adminEditPopupOverlay">
+    <div id="adminEditPopupOverlay" class="popup-overlay">
         <form class="popup-card" onsubmit="event.preventDefault(); saveAdminEdit();">
             <h3>Artikel Bearbeiten (Admin)</h3>
             <div class="input-group">
                 <label for="adminEditName">Artikel Name</label>
-                <input type="text" id="adminEditName" name="adminEditName" readonly>
+                <input type="text" id="adminEditName" readonly>
             </div>
             <div class="input-group">
                 <label for="adminEditBarcode">Barcode</label>
-                <input type="text" id="adminEditBarcode" name="adminEditBarcode" readonly>
+                <input type="text" id="adminEditBarcode" readonly>
             </div>
             <div class="input-group">
                 <label for="adminEditLocation">Neuer Lagerort</label>
-                <input type="text" id="adminEditLocation" name="adminEditLocation" required>
+                <input type="text" id="adminEditLocation" required>
             </div>
             <div class="action-button-group">
                 <button type="button" class="action-button delete" onclick="showDeleteConfirmPopup()">Löschen</button>
@@ -2912,7 +2711,7 @@
         </form>
     </div>
 
-    <div id="deleteConfirmPopupOverlay">
+    <div id="deleteConfirmPopupOverlay" class="popup-overlay">
         <div class="popup-card">
             <h3>Artikel löschen</h3>
             <p style="margin-bottom: 20px;">Sind Sie sicher, dass Sie den Artikel <strong id="deleteConfirmName"></strong> unwiderruflich löschen möchten?</p>
@@ -2922,29 +2721,28 @@
             </div>
         </div>
     </div>
-
-    <div id="employeeEditPopupOverlay">
+    
+    <div id="employeeEditPopupOverlay" class="popup-overlay">
         <form class="popup-card" onsubmit="event.preventDefault(); saveEmployeeEdit();">
             <h3>Mitarbeiter Bearbeiten (Admin)</h3>
             <div class="input-group">
-                <label for="employeeEditPN">Personalnummer</label>
-                <input type="text" id="employeeEditPN" name="employeeEditPN" readonly>
+                <label for="employeeEditName">Name</label>
+                <input type="text" id="employeeEditName" required>
             </div>
             <div class="input-group">
-                <label for="employeeEditName">Name</label>
-                <input type="text" id="employeeEditName" name="employeeEditName" required>
+                <label for="employeeEditPN">Personalnummer</label>
+                <input type="text" id="employeeEditPN" readonly>
             </div>
             <div class="input-group">
                 <label for="employeeEditRole">Rolle</label>
-                <select id="employeeEditRole" name="employeeEditRole">
-                    <option value="user">Mitarbeiter</option>
-                    <option value="admin">Administrator</option>
+                <select id="employeeEditRole">
+                    <option value="user">user</option>
+                    <option value="admin">admin</option>
                 </select>
             </div>
-            <div class="input-group">
-                <label for="employeeEditIsActive">Aktiv</label>
-                <input type="checkbox" id="employeeEditIsActive" name="employeeEditIsActive">
-                <span style="font-size: 0.8rem; opacity: 0.7;">(Deaktiviert = Gesperrt)</span>
+            <div class="checkbox-group">
+                <label for="employeeEditActive">Ist aktiv</label>
+                <input type="checkbox" id="employeeEditActive">
             </div>
             <div class="action-button-group">
                 <button type="button" class="action-button cancel" onclick="hideEmployeeEditPopup()">Abbrechen</button>
@@ -2953,40 +2751,46 @@
         </form>
     </div>
 
-    <div id="settingsPopupOverlay">
-        <div class="popup-card">
+    <div id="settingsPopupOverlay" class="popup-overlay">
+        <form class="popup-card" onsubmit="event.preventDefault(); saveSettings();">
             <h3>Einstellungen</h3>
+            
+            <div class="checkbox-group">
+                <label for="settingSound">Sound-Feedback</label>
+                <input type="checkbox" id="settingSound">
+            </div>
+            <div class="checkbox-group">
+                <label for="settingVibrate">Vibrations-Feedback</label>
+                <input type="checkbox" id="settingVibrate">
+            </div>
 
-            <h4 style="margin-top: 0;">Feedback</h4>
-            <div class="settings-row">
-                <span>Sound-Feedback</span>
-                <input type="checkbox" id="settingSound" name="settingSound">
-            </div>
-            <div class="settings-row">
-                <span>Vibrations-Feedback</span>
-                <input type="checkbox" id="settingVibrate" name="settingVibrate">
-            </div>
-            <div class="settings-row">
-                <span>Lautstärke: <span id="volValue">50%</span></span>
-                <input type="range" id="settingVolume" name="settingVolume" min="0" max="100" step="5" oninput="document.getElementById('volValue').innerText = this.value + '%'">
+            <div id="settingVolumeContainer" class="input-group">
+                <label>Lautstärke: <span id="volValue">50%</span></label>
+                <div id="volumeControls">
+                    <input type="range" id="settingVolume" min="0" max="100" step="1" oninput="document.getElementById('volValue').innerText = this.value + '%'">
+                </div>
             </div>
             
-            <h4 id="importHeader" style="margin-top: 25px;">Daten-Import (Admin)</h4>
-            <div id="importRow">
-                <p style="font-size: 0.9rem; margin: 0 0 10px 0; color: var(--color-text-secondary);">Wählen Sie eine CSV-Datei zum Hinzufügen/Aktualisieren von Artikeln (Header: barcode, name, location, quantity).</p>
-                <button onclick="document.getElementById('csvFileInput').click()">CSV-Datei auswählen</button>
-                <input type="file" id="csvFileInput" name="csvFileInput" accept=".csv" style="display: none;" onchange="handleImport()">
+            <div id="importHeader">
+                <h4>Admin CSV-Import</h4>
+                <p style="font-size: 0.9rem; opacity: 0.8; margin-bottom: 10px;">CSV-Format: barcode,name,location,quantity (erste Zeile muss Header sein)</p>
+                <div id="importRow">
+                    <input type="file" id="csvFileInput" accept=".csv">
+                    <button type="button" class="action-button plus" onclick="handleImport()">Import</button>
+                </div>
             </div>
-            
-            <div class="action-button-group" style="margin-top: 25px;">
-                <button type="button" class="action-button cancel" onclick="hideSettingsPopup()">Schließen</button>
-                <button type="button" class="action-button register" onclick="saveSettings()">Speichern</button>
+
+            <div class="action-button-group">
+                <button type="button" class="action-button cancel" onclick="hideSettingsPopup()">Abbrechen</button>
+                <button type="submit" class="action-button register">Speichern</button>
             </div>
-        </div>
+
+            <button type="button" class="logout-button" onclick="logout()">Abmelden</button>
+        </form>
     </div>
 
     <div id="mainContainer">
-
+        
         <div id="loginView" class="app-view-container active">
             <div class="login-card">
                 <div class="login-header">
@@ -2996,84 +2800,112 @@
                 </div>
                 <form id="authForm" onsubmit="event.preventDefault(); handleAuthSubmit(this);">
                     <button type="button" id="authModeToggle" onclick="toggleAuthMode()">Als Admin anmelden</button>
-                    
+
                     <div class="input-group" id="personnelNumberGroup">
                         <label for="authPersonnelNumber">personnel_number</label>
                         <input type="text" id="authPersonnelNumber" name="authPersonnelNumber" placeholder="Ihre personnel_number" required>
                     </div>
-                    
+
                     <div class="input-group" id="adminEmailGroup" style="display:none;">
                         <label for="authAdminEmail">E-Mail (Admin)</label>
                         <input type="email" id="authAdminEmail" name="authAdminEmail" placeholder="admin@firma.de">
                     </div>
-                    
+
                     <div class="input-group" id="authPasswordGroup">
                         <label for="authPassword">Passwort</label>
                         <input type="password" id="authPassword" name="authPassword" placeholder="Ihr Passwort" required>
                     </div>
-                    
+
                     <div class="input-group" id="companyEmailGroup">
                         <label for="authCompanyEmail">Firmen E-Mail Basis (z.B. firma.de)</label>
-                        <input type="text" id="authCompanyEmail" name="authCompanyEmail" placeholder="firma.de">
+                        <input type="text" id="authCompanyEmail" name="authCompanyEmail" placeholder="firma.de" required="required">
                     </div>
                     
-                    <button type="submit">Anmelden</button>
+                    <div id="loadingAuth" style="margin-top: 15px;">Lade...</div>
+                    <button type="submit" class="primary-button" style="margin-top: 25px;">Anmelden</button>
                     
-                    <span id="registerToggle" onclick="toggleRegisterMode()">Ich benötige ein neues Konto</span>
+                    <button type="button" id="registerToggle" class="toggle-register-mode" onclick="toggleRegisterMode()">Ich benötige ein neues Konto</button>
                 </form>
-                <div id="loadingAuth" style="margin-top: 20px; display: none; color: var(--color-accent-blue);">Laden...</div>
             </div>
         </div>
 
         <div id="appView" class="app-view-container">
             <header>
-                <div class="header-left">
-                    <button class="icon-button" id="goBackBtn" aria-label="Zurück/Abmelden">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none" stroke="none"/><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                    <div class="header-title-group">
-                        <h1 id="headerTitle">Inventar Scanner Pro</h1>
-                        <p id="userRoleDisplay">Rolle: N/A</p>
-                    </div>
-                </div>
-                <button class="icon-button" onclick="showSettingsPopup()" aria-label="Einstellungen">
-                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none" stroke="none"/><circle cx="12" cy="12" r="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.4 15c.34 1.48-.96 2.76-2.48 2.76H7.08c-1.52 0-2.82-1.28-2.48-2.76c.21-.92.88-1.74 1.74-2.17c-.86-.43-1.53-1.25-1.74-2.17c-.34-1.48.96-2.76 2.48-2.76h9.84c1.52 0 2.82 1.28 2.48 2.76c-.21.92-.88 1.74-1.74 2.17c.86.43 1.53 1.25 1.74 2.17zM12 2v2m0 16v2m-6-6H4m16 0h-2m-4.59-10.41l-1.41 1.41m-2.82 9.9l1.41 1.41m-4.24-4.24l-1.41-1.41m9.9-2.82l1.41-1.41" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <h1 id="headerTitle">Inventar Scanner Pro <span id="userRoleDisplay"></span></h1>
+                <button class="header-button" onclick="showSettingsPopup()">
+                    <svg viewBox="0 0 24 24"><path d="M12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5s3.5 1.57 3.5 3.5s-1.57 3.5-3.5 3.5zM12 9.5c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2zM19.4 11c.06-.32.09-.65.09-1s-.03-.68-.09-1L21 7.27l-2.09-3.63L16.42 4.41c-.48-.37-.99-.68-1.54-.9L14.07 1h-4.14l-1.81 2.51c-.55.22-1.06.53-1.54.9L5.09 3.64L3 7.27l1.6 2.73c-.06.32-.09.65-.09 1s.03.68.09 1L3 14.73l2.09 3.63L7.58 17.59c.48.37.99.68 1.54.9L9.93 21h4.14l1.81-2.51c.55-.22 1.06-.53 1.54-.9l2.49 1.74l2.09-3.63L19.4 13c.06-.32.09-.65.09-1s-.03-.68-.09-1zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7s7 3.13 7 7s-3.13 7-7 7z"/></svg>
                 </button>
             </header>
 
             <div id="tabContentContainer">
-                
                 <div id="scannerTab" class="tab-content active">
-                    <div id="scanFrame">
+                    <div id="reader-container">
                         <div id="reader"></div>
+                        <div class="scan-frame" id="scanFrame" style="display:none;"></div>
+                        <div id="preScan">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 48px; height: 48px; color: var(--color-accent-blue);"><path d="M4 4h4V2H4c-1.1 0-2 .9-2 2v4h2V4zM16 2h4c1.1 0 2 .9 2 2v4h-2V4h-4zM20 20h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4zM4 16H2v4c0 1.1.9 2 2 2h4v-2H4v-4zM12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6s6-2.69 6-6s-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4s4 1.79 4 4s-1.79 4-4 4z"/></svg>
+                            <p style="margin-top: 15px;">Tippen Sie hier, um die Kamera zu starten und einen Barcode zu scannen.</p>
+                            <button class="primary-button" onclick="activateCamera()">Scanner starten</button>
+                        </div>
                     </div>
-                    
-                    <div id="preScan" style="display: flex;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="width: 80px; height: 80px; color: var(--color-accent-green); fill: none; stroke: currentColor; stroke-width: 1.5; margin-bottom: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5"/></svg>
-                        <h3>Bereit zum Scannen</h3>
-                        <p>Bitte tippen Sie unten, um die Kamera zu starten und einen Barcode oder QR-Code zu erfassen.</p>
-                        <button class="action-button register" onclick="activateCamera()">Kamera starten</button>
-                    </div>
-                    
                     <div id="result-card">
-                        <div class="result-header">
-                            <span id="result-status-icon">⏳</span>
-                            <h4 id="result-title">Artikelinformationen</h4>
+                        <div id="result-header">
+                            <span id="result-status-icon"></span>
+                            <h2 id="result-title"></h2>
                         </div>
-                        <div id="result-details">
-                            <p>Scannen Sie einen Code, um Details zu sehen.</p>
-                        </div>
-
-                        <div class="manual-input-container">
-                            <h4>Standort manuell aktualisieren</h4>
-                            <div class="manual-input-group">
-                                <input type="text" id="manualLocationInput" name="manualLocationInput" placeholder="Standortcode hier eingeben">
-                                <button onclick="saveManualLocation()">Speichern</button>
+                        <div id="result-details"></div>
+                        <div class="action-button-group">
                             </div>
-                        </div>
                     </div>
                 </div>
 
                 <div id="listTab" class="tab-content">
                     <div class="search-container">
-                        <input type="text" id="articleSearchInput" name="articleSearchInput" placeholder="Inventar durchsuchen (Name, Barcode, Ort)" oninput="loadArticleList(this.value
+                        <input type="text" id="articleSearchInput" placeholder="Artikel suchen (Name, Barcode, Ort)" oninput="loadArticleList(this.value)">
+                    </div>
+                    <div class="list-content-container">
+                        <ul id="articleList"></ul>
+                    </div>
+                </div>
+
+                <div id="logTab" class="tab-content">
+                    <div class="search-container">
+                        <input type="text" id="logSearchInput" placeholder="Log-Einträge suchen (Aktion, Beschreibung)" oninput="loadLogList(this.value)">
+                    </div>
+                    <div class="list-content-container">
+                        <ul id="logList"></ul>
+                    </div>
+                </div>
+
+                <div id="usersTab" class="tab-content">
+                    <div class="search-container">
+                        <input type="text" id="employeeSearchInput" placeholder="Mitarbeiter suchen (Name, PN)" oninput="loadEmployeeList(this.value)">
+                    </div>
+                    <div class="list-content-container">
+                        <ul id="employeeList"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <footer>
+                <div class="nav-item active" data-tab="scannerTab" onclick="navigate('scannerTab')">
+                    <svg viewBox="0 0 24 24"><path d="M11 2h2v5h-2zM4 2h2v5H4zM18 2h2v5h-2zM4 18h2v3H4zM18 18h2v3h-2zM11 18h2v3h-2zM12 9c-3.31 0-6 2.69-6 6s2.69 6 6 6s6-2.69 6-6s-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4s4 1.79 4 4s-1.79 4-4 4z"/></svg>
+                    <span>Scanner</span>
+                </div>
+                <div class="nav-item" data-tab="listTab" onclick="navigate('listTab')">
+                    <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zm0-8h14V7H7v2z"/></svg>
+                    <span>Inventar</span>
+                </div>
+                <div class="nav-item" data-tab="logTab" onclick="navigate('logTab')" style="display:none;">
+                    <svg viewBox="0 0 24 24"><path d="M13 3H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-7-5zm4 15h-4v-4h4v4zm0-6h-4V7h4v4z"/></svg>
+                    <span>Logbuch</span>
+                </div>
+                <div class="nav-item" data-tab="usersTab" onclick="navigate('usersTab')" style="display:none;">
+                    <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm8 2c-2.33 0-6.99 1.17-6.99 3.5v2h14v-2c0-2.33-4.66-3.5-6.99-3.5zm-8 0c-2.33 0-6.99 1.17-6.99 3.5v2h7.02v-2c0-2.33-4.67-3.5-7.02-3.5z"/></svg>
+                    <span>Nutzer</span>
+                </div>
+            </footer>
+        </div>
+    </div>
+</body>
+</html>
