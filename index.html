@@ -676,8 +676,9 @@ function updateAuthForm() {
                 const { data, error } = await window.appSupabaseClient
                     .from('employees')
                     .select('id, name, personnel_number, role, is_active, client_id')
-                    .or(filters.join(',')) // Kombinierter OR-Filter
-                    .single();
+            // FIX: Suche direkt nach der Supabase User ID (user.id) in der 'id'-Spalte der 'employees'-Tabelle
+            .eq('id', user.id) 
+            .single();
 
                 if (data) {
                     userRole = data.role;
