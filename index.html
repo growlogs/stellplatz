@@ -954,7 +954,7 @@
         var offlineDB = {
             db: null,
             DB_NAME: 'InventarScannerDB',
-            DB_VERSION: 2,
+            DB_VERSION: 1,
             STORE_NAMES: ['inventar', 'audit_log', 'employees', 'outbox'],
 
             open: () => new Promise((res, rej) => {
@@ -1852,22 +1852,22 @@
 
                     <div class="input-group" id="personnelNumberGroup">
                         <label for="authPersonnelNumber">Personalnummer</label>
-                        <input type="text" id="authPersonnelNumber" placeholder="Ihre Personalnummer"> 
+                        <input type="text" id="authPersonnelNumber" name="personnel_number" placeholder="Ihre Personalnummer"> 
                     </div>
 
                     <div class="input-group" id="adminEmailGroup" style="display:none;">
                         <label for="authAdminEmail">E-Mail (Admin)</label>
-                        <input type="email" id="authAdminEmail" placeholder="admin@firma.de">
+                        <input type="email" id="authAdminEmail" name="admin_email" placeholder="admin@firma.de">
                     </div>
 
                     <div class="input-group" id="authPasswordGroup">
                         <label for="authPassword">Passwort</label>
-                        <input type="password" id="authPassword" placeholder="Ihr Passwort" required>
+                        <input type="password" id="authPassword" name="password" placeholder="Ihr Passwort" required>
                     </div>
 
                     <div class="input-group" id="companyEmailGroup">
                         <label for="authCompanyEmail">Firmen E-Mail Basis (z.B. firma.de)</label>
-                        <input type="text" id="authCompanyEmail" placeholder="firma.de">
+                        <input type="text" id="authCompanyEmail" name="companyEmailBase" placeholder="firma.de">
                     </div>
                     
                     <button type="submit" class="action-button register">Anmelden</button>
