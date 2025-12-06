@@ -1599,7 +1599,7 @@
                      const { data: empData, error: empError } = await window.appSupabaseClient
                         .from('employees')
                         .select('name, is_active') 
-                        .eq('user_id', userId) 
+                        .eq('client_id', userId) 
                         .maybeSingle();
 
                      if (empData) {
