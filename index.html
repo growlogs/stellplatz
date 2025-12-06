@@ -1085,7 +1085,7 @@
         }
         
         // NEU: Logik zur Aktualisierung des dynamischen Login-Formulars
-        function updateAuthForm() {
+function updateAuthForm() {
             const isEmployee = window.currentAuthMode === 'employee';
             const isRegister = isRegisterMode;
             
@@ -1094,11 +1094,13 @@
                 ? "Als Admin anmelden" 
                 : "Als Mitarbeiter anmelden";
 
-            // NEU: Felder dynamisch anzeigen/ausblenden
+            // Felder dynamisch anzeigen/ausblenden
             const companyEmailGroup = document.getElementById('companyEmailGroup');
             const personnelNumberGroup = document.getElementById('personnelNumberGroup');
             const adminEmailGroup = document.getElementById('adminEmailGroup');
             const authPasswordGroup = document.getElementById('authPasswordGroup');
+            const authCompanyEmail = document.getElementById('authCompanyEmail');
+            const authPassword = document.getElementById('authPassword');
 
             // Mitarbeiter-Ansicht
             if (isEmployee) {
@@ -1109,13 +1111,21 @@
                 
                 // Für Mitarbeiter-Login (NICHT Registrierung): Passwort automatisch auf Dummy setzen
                 if (!isRegister) {
-                    // WICHTIG: Supabase benötigt ein Passwort, daher verwenden wir einen festen Dummy-Wert.
-                    document.getElementById('authPassword').value = 'dummy_employee_pin_12345'; 
-                    document.getElementById('authPassword').removeAttribute('required');
+                    // Supabase benötigt ein Passwort, daher verwenden wir einen festen Dummy-Wert.
+                    authPassword.value = 'dummy_employee_pin_12345'; 
+                    authPassword.removeAttribute('required');
                 } else {
-                    document.getElementById('authPassword').value = '';
-                    document.getElementById('authPassword').setAttribute('required', 'required');
+                    authPassword.value = '';
+                    authPassword.setAttribute('required', 'required');
                 }
+
+                // Wichtig: required entfernen, wenn das Feld ausgeblendet ist, sonst Validierungsfehler
+                if (companyEmailGroup.style.display === 'none') {
+                    authCompanyEmail.removeAttribute('required');
+                } else {
+                    authCompanyEmail.setAttribute('required', 'required');
+                }
+
             } 
             // Admin-Ansicht
             else {
@@ -1123,8 +1133,10 @@
                 personnelNumberGroup.style.display = 'none';
                 adminEmailGroup.style.display = 'block';
                 authPasswordGroup.style.display = 'block';
-                document.getElementById('authPassword').setAttribute('required', 'required');
-                document.getElementById('authPassword').value = '';
+                authPassword.setAttribute('required', 'required');
+                authPassword.value = '';
+                // Admin-Modus benötigt nicht das Firmen-Basis-Feld -> required entfernen
+                authCompanyEmail.removeAttribute('required');
             }
 
             // Button-Text anpassen
