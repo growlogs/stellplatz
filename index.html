@@ -32,7 +32,7 @@
             window.isSyncing = false; 
             window.articleToEdit = null; // Für Inventar-Bearbeitung
             window.employeeToEdit = null; // Für Mitarbeiter-Bearbeitung
-            window.currentAuthMode = localStorage.getItem('auth_mode') || 'employee'; // NEU: Login-Modus (admin/employee)
+            window.currentAuthMode = localStorage.getItem('auth_mode') || 'employee'; // Login-Modus (admin/employee)
         })();
     </script>
 
@@ -948,7 +948,7 @@
             <p id="registerToggle" onclick="toggleAuthMode()">Noch kein Konto? Jetzt registrieren.</p>
         </form>
 
-        <p style="font-size: 0.7rem; opacity: 0.5;">v1.0.0</p>
+        <p style="font-size: 0.7rem; opacity: 0.5;">v1.0.1</p>
     </div>
 
     <div id="appView" class="app-view-container">
@@ -1563,58 +1563,69 @@
 
         async function handleLoginSuccess(userId, email) {
             currentUserId = userId;
-            const personnelNumber = email.split('@')[0];
-            let userRole = 'user';
-            let isBlocked = false;
+            let userRole = 'user'; // Standard-Rolle
             let clientId = null;
-            let employeeName = email; // Fallback
+            let employeeName = email; // Fallback auf E-Mail
+            let isBlocked = false;
             let isOffline = !navigator.onLine;
 
             try {
-                // 1. Online-Versuch, Mitarbeiter- und Client-Daten zu laden
-                const { data, error } = await window.appSupabaseClient
-                    .from('employees')
-                    .select('id, name, personalnummer, role, is_active, client_id')
-                    .or(`personalnummer.eq.${personnelNumber},name.eq.${personnelNumber}`) // Fallback für Admins, falls sie im Employee-Schema sind
+                // SCHRITT 1: Zuerst user_roles abfragen (Basis für Login, wie angefordert)
+                const { data: roleData, error: roleError } = await window.appSupabaseClient
+                    .from('user_roles')
+                    .select('client_id, role')
+                    .eq('user_id', userId)
                     .single();
 
-                if (error && !error.message.includes('Failed to fetch')) {
-                    // Nicht-Netzwerkfehler (z.B. User nicht gefunden oder keine Berechtigung)
-                    console.warn("Online-Abruf fehlgeschlagen, versuche nur admin/client_id:", error.message);
-                    
-                    // Admin-Fallback: Hole Client-ID basierend auf User-ID
-                    const { data: adminClientData, error: adminClientError } = await window.appSupabaseClient
-                        .from('clients')
-                        .select('id')
-                        .eq('admin_user_id', userId)
-                        .single();
+                if (roleError && !roleError.message.includes('Failed to fetch')) {
+                    console.error("Fehler beim Abruf von user_roles:", roleError);
+                    // Wir fahren trotzdem fort, falls wir offline sind oder es andere Wege gibt
+                } else if (roleData) {
+                    clientId = roleData.client_id;
+                    userRole = roleData.role || 'user';
+                }
 
-                    if (adminClientData) {
-                        userRole = 'admin';
-                        clientId = adminClientData.id;
-                        employeeName = email.includes('@') ? `Admin (${email.split('@')[0]})` : 'Administrator';
-                    } else if (adminClientError && !adminClientError.message.includes('Failed to fetch')) {
-                        console.error("Client-ID für Admin konnte nicht abgerufen werden:", adminClientError);
-                    }
-                    
-                } else if (data) {
-                    // Erfolgreicher Mitarbeiter-Login
-                    userRole = data.role || 'user';
-                    isBlocked = !data.is_active;
-                    clientId = data.client_id;
-                    employeeName = data.name || personnelNumber;
-                    // Daten für Offline-Nutzung speichern
-                    await window.offlineDB.upsertData('employees', {...data, user_id: userId});
+                // Wenn offline und keine Rolle geladen, Fehler werfen für Offline-Fallback
+                if (roleError && roleError.message.includes('Failed to fetch')) {
+                    throw new Error("Offline");
+                }
 
-                } else if (error && error.message.includes('Failed to fetch')) {
-                    throw new Error("Offline"); // Leite in den Offline-Block um
+                // SCHRITT 2: Versuchen, Mitarbeiter-Details (Name, Status) zu laden.
+                // Hinweis: Wir verwenden user_id, um Spaltenprobleme mit "personalnummer" zu vermeiden, wenn möglich.
+                // Wenn clientId schon gesetzt ist, sind wir prinzipiell eingeloggt, auch wenn dieser Schritt fehlschlägt.
+                if (clientId) {
+                     // Versuch, Mitarbeiterdaten abzurufen. Verwende maybeSingle, um keine Fehler zu werfen, wenn nicht gefunden.
+                     // Wir selektieren nur 'name' und 'is_active', da 'personalnummer' Probleme machen könnte, wenn die Spalte fehlt.
+                     const { data: empData, error: empError } = await window.appSupabaseClient
+                        .from('employees')
+                        .select('name, is_active') 
+                        .eq('user_id', userId) 
+                        .maybeSingle();
+
+                     if (empData) {
+                         employeeName = empData.name || employeeName;
+                         if (empData.is_active === false) isBlocked = true;
+                         
+                         // Speichere für Offline-Nutzung
+                         await window.offlineDB.upsertData('employees', {
+                             personalnummer: email.split('@')[0], // Fallback Key
+                             user_id: userId,
+                             name: employeeName,
+                             role: userRole,
+                             client_id: clientId,
+                             is_active: !isBlocked
+                         });
+                     } else if (empError) {
+                         console.warn("Konnte Mitarbeiter-Details nicht laden (möglicherweise Schema-Mismatch):", empError.message);
+                     }
                 }
 
             } catch (error) {
                 if (error.message === "Offline" || !navigator.onLine) {
                     isOffline = true;
-                    // 2. Offline-Fallback (IndexedDB)
+                    // Offline-Fallback (IndexedDB)
                     try {
+                        const personnelNumber = email.split('@')[0];
                         const localAuth = await window.offlineDB.getEmployeeByPersonnelNumber(personnelNumber);
                         if (localAuth) {
                             userRole = localAuth.role || 'user';
@@ -1622,7 +1633,6 @@
                             isBlocked = !localAuth.is_active || false;
                             clientId = localAuth.client_id;
                         } else {
-                            // Wenn offline und kein lokaler Datensatz, kann nicht fortgefahren werden.
                             throw new Error("Offline: Kein lokaler Datensatz gefunden.");
                         }
                     } catch (e) {
@@ -1635,7 +1645,7 @@
             
             if (!clientId) {
                 await window.appSupabaseClient.auth.signOut();
-                document.getElementById("authError").innerText = "Konto ist keinem Mandanten zugewiesen. Login nicht möglich.";
+                document.getElementById("authError").innerText = "Konto ist keinem Mandanten zugewiesen (user_roles fehlt). Login nicht möglich.";
                 showToast("Login fehlgeschlagen: Kein Mandant.", 'error', 7000);
                 return;
             }
