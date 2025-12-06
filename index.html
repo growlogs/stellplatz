@@ -1574,7 +1574,7 @@
                 const { data: roleData, error: roleError } = await window.appSupabaseClient
                     .from('user_roles')
                     .select('client_id, role')
-                    .eq('user_id', userId)
+                    .eq('id', userId)
                     .single();
 
                 if (roleError && !roleError.message.includes('Failed to fetch')) {
