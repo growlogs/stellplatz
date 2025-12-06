@@ -27,11 +27,12 @@
             window.currentTabId = "scannerTab"; 
             window.currentUserRole = null; 
             window.currentClientId = null; // Tenant-ID
-            window.companyEmailBase = null; // NEU: Gespeicherte Firmen-E-Mail-Basis
+            window.companyEmailBase = null; // Gespeicherte Firmen-E-Mail-Basis
             window.offlineDB = null; 
             window.isSyncing = false; 
             window.articleToEdit = null; // Für Inventar-Bearbeitung
-            window.employeeToEdit = null; // NEU: Für Mitarbeiter-Bearbeitung
+            window.employeeToEdit = null; // Für Mitarbeiter-Bearbeitung
+            window.currentAuthMode = localStorage.getItem('auth_mode') || 'employee'; // NEU: Login-Modus (admin/employee)
         })();
     </script>
 
@@ -258,6 +259,20 @@
         
         #pinIndicators, #keypad {
             display: none; 
+        }
+
+        /* NEUE LOGIN STYLES */
+        #authModeToggle {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
         }
 
 
@@ -900,18 +915,26 @@
         </div>
 
         <form id="authForm" onsubmit="event.preventDefault(); handleAuthSubmit(this);">
+            
+            <button type="button" id="authModeToggle" onclick="toggleAuthMode()">Als Admin anmelden</button>
+
             <div class="input-group" id="companyEmailGroup">
                 <label for="authCompanyEmail">Firmen E-Mail (Basis)</label>
                 <input type="email" id="authCompanyEmail" placeholder="firma@beispiel.de" required>
                 <p style="font-size: 0.75rem; opacity: 0.6; margin-top: -10px; margin-bottom: 15px;">Wird für zukünftige Logins gespeichert.</p>
             </div>
 
-            <div class="input-group">
+            <div class="input-group" id="personnelNumberGroup">
                 <label for="authPersonnelNumber">Personalnummer</label>
                 <input type="text" id="authPersonnelNumber" placeholder="01" required>
             </div>
+            
+            <div class="input-group" id="adminEmailGroup" style="display: none;">
+                <label for="authAdminEmail">E-Mail (Admin)</label>
+                <input type="email" id="authAdminEmail" placeholder="admin@firma.de">
+            </div>
 
-            <div class="input-group">
+            <div class="input-group" id="authPasswordGroup">
                 <label for="authPassword">Passwort</label>
                 <input type="password" id="authPassword" placeholder="******" required>
             </div>
@@ -1054,11 +1077,63 @@
                 document.getElementById('authCompanyEmail').value = window.companyEmailBase;
             } else {
                 // E-Mail-Basis ist unbekannt, Feld anzeigen
-                emailGroup.style.display = 'block';
                 document.getElementById('authCompanyEmail').setAttribute('required', 'required');
-                document.getElementById('authCompanyEmail').value = ''; // Sicherstellen, dass es leer ist
+                document.getElementById('authCompanyEmail').value = ''; 
             }
+            
+            updateAuthForm(); // NEU: Formular-Ansicht beim Start aktualisieren
         }
+        
+        // NEU: Logik zur Aktualisierung des dynamischen Login-Formulars
+        function updateAuthForm() {
+            const isEmployee = window.currentAuthMode === 'employee';
+            const isRegister = isRegisterMode;
+            
+            // Toggle Button Text
+            document.getElementById('authModeToggle').innerText = isEmployee 
+                ? "Als Admin anmelden" 
+                : "Als Mitarbeiter anmelden";
+
+            // NEU: Felder dynamisch anzeigen/ausblenden
+            const companyEmailGroup = document.getElementById('companyEmailGroup');
+            const personnelNumberGroup = document.getElementById('personnelNumberGroup');
+            const adminEmailGroup = document.getElementById('adminEmailGroup');
+            const authPasswordGroup = document.getElementById('authPasswordGroup');
+
+            // Mitarbeiter-Ansicht
+            if (isEmployee) {
+                companyEmailGroup.style.display = (window.companyEmailBase && !isRegister) ? 'none' : 'block';
+                personnelNumberGroup.style.display = 'block';
+                adminEmailGroup.style.display = 'none';
+                authPasswordGroup.style.display = isRegister ? 'block' : 'none';
+                
+                // Für Mitarbeiter-Login (NICHT Registrierung): Passwort automatisch auf Dummy setzen
+                if (!isRegister) {
+                    // WICHTIG: Supabase benötigt ein Passwort, daher verwenden wir einen festen Dummy-Wert.
+                    document.getElementById('authPassword').value = 'dummy_employee_pin_12345'; 
+                    document.getElementById('authPassword').removeAttribute('required');
+                } else {
+                    document.getElementById('authPassword').value = '';
+                    document.getElementById('authPassword').setAttribute('required', 'required');
+                }
+            } 
+            // Admin-Ansicht
+            else {
+                companyEmailGroup.style.display = 'none';
+                personnelNumberGroup.style.display = 'none';
+                adminEmailGroup.style.display = 'block';
+                authPasswordGroup.style.display = 'block';
+                document.getElementById('authPassword').setAttribute('required', 'required');
+                document.getElementById('authPassword').value = '';
+            }
+
+            // Button-Text anpassen
+            document.querySelector('#authForm button[type="submit"]').innerText = isRegister ? "Registrieren" : "Anmelden";
+
+            // Speichern des Modus
+            localStorage.setItem('auth_mode', window.currentAuthMode);
+        }
+
 
         function updateVolumeLabel() {
             document.getElementById('volValue').innerText = `${document.getElementById('settingVolume').value}%`;
@@ -1112,13 +1187,17 @@
         }
 
         function toggleAuthMode() {
-            isRegisterMode = !isRegisterMode;
-            document.getElementById('registerToggle').innerText = isRegisterMode 
-                ? "Schon registriert? Jetzt anmelden." 
-                : "Noch kein Konto? Jetzt registrieren.";
-            document.querySelector('#authForm button[type="submit"]').innerText = isRegisterMode 
-                ? "Registrieren" 
-                : "Anmelden";
+            if (isRegisterMode) {
+                // Wechsel zwischen Anmelden/Registrieren
+                isRegisterMode = !isRegisterMode;
+                document.getElementById('registerToggle').innerText = isRegisterMode 
+                    ? "Schon registriert? Jetzt anmelden." 
+                    : "Noch kein Konto? Jetzt registrieren.";
+            } else {
+                // Wechsel zwischen Employee/Admin
+                window.currentAuthMode = window.currentAuthMode === 'employee' ? 'admin' : 'employee';
+            }
+            updateAuthForm();
         }
 
         async function checkLogin() {
@@ -1137,12 +1216,39 @@
             submitButton.disabled = true;
             submitButton.innerText = "Verarbeite...";
 
-            const personalNumber = document.getElementById('authPersonnelNumber').value.trim();
-            const password = document.getElementById('authPassword').value;
-            let companyEmailBase = document.getElementById('authCompanyEmail').value.trim();
+            let fullEmail = '';
+            let password = '';
             
-            // NEU: E-Mail für Supabase Auth zusammenbauen
-            const fullEmail = `${personalNumber}@${companyEmailBase}`;
+            if (window.currentAuthMode === 'employee') {
+                // Mitarbeiter Login (PN + Auto-Passwort)
+                const personalNumber = document.getElementById('authPersonnelNumber').value.trim();
+                let companyEmailBaseInput = document.getElementById('authCompanyEmail').value.trim();
+                
+                const finalEmailBase = window.companyEmailBase || companyEmailBaseInput;
+
+                if (!finalEmailBase) {
+                     document.getElementById("authError").innerText = "Bitte Firmen E-Mail Basis angeben.";
+                     submitButton.disabled = false;
+                     submitButton.innerText = (isRegisterMode ? "Registrieren" : "Anmelden");
+                     return;
+                }
+
+                fullEmail = `${personalNumber}@${finalEmailBase}`;
+                password = document.getElementById('authPassword').value; // Liest Dummy-Wert oder Registrierungs-Passwort
+
+            } else {
+                // Admin Login (Volle Email + Passwort)
+                fullEmail = document.getElementById('authAdminEmail').value.trim();
+                password = document.getElementById('authPassword').value;
+
+                if (!fullEmail || !password) {
+                     document.getElementById("authError").innerText = "Bitte E-Mail und Passwort angeben.";
+                     submitButton.disabled = false;
+                     submitButton.innerText = (isRegisterMode ? "Registrieren" : "Anmelden");
+                     return;
+                }
+            }
+
 
             try {
                 if (isRegisterMode) {
@@ -1153,10 +1259,13 @@
 
                     if (error) throw error;
 
-                    // Beim ersten Registrieren die E-Mail-Basis speichern
-                    if (!window.companyEmailBase) {
-                        localStorage.setItem('company_email_base', companyEmailBase);
-                        window.companyEmailBase = companyEmailBase;
+                    // Beim ersten erfolgreichen Registrieren als Mitarbeiter die E-Mail-Basis speichern
+                    if (window.currentAuthMode === 'employee' && !window.companyEmailBase) {
+                        const companyEmailBase = fullEmail.split('@')[1];
+                        if (companyEmailBase) {
+                            localStorage.setItem('company_email_base', companyEmailBase);
+                            window.companyEmailBase = companyEmailBase;
+                        }
                     }
                     
                     showToast("Registrierung gestartet. Bitte E-Mail bestätigen.", 'info', 7000);
@@ -1169,11 +1278,14 @@
                     
                     if (error) throw error;
                     
-                    // Beim ersten erfolgreichen Login die E-Mail-Basis speichern
-                    if (!window.companyEmailBase) {
-                        localStorage.setItem('company_email_base', companyEmailBase);
-                        window.companyEmailBase = companyEmailBase;
-                        initLoginSettings(); // Ansicht anpassen
+                    // Beim ersten erfolgreichen Login als Mitarbeiter die E-Mail-Basis speichern
+                    if (window.currentAuthMode === 'employee' && !window.companyEmailBase) {
+                        const companyEmailBase = fullEmail.split('@')[1];
+                        if (companyEmailBase) {
+                            localStorage.setItem('company_email_base', companyEmailBase);
+                            window.companyEmailBase = companyEmailBase;
+                            initLoginSettings(); // Ansicht anpassen
+                        }
                     }
 
                     await handleLoginSuccess(data.user.id, data.user.email);
@@ -1208,13 +1320,14 @@
                 const { data, error } = await window.appSupabaseClient 
                     .from('employees')
                     .select('id, name, personalnummer, role, is_active, client_id')
-                    .eq('personalnummer', personnelNumber)
+                    .or(`personalnummer.eq.${personnelNumber},name.eq.${personnelNumber}`) // Fallback für Admins, falls sie im Employee-Schema sind
                     .single();
 
                 if (error) {
-                    // Falls Fehler, versuchen wir, die RLS/Auth Daten zu laden
+                    // Falls Fehler (z.B. Admin nicht in Employees-Tabelle), muss der Client-ID-Mechanismus angepasst werden, 
+                    // da Admins die Client-ID benötigen. Aktuell verlassen wir uns auf die RLS/Auth-Tabelle.
                     const { data: authData } = await window.appSupabaseClient
-                        .from('user_roles')
+                        .from('user_roles') // Hier wäre eine Abfrage auf eine generelle Auth-Tabelle nötig, falls 'employees' nicht gefunden wird
                         .select('role, is_blocked, client_id')
                         .eq('id', userId)
                         .single();
@@ -1228,7 +1341,6 @@
                     if (error.message.includes('Failed to fetch')) {
                         throw new Error("Offline");
                     } else if (!data) {
-                        // Mitarbeiter nicht in der Business-Tabelle gefunden
                         console.warn("Mitarbeiter nicht in 'employees' gefunden. Verwende Auth-Daten.");
                     } else {
                         throw error;
@@ -1250,7 +1362,7 @@
                     isOffline = true;
                     // 2. Offline-Fallback (IndexedDB)
                     try {
-                        const localEmployee = await window.offlineDB.getEmployeeByPersonnelNumber(personalNumber);
+                        const localEmployee = await window.offlineDB.getEmployeeByPersonnelNumber(personnelNumber);
                         const localAuth = await window.offlineDB.getAuthRole(userId);
 
                         if (localEmployee) {
@@ -1301,11 +1413,12 @@
             switchView('loginView');
             window.currentUserRole = null;
             window.currentClientId = null; // Client-ID löschen
-            window.companyEmailBase = null; // E-Mail-Basis behalten, damit nur die Personalnummer abgefragt wird
+            // window.companyEmailBase = null; // E-Mail-Basis behalten, damit nur die Personalnummer abgefragt wird
             showToast("Erfolgreich abgemeldet.", 'info');
             lastCode = "";
             document.getElementById("authPersonnelNumber").value = "";
             document.getElementById("authPassword").value = "";
+            document.getElementById("authAdminEmail").value = "";
             document.getElementById("authError").innerText = "";
             initLoginSettings(); // Login-Ansicht neu initialisieren
         }
@@ -2399,15 +2512,24 @@
             document.getElementById('navLog').style.display = isAdmin ? 'flex' : 'none';
             document.getElementById('navUsers').style.display = isAdmin ? 'flex' : 'none'; 
             // In den Einstellungen: Datenmanagement
-            document.querySelector('#settingsPopupOverlay h4').style.display = isAdmin ? 'block' : 'none';
-            document.querySelector('#settingsPopupOverlay .setting-row:nth-last-child(3)').style.display = isAdmin ? 'flex' : 'none'; 
-            document.querySelector('#settingsPopupOverlay .setting-row:nth-last-child(2)').style.display = isAdmin ? 'flex' : 'none'; 
+            const settingsPopup = document.getElementById('settingsPopupOverlay');
+            if (settingsPopup) {
+                // Diese Selektoren sind etwas anfällig, könnten durch IDs ersetzt werden
+                const h4 = settingsPopup.querySelector('h4');
+                const exportGroup = settingsPopup.querySelector('.setting-row:nth-last-child(3)');
+                const importGroup = settingsPopup.querySelector('.setting-row:nth-last-child(2)');
+                
+                if (h4) h4.style.display = isAdmin ? 'block' : 'none';
+                if (exportGroup) exportGroup.style.display = isAdmin ? 'flex' : 'none';
+                if (importGroup) importGroup.style.display = isAdmin ? 'flex' : 'none';
+            }
         }
 
         /* --- OFFLINE/INDEXEDDB LOGIK --- */
 
         class IndexedDBHelper {
-            constructor(dbName = 'inventoryDB', dbVersion = 2) { // NEU: Version 2 für neue Stores/Struktur
+            // FEHLERBEHEBUNG: Version von 2 auf 3 erhöht
+            constructor(dbName = 'inventoryDB', dbVersion = 3) { 
                 this.dbName = dbName;
                 this.dbVersion = dbVersion;
                 this.db = null;
@@ -2428,11 +2550,10 @@
                         if (!db.objectStoreNames.contains('inventar')) {
                             db.createObjectStore('inventar', { keyPath: 'barcode' });
                         } else if (db.objectStoreNames.contains('artikel')) {
-                            // OPTIONAL: Lösche alte Store 'artikel'
-                            // db.deleteObjectStore('artikel');
+                            // db.deleteObjectStore('artikel'); // Nur bei echtem Migrationsbedarf
                         }
 
-                        // Mitarbeiter-Speicher (Schlüssel: id/uuid) - NEU
+                        // Mitarbeiter-Speicher (Schlüssel: id/uuid)
                         if (!db.objectStoreNames.contains('employees')) {
                             const employeeStore = db.createObjectStore('employees', { keyPath: 'id' });
                             employeeStore.createIndex('personalnummer', 'personalnummer', { unique: true }); // Index für schnellen Login
