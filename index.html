@@ -1238,12 +1238,12 @@
 
             if (window.companyEmailBase) {
                 // E-Mail-Basis ist bekannt, Feld ausblenden
-                emailGroup.style.display = 'none';
-                if (authCompanyEmailEl) authCompanyEmailEl.removeAttribute('required');
+                // emailGroup.style.display = 'none'; // <-- Wird nun in updateAuthForm() gesetzt
+                // if (authCompanyEmailEl) authCompanyEmailEl.removeAttribute('required'); // <-- Wird nun in updateAuthForm() gesetzt
                 if (authCompanyEmailEl) authCompanyEmailEl.value = window.companyEmailBase;
             } else {
                 // E-Mail-Basis ist unbekannt, Feld anzeigen
-                if (authCompanyEmailEl) authCompanyEmailEl.setAttribute('required', 'required');
+                // if (authCompanyEmailEl) authCompanyEmailEl.setAttribute('required', 'required'); // <-- Wird nun in updateAuthForm() gesetzt
                 if (authCompanyEmailEl) authCompanyEmailEl.value = '';
             }
 
@@ -1266,9 +1266,10 @@
             const registerToggle = document.getElementById('registerToggle');
             const authTitle = document.getElementById('authTitle');
             
-            // NEU: Input-Elemente für required-Korrektur (FIX 1)
+            // NEU: Input-Elemente für required-Korrektur (FIX 1 & 3)
             const authPersonnelNumberEl = document.getElementById('authPersonnelNumber');
             const authAdminEmailEl = document.getElementById('authAdminEmail');
+            const authCompanyEmailEl = document.getElementById('authCompanyEmail'); // FIX 3: Element hinzugefügt
 
 
             // Admin-Modus
@@ -1281,6 +1282,8 @@
                 // *** FIX 1: Required Attribut dynamisch setzen/entfernen ***
                 if (authAdminEmailEl) authAdminEmailEl.setAttribute('required', 'required');
                 if (authPersonnelNumberEl) authPersonnelNumberEl.removeAttribute('required');
+                // *** FIX 3: companyEmail darf im Admin-Modus nicht required sein ***
+                if (authCompanyEmailEl) authCompanyEmailEl.removeAttribute('required');
 
             } 
             // Mitarbeiter-Modus
@@ -1297,8 +1300,12 @@
                 // Firmen-E-Mail-Basis anzeigen, falls noch nicht gespeichert
                 if (window.companyEmailBase) {
                     companyEmailGroup.style.display = 'none';
+                    // *** FIX 3: companyEmail nicht required, wenn Basis bekannt ist ***
+                    if (authCompanyEmailEl) authCompanyEmailEl.removeAttribute('required'); 
                 } else {
                     companyEmailGroup.style.display = 'block';
+                    // *** FIX 3: companyEmail required, wenn Basis unbekannt ist ***
+                    if (authCompanyEmailEl) authCompanyEmailEl.setAttribute('required', 'required'); 
                 }
             }
 
