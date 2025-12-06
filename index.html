@@ -501,21 +501,33 @@
             // Admin-Modus
             if (!isEmployee) {
                 companyEmailGroup.style.display = 'none';
+                document.getElementById('authCompanyEmail').removeAttribute('required'); // FIX: Required entfernen wenn unsichtbar
+
                 personnelNumberGroup.style.display = 'none';
+                document.getElementById('authPersonnelNumber').removeAttribute('required'); // FIX: Required entfernen wenn unsichtbar
+
                 adminEmailGroup.style.display = 'block';
+                document.getElementById('authAdminEmail').setAttribute('required', 'required'); // FIX: Required hinzufügen wenn sichtbar
+
                 authPasswordGroup.style.display = 'block';
             } 
             // Mitarbeiter-Modus
             else {
                 personnelNumberGroup.style.display = 'block';
+                document.getElementById('authPersonnelNumber').setAttribute('required', 'required'); // FIX: Required hinzufügen wenn sichtbar
+
                 adminEmailGroup.style.display = 'none';
+                document.getElementById('authAdminEmail').removeAttribute('required'); // FIX: Required entfernen wenn unsichtbar
+
                 authPasswordGroup.style.display = 'block';
 
                 // Firmen-E-Mail-Basis anzeigen, falls noch nicht gespeichert
                 if (window.companyEmailBase) {
                     companyEmailGroup.style.display = 'none';
+                    document.getElementById('authCompanyEmail').removeAttribute('required'); // FIX
                 } else {
                     companyEmailGroup.style.display = 'block';
+                    document.getElementById('authCompanyEmail').setAttribute('required', 'required'); // FIX
                 }
             }
 
