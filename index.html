@@ -2846,33 +2846,27 @@
                 <h2 id="authTitle">Anmelden</h2>
                 <p id="authError"></p>
             </div>
-            <form id="authForm" onsubmit="event.preventDefault(); handleAuthSubmit(this);">
-                <button type="button" id="authModeToggle" onclick="toggleAuthMode()">Als Admin anmelden</button>
-                
-                <div class="input-group" id="personnelNumberGroup">
-                    <label for="authPersonnelNumber">personnel_number</label>
-                    <input type="text" id="authPersonnelNumber" placeholder="Ihre personnel_number" required>
-                </div>
-                
-                <div class="input-group" id="adminEmailGroup" style="display:none;">
-                    <label for="authAdminEmail">E-Mail (Admin)</label>
-                    <input type="email" id="authAdminEmail" placeholder="admin@firma.de">
-                </div>
-                
-                <div class="input-group" id="authPasswordGroup">
-                    <label for="authPassword">Passwort</label>
-                    <input type="password" id="authPassword" placeholder="Ihr Passwort" required>
-                </div>
-                
-                <div class="input-group" id="companyEmailGroup">
-                    <label for="authCompanyEmail">Firmen E-Mail Basis (z.B. firma.de)</label>
-                    <input type="text" id="authCompanyEmail" placeholder="firma.de" required>
-                </div>
-                
-                <button type="submit">Anmelden</button>
-                
-                <button type="button" id="registerToggle" onclick="toggleRegisterMode()">Ich benötige ein neues Konto</button>
-            </form>
+<form id="authForm" onsubmit="event.preventDefault(); handleAuthSubmit(this);">
+    <button type="button" id="authModeToggle" onclick="toggleAuthMode()">Als Admin anmelden</button>
+    <div class="input-group" id="personnelNumberGroup">
+        <label for="authPersonnelNumber">personnel_number</label>
+        <input type="text" id="authPersonnelNumber" name="personnel_number" placeholder="Ihre personnel_number" required>
+    </div>
+    <div class="input-group" id="adminEmailGroup" style="display:none;">
+        <label for="authAdminEmail">E-Mail (Admin)</label>
+        <input type="email" id="authAdminEmail" placeholder="admin@firma.de">
+    </div>
+    <div class="input-group" id="authPasswordGroup">
+        <label for="authPassword">Passwort</label>
+        <input type="password" id="authPassword" placeholder="Ihr Passwort" required>
+    </div>
+    <div class="input-group" id="companyEmailGroup">
+        <label for="authCompanyEmail">Firmen E-Mail Basis (z.B. firma.de)</label>
+        <input type="text" id="authCompanyEmail" name="company_email_base" placeholder="firma.de" required>
+    </div>
+    </form>
+            <button type="submit" form="authForm">Anmelden</button>
+            <button type="button" id="registerToggle" onclick="toggleRegisterMode()">Neues Konto erstellen</button>
         </div>
     </div>
 
