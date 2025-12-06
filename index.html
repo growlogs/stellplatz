@@ -660,7 +660,7 @@
 .from('employees')
             .select('id, name, personalnummer, role, is_active, client_id')
             // FIX: Suche nur nach der vorhandenen Spalte 'personalnummer', um den Fehler 42703 zu vermeiden.
-            .eq('personalnummer', personalNumber) 
+            .eq('personnel_number', personalNumber) 
             .single();
 
                 if (data) {
