@@ -187,7 +187,7 @@
         var offlineDB = {
             db: null,
             DB_NAME: 'InventarScannerDB',
-            DB_VERSION: 2, // FIX: Version auf 2 erhöht, da dein Browser bereits Version 2 gespeichert hat
+            DB_VERSION: 1, // FIX: Version auf 2 erhöht, da dein Browser bereits Version 2 gespeichert hat
             STORE_NAMES: ['inventar', 'audit_log', 'employees', 'outbox'],
 
             open: () => new Promise((res, rej) => {
