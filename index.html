@@ -18,7 +18,6 @@
         // Globale Variablen & Supabase-Client Initialisierung
         (function() {
             if (window['supabase']) {
-                // FIX: Variable zu window.appSupabaseClient korrigiert und Aufruf optimiert
                 window.appSupabaseClient = window['supabase'].createClient(APP_SUPABASE_URL, APP_SUPABASE_KEY);
             } else {
                 window.appSupabaseClient = null;
@@ -44,7 +43,6 @@
 
         // ---------------------------------------------------------
         // *** FUNKTIONSDEFINITIONEN (VOR window.onload) ***
-        // (Struktureller FIX: Alle Funktionen vor dem Aufruf definieren)
         // ---------------------------------------------------------
 
 
@@ -189,7 +187,7 @@
         var offlineDB = {
             db: null,
             DB_NAME: 'InventarScannerDB',
-            DB_VERSION: 1,
+            DB_VERSION: 2, // FIX: Version auf 2 erhöht, da dein Browser bereits Version 2 gespeichert hat
             STORE_NAMES: ['inventar', 'audit_log', 'employees', 'outbox'],
 
             open: () => new Promise((res, rej) => {
@@ -203,7 +201,7 @@
                     if (!db.objectStoreNames.contains('audit_log')) {
                         db.createObjectStore('audit_log', { keyPath: 'created_at' });
                     }
-                    // FIX: employees sollte 'personalnummer' als Key verwenden
+                    // employees sollte 'personalnummer' als Key verwenden
                     if (!db.objectStoreNames.contains('employees')) {
                         db.createObjectStore('employees', { keyPath: 'personalnummer' });
                     }
@@ -347,8 +345,6 @@
                 request.onsuccess = (event) => res(event.target.result);
                 request.onerror = (e) => rej(e.target.error);
             }),
-            
-            // ... (Weitere IndexedDB-Funktionen)
         };
 
         // Initialisiert die Offline-Datenbank
@@ -501,33 +497,33 @@
             // Admin-Modus
             if (!isEmployee) {
                 companyEmailGroup.style.display = 'none';
-                document.getElementById('authCompanyEmail').removeAttribute('required'); // FIX: Required entfernen wenn unsichtbar
+                document.getElementById('authCompanyEmail').removeAttribute('required'); 
 
                 personnelNumberGroup.style.display = 'none';
-                document.getElementById('authPersonnelNumber').removeAttribute('required'); // FIX: Required entfernen wenn unsichtbar
+                document.getElementById('authPersonnelNumber').removeAttribute('required'); 
 
                 adminEmailGroup.style.display = 'block';
-                document.getElementById('authAdminEmail').setAttribute('required', 'required'); // FIX: Required hinzufügen wenn sichtbar
+                document.getElementById('authAdminEmail').setAttribute('required', 'required'); 
 
                 authPasswordGroup.style.display = 'block';
             } 
             // Mitarbeiter-Modus
             else {
                 personnelNumberGroup.style.display = 'block';
-                document.getElementById('authPersonnelNumber').setAttribute('required', 'required'); // FIX: Required hinzufügen wenn sichtbar
+                document.getElementById('authPersonnelNumber').setAttribute('required', 'required'); 
 
                 adminEmailGroup.style.display = 'none';
-                document.getElementById('authAdminEmail').removeAttribute('required'); // FIX: Required entfernen wenn unsichtbar
+                document.getElementById('authAdminEmail').removeAttribute('required'); 
 
                 authPasswordGroup.style.display = 'block';
 
                 // Firmen-E-Mail-Basis anzeigen, falls noch nicht gespeichert
                 if (window.companyEmailBase) {
                     companyEmailGroup.style.display = 'none';
-                    document.getElementById('authCompanyEmail').removeAttribute('required'); // FIX
+                    document.getElementById('authCompanyEmail').removeAttribute('required'); 
                 } else {
                     companyEmailGroup.style.display = 'block';
-                    document.getElementById('authCompanyEmail').setAttribute('required', 'required'); // FIX
+                    document.getElementById('authCompanyEmail').setAttribute('required', 'required'); 
                 }
             }
 
@@ -639,10 +635,14 @@
 
         // KORRIGIERTE loadUserData: Lädt die Benutzerrolle und Client-ID nach erfolgreicher Auth
         async function loadUserData(authData) {
-            let user = authData.user || authData.session.user; // Session oder Response-Data
+            // FIX: Unterscheidung zwischen direkter Session (aus checkLogin) und API-Response-Objekt (aus handleAuthSubmit)
+            // performLogin liefert { data: { user, session }, error }, während checkLogin direkt { session } liefert.
+            const dataSource = authData.data || authData; 
+            let user = dataSource.user || (dataSource.session ? dataSource.session.user : null);
+
             const userEmail = user.email;
             let personalNumber = null;
-            let isEmployee = window.currentAuthMode === 'employee'; // Verwende den aktuellen Auth-Modus
+            let isEmployee = window.currentAuthMode === 'employee'; 
 
             if (isEmployee && window.companyEmailBase && userEmail) {
                 // Versuche, die Personalnummer aus der E-Mail zu extrahieren
@@ -659,7 +659,7 @@
                 const { data, error } = await window.appSupabaseClient
                     .from('employees')
                     .select('id, name, personalnummer, role, is_active, client_id')
-                    // FIX: Suche entweder nach der Personalnummer (für Mitarbeiter) ODER der vollständigen E-Mail (für Admin)
+                    // Suche entweder nach der Personalnummer (für Mitarbeiter) ODER der vollständigen E-Mail (für Admin)
                     .or(`personalnummer.eq.${personalNumber}, email.eq.${userEmail}`) 
                     .single();
 
