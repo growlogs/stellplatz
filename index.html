@@ -808,7 +808,7 @@
                 }
                 
                 // 2. Benutzerdaten laden und globale Variablen setzen
-                await loadUserData(authResponse);
+                await loadUserData(authResponse.data);
 
                 // 3. Ansicht wechseln und Sync starten
                 switchView('appView');
