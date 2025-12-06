@@ -1085,66 +1085,75 @@
         }
         
         // NEU: Logik zur Aktualisierung des dynamischen Login-Formulars
+// NEU: Logik zur Aktualisierung des dynamischen Login-Formulars
 function updateAuthForm() {
-            const isEmployee = window.currentAuthMode === 'employee';
-            const isRegister = isRegisterMode;
-            
-            // Toggle Button Text
-            document.getElementById('authModeToggle').innerText = isEmployee 
-                ? "Als Admin anmelden" 
-                : "Als Mitarbeiter anmelden";
+    const isEmployee = window.currentAuthMode === 'employee';
+    const isRegister = isRegisterMode; 
 
-            // Felder dynamisch anzeigen/ausblenden
-            const companyEmailGroup = document.getElementById('companyEmailGroup');
-            const personnelNumberGroup = document.getElementById('personnelNumberGroup');
-            const adminEmailGroup = document.getElementById('adminEmailGroup');
-            const authPasswordGroup = document.getElementById('authPasswordGroup');
-            const authCompanyEmail = document.getElementById('authCompanyEmail');
-            const authPassword = document.getElementById('authPassword');
+    // Toggle Button Text
+    document.getElementById('authModeToggle').innerText = isEmployee ? "Als Admin anmelden" : "Als Mitarbeiter anmelden"; 
 
-            // Mitarbeiter-Ansicht
-            if (isEmployee) {
-                companyEmailGroup.style.display = (window.companyEmailBase && !isRegister) ? 'none' : 'block';
-                personnelNumberGroup.style.display = 'block';
-                adminEmailGroup.style.display = 'none';
-                authPasswordGroup.style.display = isRegister ? 'block' : 'none';
-                
-                // Für Mitarbeiter-Login (NICHT Registrierung): Passwort automatisch auf Dummy setzen
-                if (!isRegister) {
-                    // Supabase benötigt ein Passwort, daher verwenden wir einen festen Dummy-Wert.
-                    authPassword.value = 'dummy_employee_pin_12345'; 
-                    authPassword.removeAttribute('required');
-                } else {
-                    authPassword.value = '';
-                    authPassword.setAttribute('required', 'required');
-                }
+    // Elemente holen
+    const companyEmailGroup = document.getElementById('companyEmailGroup');
+    const personnelNumberGroup = document.getElementById('personnelNumberGroup');
+    const adminEmailGroup = document.getElementById('adminEmailGroup');
+    const authPasswordGroup = document.getElementById('authPasswordGroup');
+    
+    const authCompanyEmail = document.getElementById('authCompanyEmail');
+    const authPersonnelNumber = document.getElementById('authPersonnelNumber');
+    const authAdminEmail = document.getElementById('authAdminEmail');
+    const authPassword = document.getElementById('authPassword');
 
-                // Wichtig: required entfernen, wenn das Feld ausgeblendet ist, sonst Validierungsfehler
-                if (companyEmailGroup.style.display === 'none') {
-                    authCompanyEmail.removeAttribute('required');
-                } else {
-                    authCompanyEmail.setAttribute('required', 'required');
-                }
+    // 1. Felder anzeigen/ausblenden
+    if (isEmployee) {
+        // Mitarbeiter-Ansicht
+        companyEmailGroup.style.display = (window.companyEmailBase && !isRegister) ? 'none' : 'block';
+        personnelNumberGroup.style.display = 'block';
+        adminEmailGroup.style.display = 'none';
+        authPasswordGroup.style.display = isRegister ? 'block' : 'none';
+    } else { 
+        // Admin-Ansicht
+        companyEmailGroup.style.display = 'none'; 
+        personnelNumberGroup.style.display = 'none';
+        adminEmailGroup.style.display = 'block';
+        authPasswordGroup.style.display = 'block';
+    }
 
-            } 
-            // Admin-Ansicht
-            else {
-                companyEmailGroup.style.display = 'none';
-                personnelNumberGroup.style.display = 'none';
-                adminEmailGroup.style.display = 'block';
-                authPasswordGroup.style.display = 'block';
-                authPassword.setAttribute('required', 'required');
-                authPassword.value = '';
-                // Admin-Modus benötigt nicht das Firmen-Basis-Feld -> required entfernen
-                authCompanyEmail.removeAttribute('required');
-            }
-
-            // Button-Text anpassen
-            document.querySelector('#authForm button[type="submit"]').innerText = isRegister ? "Registrieren" : "Anmelden";
-
-            // Speichern des Modus
-            localStorage.setItem('auth_mode', window.currentAuthMode);
-        }
+    // 2. FIX: REQUIRED-Attribute auf Basis der Sichtbarkeit verwalten
+    // Dies behebt den Validierungsfehler, da 'required' von allen versteckten Feldern entfernt wird.
+    
+    // Personalnummer: Required wenn Employee-Mode
+    if (isEmployee) {
+        authPersonnelNumber.setAttribute('required', 'required');
+    } else {
+        authPersonnelNumber.removeAttribute('required');
+    }
+    
+    // Admin E-Mail: Required wenn Admin-Mode
+    if (!isEmployee) {
+        authAdminEmail.setAttribute('required', 'required');
+    } else {
+        authAdminEmail.removeAttribute('required');
+    }
+    
+    // Passwort: Required wenn Passwortfeld sichtbar ist (Register-Mode Employee ODER Admin-Mode)
+    if (authPasswordGroup.style.display === 'block') {
+        authPassword.setAttribute('required', 'required');
+    } else {
+        authPassword.removeAttribute('required');
+    }
+    
+    // Firmen E-Mail Basis: Required nur wenn die Gruppe sichtbar ist UND keine Basis gespeichert ist.
+    if (companyEmailGroup.style.display === 'block' && !window.companyEmailBase) {
+         authCompanyEmail.setAttribute('required', 'required');
+    } else {
+         authCompanyEmail.removeAttribute('required');
+    }
+    
+    // Update submit button text
+    const submitButton = document.querySelector('#authForm button[type="submit"]');
+    submitButton.innerText = isRegister ? "Registrieren" : "Anmelden"; 
+}
 
 
         function updateVolumeLabel() {
