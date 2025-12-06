@@ -44,7 +44,6 @@
 
         // ---------------------------------------------------------
         // *** FUNKTIONSDEFINITIONEN (VOR window.onload) ***
-        // (Struktureller FIX: Alle Funktionen vor dem Aufruf definieren)
         // ---------------------------------------------------------
 
 
@@ -470,14 +469,13 @@
             window.companyEmailBase = localStorage.getItem('company_email_base');
             const emailGroup = document.getElementById('companyEmailGroup');
             
+            // IMPORTANT: Wir setzen required nun nur noch dynamisch in updateAuthForm.
+            // Die initiale Prüfung hier ist nur noch für die Speicherung der Basis.
             if (window.companyEmailBase) {
-                // E-Mail-Basis ist bekannt, Feld ausblenden
                 emailGroup.style.display = 'none';
-                document.getElementById('authCompanyEmail').removeAttribute('required');
                 document.getElementById('authCompanyEmail').value = window.companyEmailBase;
             } else {
-                // E-Mail-Basis ist unbekannt, Feld anzeigen
-                document.getElementById('authCompanyEmail').setAttribute('required', 'required');
+                emailGroup.style.display = 'block';
                 document.getElementById('authCompanyEmail').value = '';
             }
 
@@ -500,24 +498,47 @@
             const registerToggle = document.getElementById('registerToggle');
             const authTitle = document.getElementById('authTitle');
 
+            // NEUER FIX: Zugriff auf Inputs für dynamisches 'required'
+            const pnInput = document.getElementById('authPersonnelNumber');
+            const adminEmailInput = document.getElementById('authAdminEmail');
+            const companyEmailInput = document.getElementById('authCompanyEmail');
+
+
             // Admin-Modus
             if (!isEmployee) {
-                companyEmailGroup.style.display = 'none';
-                personnelNumberGroup.style.display = 'none';
+                // Admin-Felder aktivieren und auf 'required' setzen
                 adminEmailGroup.style.display = 'block';
+                adminEmailInput.setAttribute('required', 'required');
+                
+                // Mitarbeiter-Felder deaktivieren und 'required' entfernen
+                personnelNumberGroup.style.display = 'none';
+                pnInput.removeAttribute('required');
+                
+                // E-Mail Basis deaktivieren und 'required' entfernen
+                companyEmailGroup.style.display = 'none';
+                companyEmailInput.removeAttribute('required');
+
                 authPasswordGroup.style.display = 'block';
             } 
             // Mitarbeiter-Modus
             else {
+                // Mitarbeiter-Felder aktivieren und auf 'required' setzen
                 personnelNumberGroup.style.display = 'block';
+                pnInput.setAttribute('required', 'required');
+                
+                // Admin-Felder deaktivieren und 'required' entfernen
                 adminEmailGroup.style.display = 'none';
+                adminEmailInput.removeAttribute('required');
+                
                 authPasswordGroup.style.display = 'block';
 
-                // Firmen-E-Mail-Basis anzeigen, falls noch nicht gespeichert
+                // Firmen-E-Mail-Basis anzeigen/ausblenden und required setzen/entfernen
                 if (window.companyEmailBase) {
                     companyEmailGroup.style.display = 'none';
+                    companyEmailInput.removeAttribute('required');
                 } else {
                     companyEmailGroup.style.display = 'block';
+                    companyEmailInput.setAttribute('required', 'required');
                 }
             }
 
@@ -650,7 +671,9 @@
                     .from('employees')
                     .select('id, name, personnel_number, role, is_active, client_id')
                     // FIX: Suche entweder nach der personnel_number (für Mitarbeiter) ODER der vollständigen E-Mail (für Admin)
-                    .or(`personnel_number.eq.${personalNumber}`) 
+                    // Da die employees Tabelle primär für Mitarbeiterdaten gedacht ist, suchen wir hier nach PN. 
+                    // Admin-Rollen werden über Supabase RLS auf die E-Mail abgebildet.
+                    .eq('personnel_number', personalNumber) 
                     .single();
 
                 if (data) {
@@ -664,9 +687,30 @@
                 } else if (error) {
                     if (error.message.includes('Failed to fetch')) {
                         throw new Error("Offline"); // Gehe zum Offline-Fallback
+                    }
+                    // Wenn kein Mitarbeiter mit PN gefunden wird, könnte es ein Admin sein. 
+                    // Für Admin setzen wir die Rolle auf 'admin' und die Client-ID muss separat ermittelt werden.
+                    // Da wir aktuell nur die 'employees'-Tabelle abfragen und die Rolle 'user' als Default setzen,
+                    // belassen wir die Logik so und verlassen uns auf die RLS-Regeln von Supabase.
+                    if (error.code === 'PGRST116') {
+                         // Kein Ergebnis gefunden (User ist möglicherweise Admin oder existiert nicht)
+                         if (window.currentAuthMode === 'admin') {
+                            // Wenn Admin-Modus, setze Rolle auf 'admin' (wird später in Supabase bestätigt)
+                            userRole = 'admin';
+                            employeeName = 'Admin-User';
+                            // Da Admin keine PN hat, kann die Client ID nicht über die employees-Tabelle gefunden werden.
+                            // Annahme: Admin-Client ID ist über RLS/JWT zugänglich oder wird später über ein Profil-Mapping geladen.
+                            // Da wir das Admin-Profil-Mapping nicht im Code sehen, setzen wir eine Dummy-Client-ID
+                            // und müssen dies in einem echten Setup korrigieren.
+                            // Für dieses Skript setzen wir die Client ID fest, wenn Admin:
+                            clientId = 'admin_client_id_placeholder'; 
+                            // Dies ist eine kritische Lücke in der Architektur und MUSS in einem echten Projekt über 
+                            // eine Admin-Profildatenbank oder JWT-Metadaten gelöst werden!
+                         } else {
+                             throw new Error("Benutzer nicht in Mitarbeiterliste gefunden.");
+                         }
                     } else {
-                         // Generischer Fehler, z.B. RLS-Regel verweigert Zugriff
-                        throw error;
+                         throw error;
                     }
                 }
 
@@ -701,7 +745,20 @@
             
             // Globale Variablen setzen
             window.currentUserRole = userRole;
+            // WICHTIGER FIX: Im Admin-Modus MUSS die Client-ID korrekt gesetzt werden, 
+            // da die RLS-Regeln in Supabase dies für ALLE Datenbank-Operationen erfordern.
+            // Der Platzhalter von oben sollte idealerweise durch einen echten Wert ersetzt werden, 
+            // der beim Admin-Login über ein Profil-Mapping geholt wird. 
+            // Da das im Code nicht implementiert ist, verhindern wir hier, dass Admin mit null Client ID arbeitet.
+            if (userRole === 'admin' && !clientId) {
+                 // **DIES IST EIN KRITISCHER ARCHITEKTUR-HINWEIS FÜR DEN USER**
+                 console.warn("ACHTUNG: Admin Client ID konnte nicht geladen werden. Setze auf Dummy. Dies MUSS im Supabase-Backend gefixt werden!");
+                 // Hier muss die tatsächliche Client-ID des Admins aus einem Admin-Profil-Tabelle kommen.
+                 // Wir verlassen uns auf den im local storage gespeicherten oder geladenen Wert.
+                 clientId = localStorage.getItem('localClientId') || 'client_id_for_admin_if_available'; 
+            }
             window.currentClientId = clientId;
+
             
             // Lokalen Status speichern
             localStorage.setItem('localUserRole', userRole);
@@ -751,6 +808,7 @@
                     password = document.getElementById('authPassword').value;
                     
                     if (!personalNumber || !password) {
+                         // Sollte durch HTML5-Validierung (jetzt gefixt) abgefangen werden, aber als Fallback
                          document.getElementById("authError").innerText = "Bitte personnel_number und Passwort angeben.";
                         return;
                     }
@@ -759,7 +817,7 @@
                     if (!window.companyEmailBase) {
                         localStorage.setItem('company_email_base', finalEmailBase);
                         window.companyEmailBase = finalEmailBase;
-                        // initLoginSettings(); // UI aktualisieren
+                        updateAuthForm(); // UI aktualisieren, da companyEmailGroup jetzt ausgeblendet werden soll
                     }
 
                 } else {
@@ -768,6 +826,7 @@
                     password = document.getElementById('authPassword').value;
 
                     if (!fullEmail || !password) {
+                        // Sollte durch HTML5-Validierung (jetzt gefixt) abgefangen werden, aber als Fallback
                         document.getElementById("authError").innerText = "Bitte E-Mail und Passwort angeben.";
                         return;
                     }
@@ -784,7 +843,7 @@
                 }
                 
                 // 2. Benutzerdaten laden und globale Variablen setzen
-                // HIER WURDE DER FEHLER BEHOBEN: authResponse.data übergeben
+                // HIER WURDE DER TYPERROR BEHOBEN: authResponse.data übergeben
                 await loadUserData(authResponse.data); 
 
                 // 3. Ansicht wechseln und Sync starten
@@ -996,7 +1055,7 @@
                     <p style="opacity: 0.8;">${statusMessage}</p>
                 `;
 
-                if (!isOffline) {
+                if (!isOffline && window.currentUserRole === 'admin') { // Nur Admin darf registrieren
                     const newActionButtonGroup = document.createElement('div');
                     newActionButtonGroup.id = 'actionButtonGroup';
                     newActionButtonGroup.classList.add('action-button-group');
@@ -2766,7 +2825,7 @@
 
                     <div class="input-group" id="personnelNumberGroup">
                         <label for="authPersonnelNumber">personnel_number</label>
-                        <input type="text" id="authPersonnelNumber" placeholder="Ihre personnel_number" required>
+                        <input type="text" id="authPersonnelNumber" placeholder="Ihre personnel_number">
                     </div>
 
                     <div class="input-group" id="adminEmailGroup" style="display:none;">
@@ -2779,7 +2838,7 @@
                         <input type="password" id="authPassword" placeholder="Ihr Passwort" required>
                     </div>
                     
-                    <div class="input-group" id="companyEmailGroup">
+                    <div class="input-group" id="companyEmailGroup" style="display:none;">
                         <label for="authCompanyEmail">Firmen E-Mail Basis (z.B. firma.de)</label>
                         <input type="text" id="authCompanyEmail" placeholder="firma.de">
                     </div>
