@@ -863,7 +863,7 @@
                         <input type="text" id="employeeName" required>
                     </div>
                     <div class="input-group">
-                        <label for="employeePersonnelNumber">Personalnummer</label>
+                        <label for="employeePersonnelNumber">personnel_number</label>
                         <input type="text" id="employeePersonnelNumber" required>
                     </div>
                     <div class="input-group">
@@ -1812,16 +1812,16 @@
                     }
                     
                     const name = document.getElementById('employeeName').value.trim();
-                    const personalnummer = document.getElementById('employeePersonnelNumber').value.trim();
+                    const personnel_number = document.getElementById('employeePersonnelNumber').value.trim();
                     const clientId = window.currentClientId;
 
-                    if (!name || !personalnummer) {
-                        showToast("Name und Personalnummer müssen ausgefüllt werden.", "error");
+                    if (!name || !personnel_number) {
+                        showToast("Name und personnel_number müssen ausgefüllt werden.", "error");
                         return;
                     }
 
                     const newEmployee = {
-                        personalnummer: personalnummer,
+                        personnel_number: personnel_number,
                         name: name,
                         client_id: clientId,
                         created_at: new Date().toISOString()
@@ -1840,8 +1840,8 @@
                             if (error.message.includes('Failed to fetch')) {
                                 throw new Error("Offline");
                             }
-                            if (error.code === '23505') { // Duplikat Key Error (personalnummer)
-                                showToast(`FEHLER: Personalnummer ${personalnummer} existiert bereits.`, "error");
+                            if (error.code === '23505') { // Duplikat Key Error (personnel_number)
+                                showToast(`FEHLER: personnel_number ${personnel_number} existiert bereits.`, "error");
                                 return;
                             }
                             showToast(`FEHLER beim Speichern des Mitarbeiters.`, "error");
@@ -1860,7 +1860,7 @@
                             await window.offlineDB.addToOutbox({
                                 type: 'INSERT',
                                 table: 'employees',
-                                key: personalnummer,
+                                key: personnel_number,
                                 payload: newEmployee, 
                                 timestamp: new Date().toISOString()
                             });
@@ -1875,7 +1875,7 @@
                             `Mitarbeiter ${name} lokal registriert. Wird bei Verbindung synchronisiert.` : 
                             `Mitarbeiter ${name} wurde erfolgreich registriert.`;
                         showToast(statusMessage, isOffline ? "info" : "success");
-                        logAdminAction('EMPLOYEE_REGISTERED', `Neuer Mitarbeiter ${name} (PNr: ${personalnummer}) registriert.`);
+                        logAdminAction('EMPLOYEE_REGISTERED', `Neuer Mitarbeiter ${name} (PNr: ${personnel_number}) registriert.`);
                         hideEmployeeRegisterPopup();
                     }
                 }
@@ -2645,9 +2645,9 @@
                                     db.createObjectStore('audit_log', { keyPath: 'created_at' });
                                 }
 
-                                // Mitarbeiter-Speicher (Schlüssel: personalnummer) - NEU
+                                // Mitarbeiter-Speicher (Schlüssel: personnel_number) - NEU
                                 if (!db.objectStoreNames.contains('employees')) {
-                                    db.createObjectStore('employees', { keyPath: 'personalnummer' });
+                                    db.createObjectStore('employees', { keyPath: 'personnel_number' });
                                 }
 
                                 // Outbox für Offline-Änderungen (Schlüssel: Inkrementeller Index)
@@ -2827,7 +2827,7 @@
                 // Helferfunktion zur Bestimmung des Key-Feldes für die Supabase-Tabelle
                 const getKeyColumn = (tableName) => {
                     if (tableName === 'user_roles') return 'id';
-                    if (tableName === 'employees') return 'personalnummer'; // NEU
+                    if (tableName === 'employees') return 'personnel_number'; // NEU
                     return 'barcode'; // Für 'artikel' und andere
                 };
 
