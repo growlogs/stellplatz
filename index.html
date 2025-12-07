@@ -72,55 +72,57 @@
         // OFFLINE DB LOGIC (INDEXEDDB)
         // ---------------------------------------------------------
         
-        // IndexedDB Wrapper Klasse (Stark vereinfacht, nur die relevanten Methoden sind hier aufgeführt)
-        class OfflineDB {
-            constructor() {
-                this.db = null;
-                this.dbName = "InventoryDB";
-                this.dbVersion = 5; // *** WICHTIG: Erhöht auf 5, um Upgrade zu erzwingen ***
-                this.objectStores = [
-                    { name: 'inventar', keyPath: 'barcode', indices: ['client_id'] },
-                    { name: 'employees', keyPath: 'personalnummer', indices: ['client_id'] },
-                    { name: 'audit_log', keyPath: 'id', indices: ['client_id', 'created_at'] },
-                    { name: 'outbox', keyPath: 'id' } 
-                ];
+        // Stellen Sie sicher, dass dieser Block mit der Definition Ihrer Klasse übereinstimmt.
+class OfflineDB {
+    constructor() {
+        this.db = null;
+        this.dbName = "InventoryDB";
+        this.dbVersion = 6; // *** NEU: VERSION ERHÖHT auf 6 ***
+        this.objectStores = [
+            { name: 'inventar', keyPath: 'barcode', indices: ['client_id'] },
+            { name: 'employees', keyPath: 'personalnummer', indices: ['client_id'] },
+            { name: 'audit_log', keyPath: 'id', indices: ['client_id', 'created_at'] },
+            { name: 'outbox', keyPath: 'id' } 
+        ];
+    }
+
+    open() { // Zeile 94
+        return new Promise((res, rej) => {
+            if (this.db) {
+                res(this.db);
+                return;
             }
 
-            open() { // Zeile 94
-                return new Promise((res, rej) => {
-                    if (this.db) {
-                        res(this.db);
-                        return;
-                    }
+            // *KORREKTUR*
+            const self = this; 
 
-                    // FIX: 'this' in lokaler Variable speichern, um Kontextverlust zu verhindern
-                    const self = this; 
+            const request = indexedDB.open(self.dbName, self.dbVersion);
 
-                    const request = indexedDB.open(self.dbName, self.dbVersion);
-
-                    request.onupgradeneeded = (event) => { // Zeile 103
-                        self.db = event.target.result; 
-                        self.objectStores.forEach(storeConfig => { // Zeile 106 (KORRIGIERT: Zugriff über 'self')
-                            if (!self.db.objectStoreNames.contains(storeConfig.name)) {
-                                const store = self.db.createObjectStore(storeConfig.name, { keyPath: storeConfig.keyPath });
-                                storeConfig.indices.forEach(index => {
-                                    store.createIndex(index, index, { unique: false });
-                                });
-                            }
+            request.onupgradeneeded = (event) => { // Zeile 103
+                self.db = event.target.result; 
+                // CRITICAL LINE: Stellt sicher, dass 'self' den Kontext hält
+                self.objectStores.forEach(storeConfig => { // Zeile 106
+                    if (!self.db.objectStoreNames.contains(storeConfig.name)) {
+                        const store = self.db.createObjectStore(storeConfig.name, { keyPath: storeConfig.keyPath });
+                        storeConfig.indices.forEach(index => {
+                            store.createIndex(index, index, { unique: false });
                         });
-                    };
-
-                    request.onsuccess = (event) => {
-                        self.db = event.target.result; 
-                        res(self.db);
-                    };
-
-                    request.onerror = (event) => { // Zeile 119 (für den Fehler-Log)
-                        console.error("IndexedDB Fehler:", event.target.error);
-                        rej("IndexedDB konnte nicht geöffnet werden.");
-                    };
+                    }
                 });
-            }
+            };
+
+            request.onsuccess = (event) => {
+                self.db = event.target.result; 
+                res(self.db);
+            };
+
+            request.onerror = (event) => { // Zeile 119
+                console.error("IndexedDB Fehler:", event.target.error);
+                rej("IndexedDB konnte nicht geöffnet werden.");
+            };
+        });
+    }
+    
             
             // Generische Bulk-Insert/Update Funktion
             bulkInsertData(storeName, data, keyPath = 'id') {
