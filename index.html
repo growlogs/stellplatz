@@ -181,163 +181,182 @@
 
 
          // Spezifische Inventar-Funktionen
-            getAllArticles = () => new Promise((res, rej) => {
-                const transaction = window.offlineDB.db.transaction(['inventar'], 'readonly');
-                const store = transaction.objectStore('inventar');
-                const request = store.getAll();
-                request.onsuccess = (event) => res(event.target.result);
-                request.onerror = (e) => rej(e.target.error);
-            })
+        // Spezifische Inventar-Funktionen
+            getAllArticles() {
+                return new Promise((res, rej) => {
+                    const transaction = window.offlineDB.db.transaction(['inventar'], 'readonly');
+                    const store = transaction.objectStore('inventar');
+                    const request = store.getAll();
+                    request.onsuccess = (event) => res(event.target.result);
+                    request.onerror = (e) => rej(e.target.error);
+                });
+            }
 
-            getArticleByBarcode = (barcode) => new Promise((res, rej) => {
-                const transaction = window.offlineDB.db.transaction(['inventar'], 'readonly');
-                const store = transaction.objectStore('inventar');
-                const request = store.get(barcode); 
-                request.onsuccess = (event) => res(event.target.result);
-                request.onerror = (e) => rej(e.target.error);
-            })
+            getArticleByBarcode(barcode) {
+                return new Promise((res, rej) => {
+                    const transaction = window.offlineDB.db.transaction(['inventar'], 'readonly');
+                    const store = transaction.objectStore('inventar');
+                    const request = store.get(barcode); 
+                    request.onsuccess = (event) => res(event.target.result);
+                    request.onerror = (e) => rej(e.target.error);
+                });
+            }
 
-            updateArticleQuantity = (barcode, newQuantity) => new Promise(async (res, rej) => {
-                try {
-                    const article = await window.offlineDB.getArticleByBarcode(barcode);
-                    if (article) {
-                        article.quantity = newQuantity;
-                        await window.offlineDB.upsertData('inventar', article);
-                        res();
-                    } else {
-                        rej(new Error("Artikel nicht gefunden für Update."));
+            updateArticleQuantity(barcode, newQuantity) {
+                return new Promise(async (res, rej) => {
+                    try {
+                        const article = await window.offlineDB.getArticleByBarcode(barcode);
+                        if (article) {
+                            article.quantity = newQuantity;
+                            await window.offlineDB.upsertData('inventar', article);
+                            res();
+                        } else {
+                            rej(new Error("Artikel nicht gefunden für Update."));
+                        }
+                    } catch (e) {
+                        rej(e);
                     }
-                } catch (e) {
-                    rej(e);
-                }
-            })
+                });
+            }
             
-            updateArticleLocation = (barcode, newLocation) => new Promise(async (res, rej) => {
-                try {
-                    const article = await window.offlineDB.getArticleByBarcode(barcode);
-                    if (article) {
-                        article.location = newLocation;
-                        await window.offlineDB.upsertData('inventar', article);
-                        res();
-                    } else {
-                        rej(new Error("Artikel nicht gefunden für Location Update."));
+            updateArticleLocation(barcode, newLocation) {
+                return new Promise(async (res, rej) => {
+                    try {
+                        const article = await window.offlineDB.getArticleByBarcode(barcode);
+                        if (article) {
+                            article.location = newLocation;
+                            await window.offlineDB.upsertData('inventar', article);
+                            res();
+                        } else {
+                            rej(new Error("Artikel nicht gefunden für Location Update."));
+                        }
+                    } catch (e) {
+                        rej(e);
                     }
-                } catch (e) {
-                    rej(e);
-                }
-            })
+                });
+            }
 
             // Spezifische Mitarbeiter-Funktionen
-            getAllEmployees = () => new Promise((res, rej) => {
-                const transaction = window.offlineDB.db.transaction(['employees'], 'readonly');
-                const store = transaction.objectStore('employees');
-                const request = store.getAll();
-                request.onsuccess = (event) => res(event.target.result);
-                request.onerror = (e) => rej(e.target.error);
-            })
+            getAllEmployees() {
+                return new Promise((res, rej) => {
+                    const transaction = window.offlineDB.db.transaction(['employees'], 'readonly');
+                    const store = transaction.objectStore('employees');
+                    const request = store.getAll();
+                    request.onsuccess = (event) => res(event.target.result);
+                    request.onerror = (e) => rej(e.target.error);
+                });
+            }
             
-            getEmployeeByPN = (personalnummer) => new Promise((res, rej) => {
-                const transaction = window.offlineDB.db.transaction(['employees'], 'readonly');
-                const store = transaction.objectStore('employees');
-                const request = store.get(personalnummer);
-                request.onsuccess = (event) => res(event.target.result);
-                request.onerror = (e) => rej(e.target.error);
-            })
+            getEmployeeByPN(personalnummer) {
+                return new Promise((res, rej) => {
+                    const transaction = window.offlineDB.db.transaction(['employees'], 'readonly');
+                    const store = transaction.objectStore('employees');
+                    const request = store.get(personalnummer);
+                    request.onsuccess = (event) => res(event.target.result);
+                    request.onerror = (e) => rej(e.target.error);
+                });
+            }
 
             // Outbox Funktionen
-            getOutbox = () => new Promise((res, rej) => {
-                const transaction = window.offlineDB.db.transaction(['outbox'], 'readonly');
-                const store = transaction.objectStore('outbox');
-                const request = store.getAll();
-                request.onsuccess = (event) => res(event.target.result);
-                request.onerror = (e) => rej(e.target.error);
-            })
-
-            addToOutbox = (operation) => new Promise((res, rej) => {
-                const transaction = window.offlineDB.db.transaction(['outbox'], 'readwrite');
-                const store = transaction.objectStore('outbox');
-                const request = store.add({ 
-                    ...operation, 
-                    id: window.crypto.randomUUID() // Verwende UUID als temporäre ID für Outbox
+            getOutbox() {
+                return new Promise((res, rej) => {
+                    const transaction = window.offlineDB.db.transaction(['outbox'], 'readonly');
+                    const store = transaction.objectStore('outbox');
+                    const request = store.getAll();
+                    request.onsuccess = (event) => res(event.target.result);
+                    request.onerror = (e) => rej(e.target.error);
                 });
-                request.onsuccess = () => res();
-                request.onerror = (e) => rej(e.target.error);
-            })
+            }
+
+            addToOutbox(operation) {
+                return new Promise((res, rej) => {
+                    const transaction = window.offlineDB.db.transaction(['outbox'], 'readwrite');
+                    const store = transaction.objectStore('outbox');
+                    const request = store.add({ 
+                        ...operation, 
+                        id: window.crypto.randomUUID() // Verwende UUID als temporäre ID für Outbox
+                    });
+                    request.onsuccess = () => res();
+                    request.onerror = (e) => rej(e.target.error);
+                });
+            }
             
             // Spezifische Log-Funktion
-            logAction = (type, description) => new Promise(async (res, rej) => {
-                if (!window.currentClientId) {
-                    // Ignoriere Log, wenn kein Client angemeldet
-                    res();
-                    return;
-                }
-                const logEntry = {
-                    id: window.crypto.randomUUID(), // Eindeutige ID für Audit Log
-                    client_id: window.currentClientId,
-                    action_type: type,
-                    description: description,
-                    user_id: window.appSupabaseClient.auth.getUser() ? (await window.appSupabaseClient.auth.getUser()).data.user.id : 'anonymous',
-                    created_at: new Date().toISOString()
-                };
-                
-                // Füge zuerst zum lokalen Log hinzu
-                try {
-                    await window.offlineDB.upsertData('audit_log', logEntry, 'id');
-                } catch(e) {
-                    console.error("Lokaler Log-Fehler:", e);
-                }
-
-                // Füge zur Outbox hinzu, falls offline oder als Admin
-                if (!navigator.onLine || window.currentUserRole === 'admin') {
-                     try {
-                        await window.offlineDB.addToOutbox({
-                            type: 'INSERT',
-                            table: 'audit_log',
-                            key: logEntry.id,
-                            payload: logEntry,
-                            timestamp: logEntry.created_at
-                        });
+            logAction(type, description) {
+                return new Promise(async (res, rej) => {
+                    if (!window.currentClientId) {
+                        // Ignoriere Log, wenn kein Client angemeldet
                         res();
                         return;
-                    } catch(e) {
-                        console.error("Outbox Log-Fehler:", e);
                     }
-                }
-                
-                // Falls online und kein Admin, direkt in Supabase versuchen
-                if (navigator.onLine && window.appSupabaseClient && window.currentUserRole !== 'admin') {
+                    const logEntry = {
+                        id: window.crypto.randomUUID(), // Eindeutige ID für Audit Log
+                        client_id: window.currentClientId,
+                        action_type: type,
+                        description: description,
+                        user_id: window.appSupabaseClient.auth.getUser() ? (await window.appSupabaseClient.auth.getUser()).data.user.id : 'anonymous',
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    // Füge zuerst zum lokalen Log hinzu
                     try {
-                        const { error } = await window.appSupabaseClient
-                            .from('audit_log')
-                            .insert(logEntry);
-                        if (error) {
-                             if (error.message.includes('Failed to fetch')) {
-                                throw new Error("Offline"); 
-                            }
-                            console.error("Supabase Log-Fehler:", error);
-                        }
+                        await window.offlineDB.upsertData('audit_log', logEntry, 'id');
                     } catch(e) {
-                         if (e.message === "Offline" || !navigator.onLine) {
-                            // Füge zur Outbox hinzu, wenn Online-Versuch fehlschlägt
-                             try {
-                                await window.offlineDB.addToOutbox({
-                                    type: 'INSERT',
-                                    table: 'audit_log',
-                                    key: logEntry.id,
-                                    payload: logEntry,
-                                    timestamp: logEntry.created_at
-                                });
-                            } catch(e) {
-                                console.error("Outbox Log-Fehler (Fallback):", e);
+                        console.error("Lokaler Log-Fehler:", e);
+                    }
+
+                    // Füge zur Outbox hinzu, falls offline oder als Admin
+                    if (!navigator.onLine || window.currentUserRole === 'admin') {
+                         try {
+                            await window.offlineDB.addToOutbox({
+                                type: 'INSERT',
+                                table: 'audit_log',
+                                key: logEntry.id,
+                                payload: logEntry,
+                                timestamp: logEntry.created_at
+                            });
+                            res();
+                            return;
+                        } catch(e) {
+                            console.error("Outbox Log-Fehler:", e);
+                        }
+                    }
+                    
+                    // Falls online und kein Admin, direkt in Supabase versuchen
+                    if (navigator.onLine && window.appSupabaseClient && window.currentUserRole !== 'admin') {
+                        try {
+                            const { error } = await window.appSupabaseClient
+                                .from('audit_log')
+                                .insert(logEntry);
+                            if (error) {
+                                 if (error.message.includes('Failed to fetch')) {
+                                    throw new Error("Offline"); 
+                                }
+                                console.error("Supabase Log-Fehler:", error);
+                            }
+                        } catch(e) {
+                             if (e.message === "Offline" || !navigator.onLine) {
+                                // Füge zur Outbox hinzu, wenn Online-Versuch fehlschlägt
+                                 try {
+                                    await window.offlineDB.addToOutbox({
+                                        type: 'INSERT',
+                                        table: 'audit_log',
+                                        key: logEntry.id,
+                                        payload: logEntry,
+                                        timestamp: logEntry.created_at
+                                    });
+                                } catch(e) {
+                                    console.error("Outbox Log-Fehler (Fallback):", e);
+                                }
                             }
                         }
                     }
-                }
-                res();
-            })
+                    res();
+                });
+            }
             
             // Löscht alle lokalen Daten (für Logout/Einstellungen)
-            clearAllData = () => {
+            clearAllData() {
                 return new Promise(async (res, rej) => {
                     await window.offlineDB.open();
                     const transaction = window.offlineDB.db.transaction(window.offlineDB.objectStores.map(s => s.name), 'readwrite');
@@ -2886,8 +2905,7 @@
 
         <footer>
             <div id="scannerTabNav" class="nav-item active" onclick="changeTab('scannerTab')">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8zm5 0a5 5 5 0 1 1 10 0 5 5 0 0 1-10 0z"></path></svg>
-                <span>Scanner</span>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8zm5 0a5 5 5 0 1 1 10 0 5 5 0 0 1 -10 0z"></path></svg>                <span>Scanner</span>
             </div>
             <div id="listTabNav" class="nav-item" onclick="changeTab('listTab')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
