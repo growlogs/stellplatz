@@ -77,7 +77,7 @@
             constructor() {
                 this.db = null;
                 this.dbName = "InventoryDB";
-                this.dbVersion = 4;
+                this.dbVersion = 5; // *** WICHTIG: Erhöht auf 5, um Upgrade zu erzwingen ***
                 this.objectStores = [
                     { name: 'inventar', keyPath: 'barcode', indices: ['client_id'] },
                     { name: 'employees', keyPath: 'personalnummer', indices: ['client_id'] },
@@ -86,7 +86,7 @@
                 ];
             }
 
-            open() {
+            open() { // Zeile 94
                 return new Promise((res, rej) => {
                     if (this.db) {
                         res(this.db);
@@ -98,9 +98,9 @@
 
                     const request = indexedDB.open(self.dbName, self.dbVersion);
 
-                    request.onupgradeneeded = (event) => {
-                        self.db = event.target.result; // 'this' ersetzt durch 'self'
-                        self.objectStores.forEach(storeConfig => { // FIX: 'this' ersetzt durch 'self' (Zeile 103)
+                    request.onupgradeneeded = (event) => { // Zeile 103
+                        self.db = event.target.result; 
+                        self.objectStores.forEach(storeConfig => { // Zeile 106 (KORRIGIERT: Zugriff über 'self')
                             if (!self.db.objectStoreNames.contains(storeConfig.name)) {
                                 const store = self.db.createObjectStore(storeConfig.name, { keyPath: storeConfig.keyPath });
                                 storeConfig.indices.forEach(index => {
@@ -111,11 +111,11 @@
                     };
 
                     request.onsuccess = (event) => {
-                        self.db = event.target.result; // 'this' ersetzt durch 'self'
+                        self.db = event.target.result; 
                         res(self.db);
                     };
 
-                    request.onerror = (event) => {
+                    request.onerror = (event) => { // Zeile 119 (für den Fehler-Log)
                         console.error("IndexedDB Fehler:", event.target.error);
                         rej("IndexedDB konnte nicht geöffnet werden.");
                     };
