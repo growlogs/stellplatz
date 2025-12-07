@@ -93,13 +93,16 @@
                         return;
                     }
 
-                    const request = indexedDB.open(this.dbName, this.dbVersion);
+                    // FIX: 'this' in lokaler Variable speichern, um Kontextverlust zu verhindern
+                    const self = this; 
+
+                    const request = indexedDB.open(self.dbName, self.dbVersion);
 
                     request.onupgradeneeded = (event) => {
-                        this.db = event.target.result;
-                        this.objectStores.forEach(storeConfig => {
-                            if (!this.db.objectStoreNames.contains(storeConfig.name)) {
-                                const store = this.db.createObjectStore(storeConfig.name, { keyPath: storeConfig.keyPath });
+                        self.db = event.target.result; // 'this' ersetzt durch 'self'
+                        self.objectStores.forEach(storeConfig => { // FIX: 'this' ersetzt durch 'self' (Zeile 103)
+                            if (!self.db.objectStoreNames.contains(storeConfig.name)) {
+                                const store = self.db.createObjectStore(storeConfig.name, { keyPath: storeConfig.keyPath });
                                 storeConfig.indices.forEach(index => {
                                     store.createIndex(index, index, { unique: false });
                                 });
@@ -108,8 +111,8 @@
                     };
 
                     request.onsuccess = (event) => {
-                        this.db = event.target.result;
-                        res(this.db);
+                        self.db = event.target.result; // 'this' ersetzt durch 'self'
+                        res(self.db);
                     };
 
                     request.onerror = (event) => {
