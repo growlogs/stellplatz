@@ -180,24 +180,24 @@
             }
 
 
-            // Spezifische Inventar-Funktionen
-            getAllArticles: () => new Promise((res, rej) => {
+         // Spezifische Inventar-Funktionen
+            getAllArticles = () => new Promise((res, rej) => {
                 const transaction = window.offlineDB.db.transaction(['inventar'], 'readonly');
                 const store = transaction.objectStore('inventar');
                 const request = store.getAll();
                 request.onsuccess = (event) => res(event.target.result);
                 request.onerror = (e) => rej(e.target.error);
-            }),
+            })
 
-            getArticleByBarcode: (barcode) => new Promise((res, rej) => {
+            getArticleByBarcode = (barcode) => new Promise((res, rej) => {
                 const transaction = window.offlineDB.db.transaction(['inventar'], 'readonly');
                 const store = transaction.objectStore('inventar');
                 const request = store.get(barcode); 
                 request.onsuccess = (event) => res(event.target.result);
                 request.onerror = (e) => rej(e.target.error);
-            }),
+            })
 
-            updateArticleQuantity: (barcode, newQuantity) => new Promise(async (res, rej) => {
+            updateArticleQuantity = (barcode, newQuantity) => new Promise(async (res, rej) => {
                 try {
                     const article = await window.offlineDB.getArticleByBarcode(barcode);
                     if (article) {
@@ -210,9 +210,9 @@
                 } catch (e) {
                     rej(e);
                 }
-            }),
+            })
             
-            updateArticleLocation: (barcode, newLocation) => new Promise(async (res, rej) => {
+            updateArticleLocation = (barcode, newLocation) => new Promise(async (res, rej) => {
                 try {
                     const article = await window.offlineDB.getArticleByBarcode(barcode);
                     if (article) {
@@ -225,35 +225,35 @@
                 } catch (e) {
                     rej(e);
                 }
-            }),
+            })
 
             // Spezifische Mitarbeiter-Funktionen
-            getAllEmployees: () => new Promise((res, rej) => {
+            getAllEmployees = () => new Promise((res, rej) => {
                 const transaction = window.offlineDB.db.transaction(['employees'], 'readonly');
                 const store = transaction.objectStore('employees');
                 const request = store.getAll();
                 request.onsuccess = (event) => res(event.target.result);
                 request.onerror = (e) => rej(e.target.error);
-            }),
+            })
             
-            getEmployeeByPN: (personalnummer) => new Promise((res, rej) => {
+            getEmployeeByPN = (personalnummer) => new Promise((res, rej) => {
                 const transaction = window.offlineDB.db.transaction(['employees'], 'readonly');
                 const store = transaction.objectStore('employees');
                 const request = store.get(personalnummer);
                 request.onsuccess = (event) => res(event.target.result);
                 request.onerror = (e) => rej(e.target.error);
-            }),
+            })
 
             // Outbox Funktionen
-            getOutbox: () => new Promise((res, rej) => {
+            getOutbox = () => new Promise((res, rej) => {
                 const transaction = window.offlineDB.db.transaction(['outbox'], 'readonly');
                 const store = transaction.objectStore('outbox');
                 const request = store.getAll();
                 request.onsuccess = (event) => res(event.target.result);
                 request.onerror = (e) => rej(e.target.error);
-            }),
+            })
 
-            addToOutbox: (operation) => new Promise((res, rej) => {
+            addToOutbox = (operation) => new Promise((res, rej) => {
                 const transaction = window.offlineDB.db.transaction(['outbox'], 'readwrite');
                 const store = transaction.objectStore('outbox');
                 const request = store.add({ 
@@ -262,10 +262,10 @@
                 });
                 request.onsuccess = () => res();
                 request.onerror = (e) => rej(e.target.error);
-            }),
+            })
             
             // Spezifische Log-Funktion
-            logAction: (type, description) => new Promise(async (res, rej) => {
+            logAction = (type, description) => new Promise(async (res, rej) => {
                 if (!window.currentClientId) {
                     // Ignoriere Log, wenn kein Client angemeldet
                     res();
@@ -334,10 +334,10 @@
                     }
                 }
                 res();
-            }),
+            })
             
             // Löscht alle lokalen Daten (für Logout/Einstellungen)
-            clearAllData: () => {
+            clearAllData = () => {
                 return new Promise(async (res, rej) => {
                     await window.offlineDB.open();
                     const transaction = window.offlineDB.db.transaction(window.offlineDB.objectStores.map(s => s.name), 'readwrite');
